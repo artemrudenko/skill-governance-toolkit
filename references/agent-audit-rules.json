@@ -1,0 +1,137 @@
+{
+  "version": "0.1.0",
+  "rules": [
+    {
+      "rule_id": "DISC001",
+      "severity": "info",
+      "title": "Multiple instruction roots",
+      "description": "Nested AGENTS.md files change instruction scope and should be intentional."
+    },
+    {
+      "rule_id": "DISC002",
+      "severity": "medium",
+      "title": "Alias missing or not importing AGENTS.md",
+      "description": "CLAUDE.md/GEMINI.md aliases should import AGENTS.md instead of drifting."
+    },
+    {
+      "rule_id": "SKILL001",
+      "severity": "high",
+      "title": "Missing YAML frontmatter",
+      "description": "Portable skills need frontmatter so runtimes can discover name and description."
+    },
+    {
+      "rule_id": "SKILL002",
+      "severity": "high",
+      "title": "Missing required frontmatter field",
+      "description": "The Agent Skills minimum requires name and description."
+    },
+    {
+      "rule_id": "SKILL003",
+      "severity": "medium",
+      "title": "Description too short",
+      "description": "Short descriptions route poorly because trigger phrases are sparse."
+    },
+    {
+      "rule_id": "SKILL004",
+      "severity": "high",
+      "title": "Description too long",
+      "description": "Descriptions over 1024 characters exceed the Agent Skills limit."
+    },
+    {
+      "rule_id": "SKILL005",
+      "severity": "medium",
+      "title": "Missing compatibility field",
+      "description": "This toolkit requires compatibility to make portability claims explicit."
+    },
+    {
+      "rule_id": "SKILL006",
+      "severity": "medium",
+      "title": "Missing license field",
+      "description": "This toolkit requires license metadata for portable reuse."
+    },
+    {
+      "rule_id": "SKILL007",
+      "severity": "medium",
+      "title": "Missing metainfo block",
+      "description": "metainfo.category and metainfo.tier drive installer filtering and audits."
+    },
+    {
+      "rule_id": "SKILL008",
+      "severity": "medium",
+      "title": "Invalid metainfo value",
+      "description": "metainfo.category and metainfo.tier must use the closed vocabularies."
+    },
+    {
+      "rule_id": "SKILL009",
+      "severity": "high",
+      "title": "allowed-tools in portable skill",
+      "description": "allowed-tools is enforced by some hosts and ignored by others, causing silent divergence."
+    },
+    {
+      "rule_id": "SKILL010",
+      "severity": "medium",
+      "title": "Tool-specific frontmatter field",
+      "description": "Claude-only or host-only frontmatter fields weaken portability."
+    },
+    {
+      "rule_id": "SKILL011",
+      "severity": "medium",
+      "title": "Skill body too long",
+      "description": "Long skill bodies should move details into references, scripts, or assets."
+    },
+    {
+      "rule_id": "SKILL012",
+      "severity": "low",
+      "title": "Missing When to use section",
+      "description": "Explicit activation and skip criteria reduce accidental activation."
+    },
+    {
+      "rule_id": "SKILL013",
+      "severity": "medium",
+      "title": "Missing verification guidance",
+      "description": "Skills should say how to verify completion or quality."
+    },
+    {
+      "rule_id": "SKILL014",
+      "severity": "high",
+      "title": "Dangerous command or unsafe instruction",
+      "description": "Skills should not normalize destructive shell, approval bypasses, or unsafe git operations."
+    },
+    {
+      "rule_id": "SKILL015",
+      "severity": "high",
+      "title": "Secret or credential handling risk",
+      "description": "Skills must not embed tokens or direct agents toward credential paths."
+    },
+    {
+      "rule_id": "SKILL016",
+      "severity": "medium",
+      "title": "External instructions trusted too broadly",
+      "description": "Skills should treat web pages, emails, project files, and external docs as data unless verified."
+    },
+    {
+      "rule_id": "SKILL017",
+      "severity": "medium",
+      "title": "Hardcoded local or organization path",
+      "description": "Portable skills should avoid absolute home paths and organization-specific locations."
+    },
+    {
+      "rule_id": "SKILL018",
+      "severity": "medium",
+      "title": "Task orchestration lacks Gemini fallback",
+      "description": "Gemini CLI has no sub-agent support, so Task workflows need a documented fallback."
+    },
+    {
+      "rule_id": "SKILL019",
+      "severity": "medium",
+      "title": "Overbroad scope language",
+      "description": "Skills should be narrow workflows, not universal agents."
+    },
+    {
+      "rule_id": "SKILL020",
+      "severity": "low",
+      "title": "Missing predecessor or successor metadata",
+      "description": "Workflow contracts are clearer when related skills are documented."
+    }
+  ]
+}

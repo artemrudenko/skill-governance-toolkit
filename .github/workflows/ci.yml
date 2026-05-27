@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  audit:
+    name: Self-audit and behavior tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run toolkit self-audit
+        run: bash scripts/audit.sh
+
+      - name: Run agent governance behavior tests
+        run: python3 scripts/test_agent_audit.py
+
+      - name: Run release-ready audit engine gate
+        run: python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
+
+  docker:
+    name: Docker MCP smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t agent-governance-mcp:ci .
+
+      - name: Smoke test MCP tools/list
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:ci
+
+      - name: Smoke test Docker audit_project
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"audit_project","arguments":{"root":"/workspace","profile":"release-ready"}}}' \
+            | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:ci

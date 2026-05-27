@@ -1,0 +1,33 @@
+[project]
+name = "skill-governance-toolkit"
+version = "1.8.1"
+description = "Portable governance toolkit for AGENTS.md and SKILL.md skill libraries."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Artem Rudenko" },
+]
+keywords = [
+  "agents",
+  "agent-skills",
+  "governance",
+  "mcp",
+  "skills",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Utilities",
+]
+dependencies = []
+
+[project.urls]
+Changelog = "https://github.com/artemrudenko/skill-governance-toolkit/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/artemrudenko/skill-governance-toolkit#readme"
+Repository = "https://github.com/artemrudenko/skill-governance-toolkit"

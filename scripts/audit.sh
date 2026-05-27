@@ -23,6 +23,7 @@
 #   P12 — quickstart behavior
 #   P13 — installer behavior
 #   P14 — sgt command facade behavior
+#   P15 — VERSION metadata synchronization
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -95,6 +96,12 @@ else:
     fail "$(basename "$f"): invalid JSON"
   fi
 done
+
+if [[ -f "$ROOT/VERSION" ]] && grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$' "$ROOT/VERSION"; then
+  pass "VERSION"
+else
+  fail "VERSION: missing or invalid semantic version"
+fi
 
 # ── P4: install.sh smoke test (fresh + re-run) ───────────────────────────────
 
@@ -341,6 +348,20 @@ if python3 "$ROOT/scripts/test_sgt.py" >/dev/null 2>&1; then
   pass "sgt command facade tests pass"
 else
   fail "sgt command facade tests failed — run: python3 scripts/test_sgt.py"
+fi
+
+# ── P15: VERSION metadata synchronization ────────────────────────────────────
+
+phase "P15 — VERSION metadata synchronization"
+if python3 "$ROOT/scripts/test_sync_version.py" >/dev/null 2>&1; then
+  pass "version sync behavior tests pass"
+else
+  fail "version sync behavior tests failed — run: python3 scripts/test_sync_version.py"
+fi
+if python3 "$ROOT/scripts/sync_version.py" --check >/dev/null 2>&1; then
+  pass "derived version metadata matches VERSION"
+else
+  fail "derived version metadata drift — run: python3 scripts/sync_version.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

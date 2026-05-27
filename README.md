@@ -175,6 +175,20 @@ cp -r AGENTS.md CLAUDE.md GEMINI.md README.md CHANGELOG.md \
 
 You host the toolkit **once on GitHub**, then team members install per their runtime. Two distribution models below — pick one or combine.
 
+### Version source of truth
+
+The root [`VERSION`](VERSION) file is the only version number to edit by hand.
+Derived copies live in plugin manifests, `pyproject.toml`, and pinned install
+examples.
+
+```bash
+python3 scripts/sync_version.py          # update derived files from VERSION
+python3 scripts/sync_version.py --check  # CI drift check
+```
+
+`scripts/audit.sh` runs the check, so release metadata drift fails CI before
+publishing.
+
 ### Model A — Marketplace / plugin (recommended)
 
 Three runtimes have plugin/marketplace mechanisms with shipped manifests; two runtimes (Copilot, Cursor) read AGENTS.md natively from the project root without needing a separate manifest.

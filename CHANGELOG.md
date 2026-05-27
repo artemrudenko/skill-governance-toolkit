@@ -33,6 +33,10 @@ each before upgrading.
   workflows: `doctor`, `quickstart`, `skills`, and `audit`.
 - **`sgt.py` behavior tests** in `scripts/test_sgt.py`, wired into
   `scripts/audit.sh` as P14.
+- **Root `VERSION` source of truth** plus `scripts/sync_version.py` for
+  derived version metadata in plugin manifests, `pyproject.toml`, and README
+  install pins. `scripts/audit.sh` now checks drift as P15.
+- **Version sync behavior tests** in `scripts/test_sync_version.py`.
 
 ## [1.8.1] — 2026-05-25 — install.ps1 parity + commands/ in per-host + subset-aware AGENTS.md
 

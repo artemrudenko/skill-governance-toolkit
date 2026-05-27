@@ -42,6 +42,7 @@ flowchart TB
         DOCTOR["doctor.py"]
         QUICKSTART["quickstart.py"]
         SGT["sgt.py"]
+        VERSION["sync_version.py"]
         AUDITCLI["agent_audit.py"]
         MCP["agent_governance_mcp.py"]
     end
@@ -72,6 +73,7 @@ flowchart TB
 | `scripts/doctor.py` | `stable` | Fast local health check for setup, Git state, index freshness, and local artifacts. |
 | `scripts/quickstart.py` | `stable` | Concise next-step guide and intent-to-skill decision tree. |
 | `scripts/sgt.py` | `stable` | Small CLI facade for doctor, quickstart, skills list, and self-audit. |
+| `scripts/sync_version.py` | `stable` | Syncs plugin manifests, `pyproject.toml`, and README pins from root `VERSION`. |
 | CLI/MCP/Docker audit engine | `preview` | Covered by tests and useful today, but tool names and rule details may still change before the first tagged release. |
 | Optional integrations | opt-in | CRG, repomix, and serena are installed only through `integration-init`; they are not baseline requirements. |
 
@@ -110,6 +112,7 @@ python3 scripts/test_install.py
 python3 scripts/test_doctor.py
 python3 scripts/test_quickstart.py
 python3 scripts/test_sgt.py
+python3 scripts/test_sync_version.py
 python3 scripts/test_agent_audit.py
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
 docker build -t agent-governance-mcp:local .
@@ -118,6 +121,16 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 ```
 
 GitHub Actions runs the baseline checks in `.github/workflows/ci.yml`.
+
+Version metadata has one manual source: root `VERSION`. After editing it, run:
+
+```bash
+python3 scripts/sync_version.py
+python3 scripts/sync_version.py --check
+```
+
+The sync command updates plugin manifests, `pyproject.toml`, and pinned
+install examples. The check runs inside `scripts/audit.sh`.
 
 Before installing into a project, preview the plan:
 

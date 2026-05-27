@@ -59,6 +59,7 @@ flowchart TB
         DOC["doctor.py<br/>health check"]
         QSTART["quickstart.py<br/>next step"]
         SGT["sgt.py<br/>CLI facade"]
+        VERSION["sync_version.py<br/>version sync"]
         INSTALL["install.sh<br/>multi-runtime (advanced)"]
         INITSH["init.sh<br/>bash fallback for /integration-init"]
     end
@@ -89,6 +90,7 @@ flowchart TB
 | `scripts/doctor.py` | `stable` | Быстрая локальная проверка setup, Git state, свежести индекса и локальных артефактов. |
 | `scripts/quickstart.py` | `stable` | Короткий next-step guide и карта intent → skill. |
 | `scripts/sgt.py` | `stable` | Небольшой CLI facade для doctor, quickstart, skills list и self-audit. |
+| `scripts/sync_version.py` | `stable` | Синхронизирует plugin manifests, `pyproject.toml` и README pins из root `VERSION`. |
 | CLI/MCP/Docker audit engine | `preview` | Работает и покрыт тестами, но API tools/rules могут уточняться до первого tagged release. |
 | Optional integrations | opt-in | CRG/repomix/serena ставятся только через `integration-init`; не являются baseline requirement. |
 
@@ -128,6 +130,7 @@ python3 scripts/test_install.py
 python3 scripts/test_doctor.py
 python3 scripts/test_quickstart.py
 python3 scripts/test_sgt.py
+python3 scripts/test_sync_version.py
 python3 scripts/test_agent_audit.py
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
 docker build -t agent-governance-mcp:local .
@@ -136,6 +139,16 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 ```
 
 GitHub Actions выполняет этот baseline автоматически в `.github/workflows/ci.yml`.
+
+У версии один ручной источник: root `VERSION`. После изменения запускай:
+
+```bash
+python3 scripts/sync_version.py
+python3 scripts/sync_version.py --check
+```
+
+Sync обновляет plugin manifests, `pyproject.toml` и pinned install examples.
+Check выполняется внутри `scripts/audit.sh`.
 
 **Перед установкой в проект посмотри план:**
 

@@ -10,6 +10,16 @@ each before upgrading.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **`scripts/doctor.py`** — quick stdlib-only health check for local
+  readiness. It reports required files, Git cleanliness, `skills/INDEX.jsonl`
+  freshness, skill category/tier coverage, local runtime directories, and the
+  empty Python dependency contract. Supports text and JSON output.
+- **Doctor behavior tests** in `scripts/test_doctor.py`, wired into
+  `scripts/audit.sh` as P11.
+
 ## [1.8.1] — 2026-05-25 — install.ps1 parity + commands/ in per-host + subset-aware AGENTS.md
 
 Patch release. Addresses ten issues surfaced by external review of v1.8.0,

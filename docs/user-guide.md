@@ -39,6 +39,7 @@ flowchart TB
     subgraph "scripts/"
         INDEX["build_index.py"]
         CHECKPOINT["checkpoint.py"]
+        DOCTOR["doctor.py"]
         AUDITCLI["agent_audit.py"]
         MCP["agent_governance_mcp.py"]
     end
@@ -66,13 +67,24 @@ flowchart TB
 |---|---|---|
 | Six meta-skills | `stable` | Ready for normal team use. Breaking changes should appear only in release notes. |
 | `agents/code-reviewer.md` | `stable` | Read-only TypeScript-focused reviewer. Bash usage is limited to inspection. |
+| `scripts/doctor.py` | `stable` | Fast local health check for setup, Git state, index freshness, and local artifacts. |
 | CLI/MCP/Docker audit engine | `preview` | Covered by tests and useful today, but tool names and rule details may still change before the first tagged release. |
 | Optional integrations | opt-in | CRG, repomix, and serena are installed only through `integration-init`; they are not baseline requirements. |
+
+For a quick local readiness check, run:
+
+```bash
+python3 scripts/doctor.py
+```
+
+Use `--format json` in automation. The doctor fails only on actionable
+problems, such as missing required files or stale `skills/INDEX.jsonl`.
 
 Before publishing, opening a PR, or cutting a release, run:
 
 ```bash
 bash scripts/audit.sh
+python3 scripts/test_doctor.py
 python3 scripts/test_agent_audit.py
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
 docker build -t agent-governance-mcp:local .

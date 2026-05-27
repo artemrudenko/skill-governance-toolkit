@@ -107,6 +107,20 @@ Details and MCP client config examples: [`docs/agent-governance-mcp.md`](docs/ag
 Rule metadata lives in [`references/agent-audit-rules.json`](references/agent-audit-rules.json);
 the Python engine contains the detector logic.
 
+### Health check
+
+Before installing, publishing, or debugging a checkout, run the quick doctor:
+
+```bash
+python3 scripts/doctor.py
+python3 scripts/doctor.py --format json
+```
+
+It checks required files, Git cleanliness, `skills/INDEX.jsonl` freshness,
+skill category/tier coverage, local runtime install directories, and the
+stdlib-only Python dependency contract. Warnings are informational; failures
+return a non-zero exit code with the fix to run.
+
 ---
 
 ## Quick start (one command)

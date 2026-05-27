@@ -18,6 +18,8 @@
 #   P7 — secret-pattern scan via library-audit/references/security-spec.md
 #   P8 — INDEX.jsonl freshness (regen and compare)
 #   P9 — metainfo coverage (presence + closed vocab + skills-by-category matrix)
+#   P10 — agent governance audit engine behavior
+#   P11 — doctor health-check behavior
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -300,6 +302,15 @@ if python3 "$ROOT/scripts/test_agent_audit.py" >/dev/null 2>&1; then
   pass "CLI/MCP behavior tests pass"
 else
   fail "CLI/MCP behavior tests failed — run: python3 scripts/test_agent_audit.py"
+fi
+
+# ── P11: doctor health-check behavior ────────────────────────────────────────
+
+phase "P11 — Doctor health-check behavior"
+if python3 "$ROOT/scripts/test_doctor.py" >/dev/null 2>&1; then
+  pass "doctor behavior tests pass"
+else
+  fail "doctor behavior tests failed — run: python3 scripts/test_doctor.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

@@ -1,0 +1,34 @@
+{
+  "_NOTICE": "Before publishing to your org, run `bash scripts/configure_org.sh <your-github-org>` (or hand-edit owner.name + owner.url below). See README § 'Distribution & installation' for the publishing checklist.",
+  "name": "skill-governance-marketplace",
+  "owner": {
+    "name": "REPLACE-ME-ORG",
+    "url": "https://github.com/REPLACE-ME-ORG/skill-governance-toolkit"
+  },
+  "metadata": {
+    "version": "1.8.1",
+    "description": "Internal marketplace for the Skill Governance Toolkit — six meta-skills (find / evaluate / compare / audit / build-portable / init), TypeScript code-reviewer sub-agent, and optional integrations (code-review-graph, repomix, serena)."
+  },
+  "plugins": [
+    {
+      "name": "skill-governance-toolkit",
+      "source": "./",
+      "description": "Universal AGENTS.md + SKILL.md toolkit — meta-skills that operate on other skills, plus a TypeScript code-reviewer agent.",
+      "version": "1.8.1",
+      "skills": [
+        "./skills/skill-find",
+        "./skills/skill-evaluate",
+        "./skills/skill-compare",
+        "./skills/library-audit",
+        "./skills/skill-build-portable",
+        "./skills/integration-init"
+      ],
+      "commands": [
+        "./commands/integration-init.md"
+      ],
+      "agents": [
+        "./agents/code-reviewer.md"
+      ]
+    }
+  ]
+}

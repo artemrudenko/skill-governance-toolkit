@@ -7,6 +7,7 @@
 # Usage:
 #   ./install.sh                              # interactive
 #   ./install.sh --force                      # interactive, then force-wipe target dirs before copy
+#   ./install.sh --dry-run                    # interactive, then print delegated install plan
 #   ./install.sh --yes-default                # non-interactive: Claude + project scope (CI use)
 #   ./install.sh --category discovery         # forwarded — selective install (since 1.8.0)
 #   ./install.sh --tier stable                # forwarded — tier filter
@@ -21,6 +22,7 @@ INSTALLER="$REPO_ROOT/scripts/install.sh"
 [[ -x "$INSTALLER" ]] || { echo "Error: $INSTALLER not found or not executable" >&2; exit 1; }
 
 FORCE_FLAG=""
+DRY_RUN_FLAG=""
 NON_INTERACTIVE=0
 # Pass-through flags for selective install (since 1.8.0). We don't parse them
 # semantically here — just forward to scripts/install.sh so the canonical
@@ -30,6 +32,7 @@ PASSTHROUGH=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --force)         FORCE_FLAG="--force"; shift ;;
+    --dry-run)       DRY_RUN_FLAG="--dry-run"; shift ;;
     --yes-default)   NON_INTERACTIVE=1; shift ;;
     --category)      PASSTHROUGH+=("--category" "$2"); shift 2 ;;
     --category=*)    PASSTHROUGH+=("$1"); shift ;;
@@ -124,4 +127,11 @@ echo "  scope: $SCOPE_FLAG  ($SCOPE_PREFIX)"
 echo "  mode:  $mode_label"
 echo
 
-exec "$INSTALLER" $HOST_FLAG $SCOPE_FLAG $MODE_FLAG "${PASSTHROUGH[@]}"
+DELEGATE_ARGS=("$HOST_FLAG" "$SCOPE_FLAG")
+[[ -n "$MODE_FLAG" ]] && DELEGATE_ARGS+=("$MODE_FLAG")
+[[ -n "$DRY_RUN_FLAG" ]] && DELEGATE_ARGS+=("$DRY_RUN_FLAG")
+if [[ ${#PASSTHROUGH[@]} -gt 0 ]]; then
+  DELEGATE_ARGS+=("${PASSTHROUGH[@]}")
+fi
+
+exec "$INSTALLER" "${DELEGATE_ARGS[@]}"

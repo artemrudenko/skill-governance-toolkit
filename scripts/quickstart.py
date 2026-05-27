@@ -78,6 +78,10 @@ def build_quickstart(root: Path) -> dict[str, Any]:
                 "command": "./install.sh",
             },
             {
+                "label": "Preview install plan",
+                "command": "./install.sh --dry-run",
+            },
+            {
                 "label": "Install Claude project defaults non-interactively",
                 "command": "./install.sh --yes-default",
             },

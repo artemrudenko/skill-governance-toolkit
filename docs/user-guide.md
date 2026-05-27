@@ -95,6 +95,7 @@ Before publishing, opening a PR, or cutting a release, run:
 
 ```bash
 bash scripts/audit.sh
+python3 scripts/test_install.py
 python3 scripts/test_doctor.py
 python3 scripts/test_quickstart.py
 python3 scripts/test_agent_audit.py
@@ -105,6 +106,17 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 ```
 
 GitHub Actions runs the baseline checks in `.github/workflows/ci.yml`.
+
+Before installing into a project, preview the plan:
+
+```bash
+./install.sh --dry-run
+./install.ps1 -DryRun
+./scripts/install.sh --claude --project --target-project=/path/to/project --dry-run
+```
+
+Dry-run mode resolves the same skill filters and target paths as a real
+install, prints the planned writes, and exits before mutating files.
 
 ---
 

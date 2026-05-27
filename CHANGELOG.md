@@ -24,6 +24,11 @@ each before upgrading.
   JSON output is available for wrappers.
 - **Quickstart behavior tests** in `scripts/test_quickstart.py`, wired into
   `scripts/audit.sh` as P12.
+- **Installer dry-run plan mode** for `install.sh`, `install.ps1`, and
+  `scripts/install.sh`. It resolves filters and target paths, prints planned
+  project/runtime writes, and exits before mutating files.
+- **Installer behavior tests** in `scripts/test_install.py`, wired into
+  `scripts/audit.sh` as P13.
 
 ## [1.8.1] — 2026-05-25 — install.ps1 parity + commands/ in per-host + subset-aware AGENTS.md
 

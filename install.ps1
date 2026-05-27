@@ -19,6 +19,10 @@
 .PARAMETER Force
     Wipe target dirs before copying (most aggressive reinstall).
 
+.PARAMETER DryRun
+    Resolve filters and target paths, print the install plan, then exit
+    without writing files.
+
 .PARAMETER YesDefault
     Non-interactive: install Claude Code to project scope. Useful for CI.
 
@@ -40,6 +44,7 @@
 .EXAMPLE
     ./install.ps1
     ./install.ps1 -Force
+    ./install.ps1 -DryRun
     ./install.ps1 -YesDefault
     ./install.ps1 -Category discovery
     ./install.ps1 -Tier stable -Skill skill-find,skill-evaluate
@@ -49,6 +54,7 @@
 [CmdletBinding()]
 param(
     [switch]$Force,
+    [switch]$DryRun,
     [switch]$YesDefault,
     [string]$Category = '',
     [string]$Tier    = '',
@@ -67,6 +73,7 @@ if (-not $IsWindows) {
     }
     $bashArgs = @()
     if ($Force)                                  { $bashArgs += '--force' }
+    if ($DryRun)                                 { $bashArgs += '--dry-run' }
     if ($YesDefault)                             { $bashArgs += '--yes-default' }
     if (-not [string]::IsNullOrWhiteSpace($Category)) { $bashArgs += @('--category', $Category) }
     if (-not [string]::IsNullOrWhiteSpace($Tier))     { $bashArgs += @('--tier',     $Tier) }
@@ -212,6 +219,28 @@ Write-Host "  scope:   $scopePrefix"
 Write-Host "  mode:    $mode"
 Write-Host "  filter:  category=$Category tier=$tierFilter skill=$Skill"
 Write-Host "  install ($($selectedSkills.Count) skills): $($selectedSkills -join ', ')`n"
+
+if ($DryRun) {
+    Write-Host "── Dry-run install plan (no files will be written) ──"
+    Write-Host "  source: $RepoRoot"
+    Write-Host "  scope:  $scopePrefix"
+    Write-Host "  targets:"
+    foreach ($t in $targets) {
+        Write-Host ("    · {0} -> {1}" -f $t.Kind, (Join-Path $scopePrefix $t.Dir))
+    }
+    if ($scopeChoice -eq '2') {
+        Write-Host "  project root:"
+        Write-Host "    · upsert marker blocks in AGENTS.md, CLAUDE.md, GEMINI.md, .github/copilot-instructions.md"
+        Write-Host "    · copy filtered skills/ plus agents/, references/, scripts/, commands/"
+        Write-Host "    · copy docs/ with conflict-renaming"
+        Write-Host "    · place .codex-plugin/, .claude-plugin/, gemini-extension.json manifests"
+    }
+    else {
+        Write-Host "  project root: skipped for global scope"
+    }
+    Write-Host "`nDry run complete."
+    exit 0
+}
 
 # ── Marker-block helper (Python parity with Bash installer) ──────────────────
 

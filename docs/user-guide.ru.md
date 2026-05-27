@@ -113,6 +113,7 @@ actionable проблемах: отсутствующие обязательны
 
 ```bash
 bash scripts/audit.sh
+python3 scripts/test_install.py
 python3 scripts/test_doctor.py
 python3 scripts/test_quickstart.py
 python3 scripts/test_agent_audit.py
@@ -123,6 +124,17 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 ```
 
 GitHub Actions выполняет этот baseline автоматически в `.github/workflows/ci.yml`.
+
+**Перед установкой в проект посмотри план:**
+
+```bash
+./install.sh --dry-run
+./install.ps1 -DryRun
+./scripts/install.sh --claude --project --target-project=/path/to/project --dry-run
+```
+
+Dry-run mode использует те же skill filters и target paths, что реальная
+установка, печатает план записей и выходит до изменения файлов.
 
 ---
 

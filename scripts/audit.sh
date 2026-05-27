@@ -21,6 +21,7 @@
 #   P10 — agent governance audit engine behavior
 #   P11 — doctor health-check behavior
 #   P12 — quickstart behavior
+#   P13 — installer behavior
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -321,6 +322,15 @@ if python3 "$ROOT/scripts/test_quickstart.py" >/dev/null 2>&1; then
   pass "quickstart behavior tests pass"
 else
   fail "quickstart behavior tests failed — run: python3 scripts/test_quickstart.py"
+fi
+
+# ── P13: installer behavior ──────────────────────────────────────────────────
+
+phase "P13 — Installer behavior"
+if python3 "$ROOT/scripts/test_install.py" >/dev/null 2>&1; then
+  pass "installer behavior tests pass"
+else
+  fail "installer behavior tests failed — run: python3 scripts/test_install.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

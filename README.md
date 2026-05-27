@@ -137,8 +137,10 @@ a short map from user intent to the right skill.
 
 ```bash
 cd /path/to/skill-governance-toolkit
+./install.sh --dry-run        # preview — resolves filters and target paths, writes nothing
 ./install.sh                  # interactive — asks host + scope, auto-detects upgrades
 # or
+./install.ps1 -DryRun         # PowerShell preview
 ./install.ps1                 # PowerShell 7+ (Windows / macOS / Linux)
 ```
 

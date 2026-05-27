@@ -16,6 +16,7 @@
 #   ./scripts/install.sh --claude --project             # ./.claude/ install (uses cwd)
 #   ./scripts/install.sh --claude --project --target-project=/path/to/proj
 #   ./scripts/install.sh --all --global                 # all five runtimes
+#   ./scripts/install.sh --claude --project --dry-run   # print plan, write nothing
 #
 # Install modes:
 #   (default)      Fresh — overwrites managed dirs (skills/, agents/, references/, scripts/, commands/).
@@ -41,6 +42,7 @@ else
 fi
 
 INSTALL_MODE="fresh"   # fresh | upgrade | force
+DRY_RUN=false
 
 _smart_copy() {
   local src="$1" dest="$2"
@@ -150,6 +152,8 @@ Install mode (optional):
                  (handles renamed/removed skills). Marker-block contract unchanged.
   --force        Wipe managed dirs before copy. Marker-block contract for user-owned
                  root files is unchanged (still upsert, not overwrite).
+  --dry-run      Resolve filters and target paths, print the install plan, then exit
+                 without writing files.
 
 Skill subset (optional — since 1.8.0). Reads skills/INDEX.jsonl, copies only
 the matching subset, and writes a filtered INDEX.jsonl to each install dir.
@@ -170,6 +174,7 @@ Examples:
   install.sh --all --project --target-project=~/myapp   # install into ~/myapp
   install.sh --copilot --codex --global
   install.sh --claude --project --upgrade
+  install.sh --claude --project --dry-run
   install.sh --claude --project --category discovery    # only discovery-tagged skills
   install.sh --claude --project --skill skill-find      # just one skill
   install.sh --claude --project --tier stable           # stable only, skip preview
@@ -196,6 +201,7 @@ while [[ $# -gt 0 ]]; do
     --target-project=*) TARGET_PROJECT="${1#*=}"; TARGET_PROJECT="$(cd "$TARGET_PROJECT" && pwd)" ;;
     --upgrade)  INSTALL_MODE="upgrade" ;;
     --force)    INSTALL_MODE="force" ;;
+    --dry-run)  DRY_RUN=true ;;
     --category)      CATEGORY_FILTER="$2"; shift ;;
     --category=*)    CATEGORY_FILTER="${1#*=}" ;;
     --tier)          TIER_FILTER="$2"; shift ;;
@@ -305,6 +311,36 @@ resolve_skill_subset() {
   while IFS= read -r line; do
     [[ -n "$line" ]] && SELECTED_SKILLS+=("$line")
   done <<< "$names"
+}
+
+print_dry_run_plan() {
+  echo "── Dry-run install plan (no files will be written) ──"
+  echo "  source:          $SOURCE"
+  echo "  target_project:  $TARGET_PROJECT"
+  echo "  scope:           $SCOPE"
+  echo "  mode:            $INSTALL_MODE"
+  echo "  targets:         ${TARGETS[*]}"
+  echo "  skills:          ${SELECTED_SKILLS[*]}"
+  echo
+  if [[ "$SCOPE" == "project" ]]; then
+    if [[ "$SOURCE" -ef "$TARGET_PROJECT" ]]; then
+      echo "  project root:    source == target; marker blocks, root dirs, docs, and per-host dirs would be skipped"
+    else
+      echo "  project root:"
+      echo "    · upsert marker blocks in AGENTS.md, CLAUDE.md, GEMINI.md, .github/copilot-instructions.md"
+      echo "    · copy filtered skills/ plus agents/, references/, scripts/, commands/"
+      echo "    · copy docs/ with conflict-renaming"
+      echo "    · place .codex-plugin/, .claude-plugin/, gemini-extension.json manifests"
+    fi
+  else
+    echo "  project root:    skipped for global scope"
+  fi
+  echo "  runtime dirs:"
+  local target dest
+  for target in "${TARGETS[@]}"; do
+    dest="$(resolve_runtime_dir "$target")"
+    echo "    · $target -> $dest"
+  done
 }
 
 # _copy_filtered_skills DEST — copy only the skills in SELECTED_SKILLS into DEST/,
@@ -536,6 +572,13 @@ echo "    tier filter:     ${TIER_FILTER}"
 echo "    skill filter:    ${SKILL_FILTER:-<none>}"
 echo "    resolved (${#SELECTED_SKILLS[@]} skills): ${SELECTED_SKILLS[*]}"
 echo
+
+if $DRY_RUN; then
+  print_dry_run_plan
+  echo
+  echo "Dry run complete."
+  exit 0
+fi
 
 # Ensure project root user-owned files ONCE (not per-host) for --project scope.
 # Append-with-markers — never overwrites user content.

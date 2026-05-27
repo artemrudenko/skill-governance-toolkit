@@ -19,6 +19,11 @@ each before upgrading.
   empty Python dependency contract. Supports text and JSON output.
 - **Doctor behavior tests** in `scripts/test_doctor.py`, wired into
   `scripts/audit.sh` as P11.
+- **`scripts/quickstart.py`** — concise next-step guide that combines the
+  doctor summary with common commands and an intent-to-skill decision tree.
+  JSON output is available for wrappers.
+- **Quickstart behavior tests** in `scripts/test_quickstart.py`, wired into
+  `scripts/audit.sh` as P12.
 
 ## [1.8.1] — 2026-05-25 — install.ps1 parity + commands/ in per-host + subset-aware AGENTS.md
 

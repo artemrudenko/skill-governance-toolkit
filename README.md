@@ -125,6 +125,16 @@ return a non-zero exit code with the fix to run.
 
 ## Quick start (one command)
 
+If you are unsure where to begin, print the local next-step guide:
+
+```bash
+python3 scripts/quickstart.py
+python3 scripts/quickstart.py --format json
+```
+
+It runs the doctor summary first, then shows the recommended next command and
+a short map from user intent to the right skill.
+
 ```bash
 cd /path/to/skill-governance-toolkit
 ./install.sh                  # interactive — asks host + scope, auto-detects upgrades

@@ -57,6 +57,7 @@ flowchart TB
         IDX["build_index.py<br/>INDEX.jsonl"]
         CHKP["checkpoint.py<br/>resume state"]
         DOC["doctor.py<br/>health check"]
+        QSTART["quickstart.py<br/>next step"]
         INSTALL["install.sh<br/>multi-runtime (advanced)"]
         INITSH["init.sh<br/>bash fallback for /integration-init"]
     end
@@ -85,8 +86,18 @@ flowchart TB
 | Six meta-skills | `stable` | Подходят для обычного командного использования; breaking changes — только через release notes. |
 | `agents/code-reviewer.md` | `stable` | Read-only TypeScript-first reviewer; Bash ограничен read-only inspection. |
 | `scripts/doctor.py` | `stable` | Быстрая локальная проверка setup, Git state, свежести индекса и локальных артефактов. |
+| `scripts/quickstart.py` | `stable` | Короткий next-step guide и карта intent → skill. |
 | CLI/MCP/Docker audit engine | `preview` | Работает и покрыт тестами, но API tools/rules могут уточняться до первого tagged release. |
 | Optional integrations | opt-in | CRG/repomix/serena ставятся только через `integration-init`; не являются baseline requirement. |
+
+**Если непонятно, с чего начать:**
+
+```bash
+python3 scripts/quickstart.py
+```
+
+Скрипт печатает doctor summary, следующий рекомендуемый command и короткую
+карту intent → skill. Для автоматизации используй `--format json`.
 
 **Быстрая проверка локального состояния:**
 
@@ -103,6 +114,7 @@ actionable проблемах: отсутствующие обязательны
 ```bash
 bash scripts/audit.sh
 python3 scripts/test_doctor.py
+python3 scripts/test_quickstart.py
 python3 scripts/test_agent_audit.py
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
 docker build -t agent-governance-mcp:local .

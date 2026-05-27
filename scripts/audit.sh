@@ -20,6 +20,7 @@
 #   P9 — metainfo coverage (presence + closed vocab + skills-by-category matrix)
 #   P10 — agent governance audit engine behavior
 #   P11 — doctor health-check behavior
+#   P12 — quickstart behavior
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -311,6 +312,15 @@ if python3 "$ROOT/scripts/test_doctor.py" >/dev/null 2>&1; then
   pass "doctor behavior tests pass"
 else
   fail "doctor behavior tests failed — run: python3 scripts/test_doctor.py"
+fi
+
+# ── P12: quickstart behavior ─────────────────────────────────────────────────
+
+phase "P12 — Quickstart behavior"
+if python3 "$ROOT/scripts/test_quickstart.py" >/dev/null 2>&1; then
+  pass "quickstart behavior tests pass"
+else
+  fail "quickstart behavior tests failed — run: python3 scripts/test_quickstart.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

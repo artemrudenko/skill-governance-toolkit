@@ -41,6 +41,7 @@ flowchart TB
         CHECKPOINT["checkpoint.py"]
         DOCTOR["doctor.py"]
         QUICKSTART["quickstart.py"]
+        SGT["sgt.py"]
         AUDITCLI["agent_audit.py"]
         MCP["agent_governance_mcp.py"]
     end
@@ -70,12 +71,14 @@ flowchart TB
 | `agents/code-reviewer.md` | `stable` | Read-only TypeScript-focused reviewer. Bash usage is limited to inspection. |
 | `scripts/doctor.py` | `stable` | Fast local health check for setup, Git state, index freshness, and local artifacts. |
 | `scripts/quickstart.py` | `stable` | Concise next-step guide and intent-to-skill decision tree. |
+| `scripts/sgt.py` | `stable` | Small CLI facade for doctor, quickstart, skills list, and self-audit. |
 | CLI/MCP/Docker audit engine | `preview` | Covered by tests and useful today, but tool names and rule details may still change before the first tagged release. |
 | Optional integrations | opt-in | CRG, repomix, and serena are installed only through `integration-init`; they are not baseline requirements. |
 
 If you are unsure where to begin, run:
 
 ```bash
+python3 scripts/sgt.py quickstart
 python3 scripts/quickstart.py
 ```
 
@@ -91,6 +94,14 @@ python3 scripts/doctor.py
 Use `--format json` in automation. The doctor fails only on actionable
 problems, such as missing required files or stale `skills/INDEX.jsonl`.
 
+Use the `sgt.py` facade when you want stable command names:
+
+```bash
+python3 scripts/sgt.py doctor
+python3 scripts/sgt.py skills
+python3 scripts/sgt.py audit
+```
+
 Before publishing, opening a PR, or cutting a release, run:
 
 ```bash
@@ -98,6 +109,7 @@ bash scripts/audit.sh
 python3 scripts/test_install.py
 python3 scripts/test_doctor.py
 python3 scripts/test_quickstart.py
+python3 scripts/test_sgt.py
 python3 scripts/test_agent_audit.py
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
 docker build -t agent-governance-mcp:local .

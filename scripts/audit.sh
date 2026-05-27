@@ -22,6 +22,7 @@
 #   P11 — doctor health-check behavior
 #   P12 — quickstart behavior
 #   P13 — installer behavior
+#   P14 — sgt command facade behavior
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -331,6 +332,15 @@ if python3 "$ROOT/scripts/test_install.py" >/dev/null 2>&1; then
   pass "installer behavior tests pass"
 else
   fail "installer behavior tests failed — run: python3 scripts/test_install.py"
+fi
+
+# ── P14: sgt command facade behavior ─────────────────────────────────────────
+
+phase "P14 — sgt command facade behavior"
+if python3 "$ROOT/scripts/test_sgt.py" >/dev/null 2>&1; then
+  pass "sgt command facade tests pass"
+else
+  fail "sgt command facade tests failed — run: python3 scripts/test_sgt.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

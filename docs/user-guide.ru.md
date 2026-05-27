@@ -58,6 +58,7 @@ flowchart TB
         CHKP["checkpoint.py<br/>resume state"]
         DOC["doctor.py<br/>health check"]
         QSTART["quickstart.py<br/>next step"]
+        SGT["sgt.py<br/>CLI facade"]
         INSTALL["install.sh<br/>multi-runtime (advanced)"]
         INITSH["init.sh<br/>bash fallback for /integration-init"]
     end
@@ -87,12 +88,14 @@ flowchart TB
 | `agents/code-reviewer.md` | `stable` | Read-only TypeScript-first reviewer; Bash ограничен read-only inspection. |
 | `scripts/doctor.py` | `stable` | Быстрая локальная проверка setup, Git state, свежести индекса и локальных артефактов. |
 | `scripts/quickstart.py` | `stable` | Короткий next-step guide и карта intent → skill. |
+| `scripts/sgt.py` | `stable` | Небольшой CLI facade для doctor, quickstart, skills list и self-audit. |
 | CLI/MCP/Docker audit engine | `preview` | Работает и покрыт тестами, но API tools/rules могут уточняться до первого tagged release. |
 | Optional integrations | opt-in | CRG/repomix/serena ставятся только через `integration-init`; не являются baseline requirement. |
 
 **Если непонятно, с чего начать:**
 
 ```bash
+python3 scripts/sgt.py quickstart
 python3 scripts/quickstart.py
 ```
 
@@ -109,6 +112,14 @@ python3 scripts/doctor.py
 actionable проблемах: отсутствующие обязательные файлы, stale
 `skills/INDEX.jsonl` и похожие нарушения.
 
+Используй `sgt.py`, если нужны стабильные command names:
+
+```bash
+python3 scripts/sgt.py doctor
+python3 scripts/sgt.py skills
+python3 scripts/sgt.py audit
+```
+
 **Перед публикацией / PR / релизом запускай:**
 
 ```bash
@@ -116,6 +127,7 @@ bash scripts/audit.sh
 python3 scripts/test_install.py
 python3 scripts/test_doctor.py
 python3 scripts/test_quickstart.py
+python3 scripts/test_sgt.py
 python3 scripts/test_agent_audit.py
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
 docker build -t agent-governance-mcp:local .

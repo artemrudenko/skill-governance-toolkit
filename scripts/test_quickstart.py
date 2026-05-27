@@ -34,9 +34,10 @@ class QuickstartBehaviorTests(unittest.TestCase):
         self.assertIn("library-audit", uses)
         self.assertIn("integration-init", uses)
         commands = {item["command"] for item in report["common_commands"]}
-        self.assertIn("python3 scripts/doctor.py", commands)
+        self.assertIn("python3 scripts/sgt.py doctor", commands)
+        self.assertIn("python3 scripts/sgt.py quickstart", commands)
         self.assertIn("./install.sh --dry-run", commands)
-        self.assertIn("bash scripts/audit.sh", commands)
+        self.assertIn("python3 scripts/sgt.py audit", commands)
 
     def test_health_failures_make_doctor_the_next_step(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

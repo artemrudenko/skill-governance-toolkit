@@ -128,12 +128,21 @@ return a non-zero exit code with the fix to run.
 If you are unsure where to begin, print the local next-step guide:
 
 ```bash
+python3 scripts/sgt.py quickstart
 python3 scripts/quickstart.py
 python3 scripts/quickstart.py --format json
 ```
 
 It runs the doctor summary first, then shows the recommended next command and
 a short map from user intent to the right skill.
+
+The `sgt.py` facade also exposes the common local workflows:
+
+```bash
+python3 scripts/sgt.py doctor
+python3 scripts/sgt.py skills
+python3 scripts/sgt.py audit
+```
 
 ```bash
 cd /path/to/skill-governance-toolkit

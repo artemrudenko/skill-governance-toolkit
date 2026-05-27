@@ -29,6 +29,10 @@ each before upgrading.
   project/runtime writes, and exits before mutating files.
 - **Installer behavior tests** in `scripts/test_install.py`, wired into
   `scripts/audit.sh` as P13.
+- **`scripts/sgt.py`** — stable stdlib-only CLI facade for common local
+  workflows: `doctor`, `quickstart`, `skills`, and `audit`.
+- **`sgt.py` behavior tests** in `scripts/test_sgt.py`, wired into
+  `scripts/audit.sh` as P14.
 
 ## [1.8.1] — 2026-05-25 — install.ps1 parity + commands/ in per-host + subset-aware AGENTS.md
 

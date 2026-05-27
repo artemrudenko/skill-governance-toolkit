@@ -71,7 +71,11 @@ def build_quickstart(root: Path) -> dict[str, Any]:
         "common_commands": [
             {
                 "label": "Check local readiness",
-                "command": "python3 scripts/doctor.py",
+                "command": "python3 scripts/sgt.py doctor",
+            },
+            {
+                "label": "Show this guide",
+                "command": "python3 scripts/sgt.py quickstart",
             },
             {
                 "label": "Install interactively",
@@ -87,7 +91,7 @@ def build_quickstart(root: Path) -> dict[str, Any]:
             },
             {
                 "label": "Run full self-audit",
-                "command": "bash scripts/audit.sh",
+                "command": "python3 scripts/sgt.py audit",
             },
         ],
         "decision_tree": DECISIONS,

@@ -27,6 +27,7 @@
 #   P16 — MR comment poster behavior
 #   P17 — externalized audit config behavior
 #   P18 — CODEOWNERS covers the governance control-plane paths
+#   P19 — marker_block managed-block writer behavior
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -400,6 +401,15 @@ else
   else
     pass "CODEOWNERS covers policy, engine, and CI gate"
   fi
+fi
+
+# ── P19: marker_block managed-block writer behavior ──────────────────────────
+
+phase "P19 — marker_block writer behavior"
+if python3 "$ROOT/scripts/test_marker_block.py" >/dev/null 2>&1; then
+  pass "marker_block writer tests pass (user content preserved)"
+else
+  fail "marker_block tests failed — run: python3 scripts/test_marker_block.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

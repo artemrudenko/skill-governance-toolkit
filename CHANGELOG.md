@@ -13,6 +13,11 @@ each before upgrading.
 ## [Unreleased]
 
 ### Added
+- **`marker_block` behavior tests** (`scripts/test_marker_block.py`, wired as
+  `audit.sh` P19) covering the installer's "we never overwrite your files"
+  guarantee: managed-block create, append-preserving-user-content, byte-for-byte
+  idempotent re-run, in-place update preserving content around the markers,
+  uninstall preserving user content, delete-when-only-block, and custom marker id.
 - **Pilot-hardening — separation of duties.** Root `CODEOWNERS` assigns the audit
   policy, the engine, the CI gate template, and the security baseline to a
   governance owner group, so a skill author cannot change the standards that

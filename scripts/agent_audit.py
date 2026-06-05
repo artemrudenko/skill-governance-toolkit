@@ -23,8 +23,17 @@ from typing import Any
 from build_index import FRONTMATTER_RE, parse_frontmatter
 
 
+# Defaults below are overridable via the catalog's optional `config` block; see
+# load_config(). Algorithms stay in code, policy data moves to configuration.
 CLOSED_CATEGORIES = {"code-review", "docs", "testing", "governance", "discovery", "research", "delivery"}
 CLOSED_TIERS = {"stable", "preview", "experimental", "internal"}
+DEFAULT_THRESHOLDS = {
+    "description_min": 80,
+    "description_max": 1024,
+    "body_budget": 500,
+    "body_critical": 600,
+}
+DEFAULT_QUALITY_EXCLUDE = {"SKILL015"}
 IGNORED_DIRS = {".git", ".skill-state", "out", "node_modules", "__pycache__"}
 SEVERITIES = {"high", "medium", "low", "info"}
 ENGINE_RULE_IDS = {
@@ -164,6 +173,68 @@ def load_rule_catalog() -> dict[str, Any]:
         "version": payload.get("version", "unknown"),
         "path": as_posix(path),
         "rules": sorted(rules, key=lambda item: item["rule_id"]),
+    }
+
+
+def _catalog_config_block() -> dict[str, Any]:
+    """Read the optional `config` block from the catalog, tolerating absence."""
+    path = default_rules_path()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid audit rule catalog JSON: {exc}") from exc
+    config = payload.get("config")
+    return config if isinstance(config, dict) else {}
+
+
+def _compile_patterns(entries: Any, *, with_suggestion: bool) -> list[tuple[Any, ...]]:
+    """Compile pattern entries from config into the engine's runtime tuples."""
+    compiled: list[tuple[Any, ...]] = []
+    for entry in entries or []:
+        if not isinstance(entry, dict) or "regex" not in entry:
+            continue
+        flags = re.I if entry.get("ignore_case") else 0
+        pattern = re.compile(str(entry["regex"]), flags)
+        label = str(entry.get("label", entry["regex"]))
+        if with_suggestion:
+            compiled.append((label, pattern, str(entry.get("suggestion", "Review this instruction for safety."))))
+        else:
+            compiled.append((label, pattern))
+    return compiled
+
+
+@lru_cache(maxsize=1)
+def load_config() -> dict[str, Any]:
+    """Resolve audit policy data: built-in defaults merged with the catalog's
+    optional `config` block. Thresholds/profiles override; vocab/patterns extend."""
+    raw = _catalog_config_block()
+
+    thresholds = {**DEFAULT_THRESHOLDS, **(raw.get("thresholds") or {})}
+
+    vocab = raw.get("vocabularies") or {}
+    categories = CLOSED_CATEGORIES | {str(c) for c in (vocab.get("categories") or [])}
+    tiers = CLOSED_TIERS | {str(t) for t in (vocab.get("tiers") or [])}
+
+    profiles = raw.get("profiles") or {}
+    security = set(profiles["security"]) if profiles.get("security") else set(SECURITY_PROFILE_RULE_IDS)
+    quality_exclude = (
+        set(profiles["quality_exclude"]) if profiles.get("quality_exclude") is not None else set(DEFAULT_QUALITY_EXCLUDE)
+    )
+
+    patterns = raw.get("patterns") or {}
+    dangerous = list(DANGEROUS_PATTERNS) + _compile_patterns(patterns.get("dangerous"), with_suggestion=True)
+    secrets = list(SECRET_PATTERNS) + _compile_patterns(patterns.get("secrets"), with_suggestion=False)
+
+    return {
+        "thresholds": thresholds,
+        "categories": categories,
+        "tiers": tiers,
+        "security_profile": security,
+        "quality_exclude": quality_exclude,
+        "dangerous_patterns": dangerous,
+        "secret_patterns": secrets,
     }
 
 
@@ -322,6 +393,10 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
     fm_text = frontmatter_text(text)
     fm = parse_frontmatter(text)
     findings: list[Finding] = []
+    cfg = load_config()
+    thresholds = cfg["thresholds"]
+    categories_vocab = cfg["categories"]
+    tiers_vocab = cfg["tiers"]
 
     if fm is None:
         findings.append(
@@ -338,13 +413,15 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
 
     description = fm.get("description")
     if isinstance(description, str):
-        if len(description) < 80:
+        desc_min = thresholds["description_min"]
+        desc_max = thresholds["description_max"]
+        if len(description) < desc_min:
             findings.append(
-                finding("SKILL003", skill_path, line_for_regex(fm_text, r"^description\s*:", re.M), "Description is under 80 characters.", "Add 2-5 concrete trigger phrases and the main outcome.")
+                finding("SKILL003", skill_path, line_for_regex(fm_text, r"^description\s*:", re.M), f"Description is under {desc_min} characters.", "Add 2-5 concrete trigger phrases and the main outcome.")
             )
-        if len(description) > 1024:
+        if len(description) > desc_max:
             findings.append(
-                finding("SKILL004", skill_path, line_for_regex(fm_text, r"^description\s*:", re.M), "Description exceeds 1024 characters.", "Shorten it without removing critical trigger phrases.")
+                finding("SKILL004", skill_path, line_for_regex(fm_text, r"^description\s*:", re.M), f"Description exceeds {desc_max} characters.", "Shorten it without removing critical trigger phrases.")
             )
 
     if "compatibility" not in fm:
@@ -366,22 +443,22 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
         tier = metainfo.get("tier")
         if not categories:
             findings.append(
-                finding("SKILL007", skill_path, line_for_regex(fm_text, r"^metainfo\s*:", re.M), "Missing `metainfo.category`.", f"Use one or more of: {', '.join(sorted(CLOSED_CATEGORIES))}.")
+                finding("SKILL007", skill_path, line_for_regex(fm_text, r"^metainfo\s*:", re.M), "Missing `metainfo.category`.", f"Use one or more of: {', '.join(sorted(categories_vocab))}.")
             )
         else:
             cat_list = categories if isinstance(categories, list) else [categories]
-            invalid = [str(cat) for cat in cat_list if str(cat) not in CLOSED_CATEGORIES]
+            invalid = [str(cat) for cat in cat_list if str(cat) not in categories_vocab]
             if invalid:
                 findings.append(
-                    finding("SKILL008", skill_path, line_for_regex(fm_text, r"category\s*:", re.M), f"Invalid metainfo.category value(s): {', '.join(invalid)}.", f"Use only: {', '.join(sorted(CLOSED_CATEGORIES))}.")
+                    finding("SKILL008", skill_path, line_for_regex(fm_text, r"category\s*:", re.M), f"Invalid metainfo.category value(s): {', '.join(invalid)}.", f"Use only: {', '.join(sorted(categories_vocab))}.")
                 )
         if not tier:
             findings.append(
-                finding("SKILL007", skill_path, line_for_regex(fm_text, r"^metainfo\s*:", re.M), "Missing `metainfo.tier`.", f"Use one of: {', '.join(sorted(CLOSED_TIERS))}.")
+                finding("SKILL007", skill_path, line_for_regex(fm_text, r"^metainfo\s*:", re.M), "Missing `metainfo.tier`.", f"Use one of: {', '.join(sorted(tiers_vocab))}.")
             )
-        elif str(tier) not in CLOSED_TIERS:
+        elif str(tier) not in tiers_vocab:
             findings.append(
-                finding("SKILL008", skill_path, line_for_regex(fm_text, r"tier\s*:", re.M), f"Invalid metainfo.tier value: {tier}.", f"Use one of: {', '.join(sorted(CLOSED_TIERS))}.")
+                finding("SKILL008", skill_path, line_for_regex(fm_text, r"tier\s*:", re.M), f"Invalid metainfo.tier value: {tier}.", f"Use one of: {', '.join(sorted(tiers_vocab))}.")
             )
 
     if "allowed-tools" in fm:
@@ -413,10 +490,12 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
             )
 
     body_lines = body.splitlines()
-    if len(body_lines) > 600:
-        message = f"Skill body has {len(body_lines)} lines, above the critical 600-line threshold."
-    elif len(body_lines) > 500:
-        message = f"Skill body has {len(body_lines)} lines, above the 500-line portability budget."
+    body_budget = thresholds["body_budget"]
+    body_critical = thresholds["body_critical"]
+    if len(body_lines) > body_critical:
+        message = f"Skill body has {len(body_lines)} lines, above the critical {body_critical}-line threshold."
+    elif len(body_lines) > body_budget:
+        message = f"Skill body has {len(body_lines)} lines, above the {body_budget}-line portability budget."
     else:
         message = ""
     if message:
@@ -434,7 +513,7 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
             finding("SKILL013", skill_path, 1, "No explicit verification guidance detected.", "Add concrete verification steps or acceptance criteria.")
         )
 
-    for label, pattern, suggestion in DANGEROUS_PATTERNS:
+    for label, pattern, suggestion in cfg["dangerous_patterns"]:
         for match in pattern.finditer(text):
             if is_detection_context(line_text_for_offset(text, match.start())):
                 continue
@@ -442,7 +521,7 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
                 finding("SKILL014", skill_path, line_for_offset(text, match.start()), f"Potentially dangerous instruction detected: {label}.", suggestion)
             )
 
-    for label, pattern in SECRET_PATTERNS:
+    for label, pattern in cfg["secret_patterns"]:
         for match in pattern.finditer(text):
             if is_detection_context(line_text_for_offset(text, match.start())):
                 continue
@@ -479,9 +558,9 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
         )
 
     if profile == "security":
-        kept = [f for f in findings if f.rule_id in SECURITY_PROFILE_RULE_IDS]
+        kept = [f for f in findings if f.rule_id in cfg["security_profile"]]
     elif profile == "quality":
-        kept = [f for f in findings if f.rule_id not in {"SKILL015"}]
+        kept = [f for f in findings if f.rule_id not in cfg["quality_exclude"]]
     else:
         kept = findings
 

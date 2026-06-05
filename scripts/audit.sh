@@ -373,6 +373,15 @@ else
   fail "MR comment poster tests failed — run: python3 scripts/test_post_mr_comment.py"
 fi
 
+# ── P17: externalized audit config behavior ──────────────────────────────────
+
+phase "P17 — Externalized audit config behavior"
+if python3 "$ROOT/scripts/test_audit_config.py" >/dev/null 2>&1; then
+  pass "audit config behavior tests pass"
+else
+  fail "audit config tests failed — run: python3 scripts/test_audit_config.py"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""

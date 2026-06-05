@@ -13,6 +13,20 @@ each before upgrading.
 ## [Unreleased]
 
 ### Added
+- **Externalized audit policy** via an optional `config` block in the rule
+  catalog (`references/agent-audit-rules.json`). Organizations can override
+  `thresholds` (description length, body budgets), extend `vocabularies`
+  (categories/tiers), redefine `profiles` (security set, quality exclusions),
+  and extend `patterns` (dangerous/secret packs for SKILL014/015) — all without
+  forking Python. Detection algorithms stay in code; only policy data is
+  configurable. Resolved by `agent_audit.load_config()`; schema and merge
+  semantics documented in `docs/checks-reference.md` § Extending the checks.
+- **Audit config behavior tests** in `scripts/test_audit_config.py`, wired into
+  `scripts/audit.sh` as P17.
+- **`docs/checks-reference.md`** — full catalog of every governance check
+  (engine rules + LLM dimensions) with rationale and an explicit
+  engine-vs-LLM-depth comparison; a coverage test asserts every engine
+  `rule_id` is documented.
 - **`--changed-only` merge-request scope** for `agent_audit.py audit-project`.
   Diffs the working tree against `--base` (a git ref, default `origin/main`)
   via a three-dot diff and scopes findings — including DISC alias findings — to

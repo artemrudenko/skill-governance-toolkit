@@ -115,6 +115,25 @@ Full procedure: [`skills/library-audit/SKILL.md`](../skills/library-audit/SKILL.
 
 ## Engine vs LLM skills
 
+**Does the engine give the same depth of evaluation as the LLM skills? No — and
+that is by design.** The two answer different questions:
+
+- The **deterministic engine** answers *"is this structurally and safely valid?"*
+  It is **as good as or better than** the LLM on objective, lexical facts —
+  frontmatter presence, `allowed-tools`, secrets, dangerous shell, line budget —
+  because it is exact and never hallucinates. About half the checks are of this
+  kind.
+- The **LLM skills** answer *"is this a **good** skill?"* They reach what a
+  lexical engine cannot: whether trigger phrases actually route well (the engine
+  only measures description *length*), whether prose is clear, whether two skills
+  **collide** on triggers, whether a workflow is logically sound for its goal.
+
+So the engine is **deliberately shallower on semantics and richer on
+determinism**. Use the engine where reproducibility matters (a blocking merge
+gate); use the LLM skills where judgement matters (authoring review). Running the
+engine in CI and the LLM skills as an advisory/on-demand step is the intended
+split — neither replaces the other.
+
 | Question | Deterministic engine | LLM skills |
 |---|---|---|
 | Is the frontmatter present and valid? | ✅ exact | ✅ |
@@ -135,11 +154,63 @@ step.
 
 ## Extending the checks
 
-Engine rules are partly data: the catalog entry (id, severity, title, rationale)
-lives in
-[`references/agent-audit-rules.json`](../references/agent-audit-rules.json), while
-the detector logic lives in [`scripts/agent_audit.py`](../scripts/agent_audit.py)
-(`audit_skill` / `audit_project`). `AGENT_GOVERNANCE_RULES_PATH` lets a consumer
-point the engine at a custom catalog; the catalog must define every `rule_id`
-the engine emits. See the user guide § Deterministic Audit Engine for the
-override contract.
+The dividing line is **data vs algorithm**: policy data lives in configuration;
+detection algorithms stay in code. An organization can tune policy without
+forking Python by pointing `AGENT_GOVERNANCE_RULES_PATH` at a custom catalog.
+
+### Configurable policy (no code change)
+
+Rule metadata (id, severity, title, rationale) lives in
+[`references/agent-audit-rules.json`](../references/agent-audit-rules.json). The
+same file accepts an **optional `config` block** that overrides built-in policy
+data. Every key is optional; absent keys fall back to the shipped defaults.
+
+```json
+{
+  "rules": [ /* … the full rule catalog … */ ],
+  "config": {
+    "thresholds": {
+      "description_min": 80,
+      "description_max": 1024,
+      "body_budget": 500,
+      "body_critical": 600
+    },
+    "vocabularies": {
+      "categories": ["marketplace"],
+      "tiers": ["lts"]
+    },
+    "profiles": {
+      "security": ["SKILL001", "SKILL002", "SKILL009", "SKILL014", "SKILL015"],
+      "quality_exclude": ["SKILL015"]
+    },
+    "patterns": {
+      "dangerous": [
+        {"label": "kubectl delete", "regex": "kubectl\\s+delete", "suggestion": "Avoid cluster deletion.", "ignore_case": false}
+      ],
+      "secrets": [
+        {"label": "Example org token", "regex": "ARK-[A-Za-z0-9]{20,}"}
+      ]
+    }
+  }
+}
+```
+
+| Key | Merge semantics | Effect |
+|---|---|---|
+| `thresholds` | **override** per key | Tune SKILL003/004 length and SKILL011 body budgets |
+| `vocabularies.categories` / `.tiers` | **extend** (union with defaults) | Add org categories/tiers without losing the closed vocab — SKILL008 |
+| `profiles.security` | **override** the set | Define which rules the `security` profile keeps |
+| `profiles.quality_exclude` | **override** the set | Define which rules the `quality` profile drops |
+| `patterns.dangerous` / `.secrets` | **extend** (append to defaults) | Add org-specific SKILL014/015 detections without losing the baseline |
+
+The custom catalog must still define every `rule_id` the engine emits (the
+`config` block does not relax that contract). Validate a custom catalog with
+`agent_audit.py rules --format json`.
+
+### New check types (code change)
+
+Adding a brand-new *kind* of detection — not just new data for an existing rule —
+requires a detector in [`scripts/agent_audit.py`](../scripts/agent_audit.py)
+(`audit_skill` / `audit_project`) plus a catalog entry. This is deliberate: a
+full config-driven rule DSL would be more complex and less safe than a small
+Python function.

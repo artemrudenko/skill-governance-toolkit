@@ -172,3 +172,7 @@ walk-through: `docs/user-guide.md` § GitLab CI - Merge Request gate.
 - LLM agents interpret findings and decide whether to propose edits.
 - Rule metadata lives in `references/agent-audit-rules.json`; detector logic
   stays in stdlib Python.
+- Policy data (thresholds, vocabularies, profile membership, dangerous/secret
+  pattern packs) is overridable via an optional `config` block in the same
+  catalog — see `docs/checks-reference.md` § Extending the checks. Detection
+  algorithms stay in code; only data is configurable.

@@ -1,25 +1,30 @@
 # Checks Reference
 
 Complete catalog of every governance check this toolkit applies, with the
-rationale behind each. Two layers run checks:
+rationale behind each. Checks come from two engines:
 
-| Layer | Engine | Determinism | Where it runs |
+| Engine | Implementation | Determinism | Where it runs |
 |---|---|---|---|
-| **A. Deterministic engine** | `scripts/agent_audit.py` (Python, stdlib-only) | 100% reproducible | CLI, CI gate, MCP, Docker |
-| **B. LLM skills** | `skill-evaluate`, `library-audit` (Markdown procedures an agent executes) | Model-driven | Interactive agent sessions |
+| **Deterministic engine** | `scripts/agent_audit.py` (Python, stdlib-only) | 100% reproducible | CLI, CI gate, MCP, Docker |
+| **LLM skills** | `skill-evaluate`, `library-audit` (Markdown procedures an agent executes) | Model-driven | Interactive agent sessions |
 
-Layer A is the CI blocker (fast, free, repeatable). Layer B adds depth a
-lexical engine cannot reach (semantic clarity, trigger-phrase quality,
-cross-skill collisions). See [§ Layer A vs Layer B](#layer-a-vs-layer-b).
+> Not to be confused with the **three instruction layers** (L1 `AGENTS.md` /
+> L2 `SKILL.md` / L3 `agents/`) in [`architecture.md`](architecture.md) — that
+> is the loading hierarchy; this page is about *checks*.
 
-The runtime source of truth for Layer A rules is
+The deterministic engine is the CI blocker (fast, free, repeatable). The LLM
+skills add depth a lexical engine cannot reach (semantic clarity, trigger-phrase
+quality, cross-skill collisions). See
+[§ Engine vs LLM skills](#engine-vs-llm-skills).
+
+The runtime source of truth for engine rules is
 [`references/agent-audit-rules.json`](../references/agent-audit-rules.json);
 inspect any rule live with `agent_audit.py explain-rule <RULE_ID>`. This page
 adds the *what it detects* and *why it matters* that the JSON omits.
 
 ---
 
-## Layer A — Deterministic engine rules
+## Deterministic engine rules
 
 22 rules across two families: `DISC*` (project-level discovery) and `SKILL*`
 (per-`SKILL.md`). Severity drives the CI gate: `--fail-on high` blocks a merge
@@ -74,7 +79,7 @@ the `security` and release gates, not the day-to-day structural pass.
 
 ---
 
-## Layer B — LLM skill criteria
+## LLM skill criteria
 
 These run inside an agent session, not in CI. They interpret meaning, not just
 lexical patterns.
@@ -85,18 +90,19 @@ Scores one `SKILL.md`. Full rubric: [`skills/skill-evaluate/SKILL.md`](../skills
 
 | Dim | Focus |
 |---|---|
-| D1 | Clarity (capped automatically on language mix / filler / duplicate paragraphs) |
-| D2 | Description & trigger-phrase quality |
-| D3 | Structure & token budget |
-| D4 | Portability across hosts |
-| D5 | Input/parameter rigor |
-| D6 | Workflow & phase design |
-| D7 | Verification & output contract |
-| D8 | Maintainability & metadata |
-| D9 | Safety |
+| D1 | Clarity (capped by Phase 3.6 on language mix / filler / duplicate paragraphs) |
+| D2 | Completeness |
+| D3 | Specificity |
+| D4 | Examples |
+| D5 | Constraints |
+| D6 | Portability |
+| D7 | Testability |
+| D8 | Discoverability |
+| D9 | Safety (capped by the Phase 3.5 lexical security scan; read-only skills get a D9 floor of 4) |
 
-Plus a per-file lexical security scan and a Phase 3.6 writing-quality scan
-(single-language, active voice, banned filler, brevity heuristics).
+Total score is D1+…+D9 (max 45). A **safety gate** forces the verdict to 🔴 Red
+when D9 ≤ 1 and the skill mutates state or ingests untrusted input, regardless of
+the numeric score.
 
 ### `library-audit` — collection-level phases
 
@@ -107,9 +113,9 @@ Full procedure: [`skills/library-audit/SKILL.md`](../skills/library-audit/SKILL.
 
 ---
 
-## Layer A vs Layer B
+## Engine vs LLM skills
 
-| Question | Layer A (engine) | Layer B (LLM) |
+| Question | Deterministic engine | LLM skills |
 |---|---|---|
 | Is the frontmatter present and valid? | ✅ exact | ✅ |
 | Does `allowed-tools:` / a secret / `rm -rf` appear? | ✅ exact | ✅ |
@@ -119,18 +125,20 @@ Full procedure: [`skills/library-audit/SKILL.md`](../skills/library-audit/SKILL.
 | Do two skills **collide** on triggers? | ❌ | ✅ (cross-skill) |
 | Is the workflow logically sound for its goal? | ❌ | ✅ |
 
-**Rule of thumb:** Layer A answers *"is this structurally and safely valid?"*
-deterministically — the right question for a blocking merge gate. Layer B
-answers *"is this a good skill?"* — the right question for authoring review.
-The CI gate runs Layer A; route Layer B as an advisory or on-demand step.
+**Rule of thumb:** the engine answers *"is this structurally and safely valid?"*
+deterministically — the right question for a blocking merge gate. The LLM skills
+answer *"is this a good skill?"* — the right question for authoring review.
+The CI gate runs the engine; route the LLM skills as an advisory or on-demand
+step.
 
 ---
 
 ## Extending the checks
 
-Layer A rules are data, not code: add an entry to
-[`references/agent-audit-rules.json`](../references/agent-audit-rules.json) and a
-matching detector in [`scripts/agent_audit.py`](../scripts/agent_audit.py)
+Engine rules are partly data: the catalog entry (id, severity, title, rationale)
+lives in
+[`references/agent-audit-rules.json`](../references/agent-audit-rules.json), while
+the detector logic lives in [`scripts/agent_audit.py`](../scripts/agent_audit.py)
 (`audit_skill` / `audit_project`). `AGENT_GOVERNANCE_RULES_PATH` lets a consumer
 point the engine at a custom catalog; the catalog must define every `rule_id`
 the engine emits. See the user guide § Deterministic Audit Engine for the

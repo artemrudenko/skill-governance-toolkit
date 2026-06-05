@@ -469,10 +469,22 @@ A copy-ready template lives at `references/ci/gitlab-ci.yml`. Copy it to the
 root of the consuming marketplace repo as `.gitlab-ci.yml`. It audits only the
 skills/agents a merge request changes, using a tiered gate:
 
+```mermaid
+flowchart TD
+    MR[Merge request opens or updates] --> CH{Changes touch<br/>skills/agents/AGENTS.md?}
+    CH -- no --> SKIP[Gate skipped]
+    CH -- yes --> SCOPE[audit-project --changed-only<br/>--base CI_MERGE_REQUEST_DIFF_BASE_SHA]
+    SCOPE --> BLOCK{High-severity<br/>finding?}
+    BLOCK -- yes --> FAIL[skill-gate:block fails<br/>merge blocked]
+    BLOCK -- no --> PASS[skill-gate:block passes]
+    SCOPE --> ADV[skill-gate:advisory<br/>JSON artifact + MR comment]
+    ADV --> NOTE[Idempotent note,<br/>never blocks]
+```
+
 | Job | Command | Effect |
 |---|---|---|
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on high` | High-severity findings fail the pipeline and block the merge |
-| `skill-gate:advisory` | same with `--fail-on none --format json` | Never blocks; publishes `skill-audit.json` for downstream MR comments |
+| `skill-gate:advisory` | same with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` and an idempotent MR comment |
 
 `--changed-only` diffs the working tree against `--base` (a git ref) using a
 three-dot diff, so an author is accountable only for the entities their MR

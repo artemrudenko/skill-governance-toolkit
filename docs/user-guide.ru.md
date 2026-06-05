@@ -557,10 +557,22 @@ docker run --rm -i \
 целевого репозитория маркетплейса как `.gitlab-ci.yml`. Он аудитит только
 изменённые в MR скиллы/агенты по многоуровневой схеме:
 
+```mermaid
+flowchart TD
+    MR[MR открыт или обновлён] --> CH{Изменены<br/>skills/agents/AGENTS.md?}
+    CH -- нет --> SKIP[Gate пропущен]
+    CH -- да --> SCOPE[audit-project --changed-only<br/>--base CI_MERGE_REQUEST_DIFF_BASE_SHA]
+    SCOPE --> BLOCK{High-severity<br/>finding?}
+    BLOCK -- да --> FAIL[skill-gate:block падает<br/>merge заблокирован]
+    BLOCK -- нет --> PASS[skill-gate:block проходит]
+    SCOPE --> ADV[skill-gate:advisory<br/>JSON-артефакт + коммент в MR]
+    ADV --> NOTE[Идемпотентный коммент,<br/>не блокирует]
+```
+
 | Job | Команда | Эффект |
 |---|---|---|
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on high` | High-severity findings роняют pipeline и блокируют merge |
-| `skill-gate:advisory` | то же с `--fail-on none --format json` | Не блокирует; публикует `skill-audit.json` для комментариев в MR |
+| `skill-gate:advisory` | то же с `--fail-on none --format json` + `post_mr_comment.py` | Не блокирует; публикует `skill-audit.json` и идемпотентный коммент в MR |
 
 `--changed-only` сравнивает рабочее дерево с `--base` (git ref) через three-dot
 diff — автор отвечает только за изменённые в его MR сущности. Шаблон ставит

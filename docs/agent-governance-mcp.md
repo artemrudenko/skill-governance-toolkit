@@ -17,9 +17,14 @@ python3 scripts/agent_audit.py discover .
 python3 scripts/agent_audit.py audit-skill skills/skill-evaluate/SKILL.md --format json
 python3 scripts/agent_audit.py audit-project . --profile release-ready --format json
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on high
+python3 scripts/agent_audit.py audit-project . --changed-only --base origin/main --fail-on high
 python3 scripts/agent_audit.py rules
 python3 scripts/agent_audit.py explain-rule SKILL009
 ```
+
+`--changed-only` scopes the audit to assets changed against `--base` (a git ref,
+default `origin/main`) — the merge-request gate. See the
+[checks reference](checks-reference.md) for every rule and rationale.
 
 Profiles:
 
@@ -150,6 +155,13 @@ The repository includes `.github/workflows/ci.yml` with two baseline jobs:
 
 For local reproduction, run the commands in `docs/user-guide.md` or
 `docs/user-guide.ru.md` under the component status section.
+
+## GitLab CI
+
+For a GitLab merge-request gate, copy `references/ci/gitlab-ci.yml` into the
+consuming repo as `.gitlab-ci.yml`. It runs `--changed-only` with a tiered
+block/advisory policy and posts findings via `scripts/post_mr_comment.py`. Full
+walk-through: `docs/user-guide.md` § GitLab CI - Merge Request gate.
 
 ## Design constraints
 

@@ -24,6 +24,9 @@
 #   P13 — installer behavior
 #   P14 — sgt command facade behavior
 #   P15 — VERSION metadata synchronization
+#   P16 — MR comment poster behavior
+#   P17 — externalized audit config behavior
+#   P18 — CODEOWNERS covers the governance control-plane paths
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -380,6 +383,23 @@ if python3 "$ROOT/scripts/test_audit_config.py" >/dev/null 2>&1; then
   pass "audit config behavior tests pass"
 else
   fail "audit config tests failed — run: python3 scripts/test_audit_config.py"
+fi
+
+# ── P18: CODEOWNERS covers the governance control-plane paths ─────────────────
+
+phase "P18 — CODEOWNERS separation-of-duties coverage"
+if [[ ! -f "$ROOT/CODEOWNERS" ]]; then
+  fail "CODEOWNERS missing — the governance control plane has no separation of duties"
+else
+  missing_owners=""
+  for critical in "references/agent-audit-rules.json" "scripts/agent_audit.py" "references/ci/gitlab-ci.yml"; do
+    grep -qF "$critical" "$ROOT/CODEOWNERS" || missing_owners+=" $critical"
+  done
+  if [[ -n "$missing_owners" ]]; then
+    fail "CODEOWNERS does not cover critical paths:$missing_owners"
+  else
+    pass "CODEOWNERS covers policy, engine, and CI gate"
+  fi
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

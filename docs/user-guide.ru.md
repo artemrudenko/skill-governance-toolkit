@@ -1,5 +1,9 @@
 # Skill Governance Toolkit — руководство пользователя
 
+> **Канонический источник — английский [`user-guide.md`](user-guide.md).** Этот
+> перевод может отставать по версиям и разделам; при расхождении доверяй
+> английской версии.
+
 Универсальный набор meta-навыков для управления библиотекой Agent Skills
 (SKILL.md по спецификации Anthropic Agent Skills + AGENTS.md по спецификации
 Linux Foundation AAIF). Работает в Claude Code, GitHub Copilot, Cursor,

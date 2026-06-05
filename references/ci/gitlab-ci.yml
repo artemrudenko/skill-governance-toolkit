@@ -17,9 +17,11 @@ stages:
 variables:
   # Full history so the merge-request base commit is reachable for the diff.
   GIT_DEPTH: "0"
-  # Toolkit source. Pin SGT_REF to a release tag for reproducible runs.
+  # Toolkit source. Pin SGT_REF to an IMMUTABLE commit SHA (not a tag) so a
+  # re-tagged release cannot silently change gate behaviour. Replace with the
+  # 40-char SHA of the toolkit commit your org has reviewed and approved.
   SGT_REPO: "https://REPLACE-WITH-YOUR-GITLAB-HOST/ai-tools/skill-governance-toolkit.git"
-  SGT_REF: "v1.8.1"
+  SGT_REF: "REPLACE-WITH-40-CHAR-COMMIT-SHA"
   SGT_DIR: "/tmp/sgt"
 
 # Shared setup: only run on merge requests that touch governed entities.
@@ -27,13 +29,29 @@ variables:
   image: python:3.12-slim
   before_script:
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends git >/dev/null
-    - git clone --depth 1 --branch "$SGT_REF" "$SGT_REPO" "$SGT_DIR"
+    # Fetch then checkout the pinned SHA, and verify HEAD matches it.
+    - git clone "$SGT_REPO" "$SGT_DIR"
+    - git -C "$SGT_DIR" checkout -q "$SGT_REF"
+    - test "$(git -C "$SGT_DIR" rev-parse HEAD)" = "$SGT_REF" || (echo "Toolkit SHA mismatch" && exit 1)
   rules:
+    # Keep this list in sync with the engine's governed asset types
+    # (agent_audit.py asset_type). A path the engine governs but CI ignores
+    # is a silent coverage gap.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "skills/**/*"
         - "agents/**/*"
+        - "commands/**/*"
+        - "prompts/**/*"
         - "AGENTS.md"
+        - "CLAUDE.md"
+        - "GEMINI.md"
+        - ".github/copilot-instructions.md"
+        - "gemini-extension.json"
+        - "**/.mcp.json"
+        - "**/mcp.json"
+        - "**/plugin.json"
+        - "references/agent-audit-rules.json"
 
 # Blocking gate: high-severity findings (secrets, dangerous shell, broken
 # frontmatter, allowed-tools) fail the pipeline and block the merge.

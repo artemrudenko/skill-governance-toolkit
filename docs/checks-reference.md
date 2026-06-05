@@ -180,7 +180,6 @@ data. Every key is optional; absent keys fall back to the shipped defaults.
       "tiers": ["lts"]
     },
     "profiles": {
-      "security": ["SKILL001", "SKILL002", "SKILL009", "SKILL014", "SKILL015"],
       "quality_exclude": ["SKILL015"]
     },
     "patterns": {
@@ -203,9 +202,30 @@ data. Every key is optional; absent keys fall back to the shipped defaults.
 | `profiles.quality_exclude` | **override** the set | Define which rules the `quality` profile drops |
 | `patterns.dangerous` / `.secrets` | **extend** (append to defaults) | Add org-specific SKILL014/015 detections without losing the baseline |
 
+A ready-to-copy, validated example lives at
+[`references/agent-audit-config.example.json`](../references/agent-audit-config.example.json).
+
 The custom catalog must still define every `rule_id` the engine emits (the
 `config` block does not relax that contract). Validate a custom catalog with
-`agent_audit.py rules --format json`.
+`agent_audit.py rules --format json` — it now reports a malformed `config` block,
+not only a malformed rule list.
+
+**Guardrails (pilot):** core safety rules SKILL001/002/009/014/015 have a severity
+floor — a catalog that downgrades them below `high` is rejected at load. Config
+`thresholds` must be positive integers and `patterns` regexes are validated and
+length-capped. Narrow `profiles.security` only to **extend** coverage; weakening
+it is discouraged (a subset-guard is planned).
+
+### Separation of duties
+
+Who may change the *standards* should differ from who authors the *skills* a
+standard governs. The repo ships a root [`CODEOWNERS`](../CODEOWNERS) assigning
+the policy (`agent-audit-rules.json`), the engine (`agent_audit.py`), the CI gate
+template, and the security baseline to a governance owner group. This is the
+human half of "the gate cannot weaken itself"; the severity floor is the engine
+half. `CODEOWNERS` only *enforces* review when the project's branch protection
+requires code-owner approval — enable that on the default branch. `audit.sh` P18
+fails if `CODEOWNERS` stops covering the control-plane paths.
 
 ### New check types (code change)
 

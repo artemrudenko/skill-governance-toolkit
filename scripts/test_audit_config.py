@@ -154,6 +154,18 @@ class AuditConfigTests(unittest.TestCase):
             self.assertIn("broken", result.stderr)
             self.assertNotIn("Traceback", result.stderr)
 
+    def test_shipped_config_example_is_valid_and_functional(self) -> None:
+        example = json.loads((ROOT / "references" / "agent-audit-config.example.json").read_text(encoding="utf-8"))
+        self.assertIn("config", example)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = self._catalog_with_config(tmp_path, example["config"])
+            # Valid: `rules` loads it without error.
+            self.assertEqual(self._run_rules(catalog).returncode, 0)
+            # Functional: the example's `marketplace` category is accepted (no SKILL008).
+            skill = self._skill(tmp_path, category="marketplace")
+            self.assertNotIn("SKILL008", self._rule_ids(self._audit(skill, catalog)))
+
     def test_rules_command_validates_config_block(self) -> None:
         # The `rules` command must surface a bad config, not only the audit path.
         with tempfile.TemporaryDirectory() as tmp:

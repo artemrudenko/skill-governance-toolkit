@@ -1,0 +1,30 @@
+# CODEOWNERS — separation of duties for the governance control plane.
+#
+# Changes to the audit POLICY, the detection ENGINE, the CI GATE, and the
+# SECURITY baseline must be reviewed by the governance/security owners below —
+# not by the same author who edits a skill in the same merge request. This is
+# the human half of "the gate cannot weaken itself"; the engine half is the
+# severity floor in scripts/agent_audit.py.
+#
+# Replace @skill-governance-owners with your real GitLab/GitHub group or
+# usernames (same as the REPLACE-ME sentinels elsewhere in the repo).
+#
+# IMPORTANT: a CODEOWNERS file only ENFORCES review when branch protection is
+# configured to require code-owner approval. In GitLab: Settings → Repository →
+# Protected branches → "Require approval from Code Owners" on the default
+# branch. Without that project setting, this file is advisory only.
+
+# --- Audit policy and rule catalog (who can change the standards) ---
+/references/agent-audit-rules.json          @skill-governance-owners
+/references/agent-audit-config.example.json  @skill-governance-owners
+
+# --- Deterministic engine + read-only MCP wrapper ---
+/scripts/agent_audit.py                     @skill-governance-owners
+/scripts/agent_governance_mcp.py            @skill-governance-owners
+
+# --- CI gate template (who can change enforcement) ---
+/references/ci/gitlab-ci.yml                @skill-governance-owners
+
+# --- Security baseline + the checks reference ---
+/skills/library-audit/references/security-spec.md  @skill-governance-owners
+/docs/checks-reference.md                   @skill-governance-owners

@@ -13,6 +13,21 @@ each before upgrading.
 ## [Unreleased]
 
 ### Added
+- **Pilot-hardening — separation of duties.** Root `CODEOWNERS` assigns the audit
+  policy, the engine, the CI gate template, and the security baseline to a
+  governance owner group, so a skill author cannot change the standards that
+  govern them in the same MR. `audit.sh` P18 fails if `CODEOWNERS` stops covering
+  those control-plane paths. (Enforced only when branch protection requires
+  code-owner approval.)
+- **Pilot-hardening — config example.** `references/agent-audit-config.example.json`
+  is a ready-to-copy, validated `config` block (thresholds, vocabularies,
+  profiles, patterns) so orgs can adopt configurable standards without
+  reverse-engineering the schema. Covered by a behavior test.
+- **Pilot-hardening — CI trigger/coverage sync.** The GitLab template's `changes:`
+  list now matches every governed asset type (`commands/**`, `prompts/**`,
+  `.mcp.json`, `plugin.json`, `CLAUDE.md`/`GEMINI.md`, the catalog) so a governed
+  file can no longer dodge the gate by placement; the toolkit is pinned by an
+  immutable commit SHA (verified post-checkout) instead of a movable tag.
 - **Pilot-hardening — severity floor.** `load_rule_catalog` now rejects a catalog
   that downgrades a core safety rule (SKILL001/002/009/014/015) below `high`,
   preventing accidental (or deliberate) gate-weakening when an org tunes

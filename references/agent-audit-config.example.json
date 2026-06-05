@@ -1,0 +1,26 @@
+{
+  "_comment": "Example org policy override for the deterministic audit engine. Copy the `config` object below into your rule catalog (references/agent-audit-rules.json) or point AGENT_GOVERNANCE_RULES_PATH at a catalog that contains it. Every key is optional; absent keys fall back to the shipped defaults. thresholds/profiles override, vocabularies/patterns extend. See docs/checks-reference.md § Extending the checks. NOTE: narrowing profiles.security is intentionally omitted here — extend, do not weaken, the security gate.",
+  "config": {
+    "thresholds": {
+      "description_min": 80,
+      "description_max": 1024,
+      "body_budget": 500,
+      "body_critical": 600
+    },
+    "vocabularies": {
+      "categories": ["marketplace"],
+      "tiers": ["lts"]
+    },
+    "profiles": {
+      "quality_exclude": ["SKILL015"]
+    },
+    "patterns": {
+      "dangerous": [
+        {"label": "kubectl delete", "regex": "kubectl\\s+delete", "suggestion": "Avoid cluster-deletion commands in skill examples.", "ignore_case": false}
+      ],
+      "secrets": [
+        {"label": "Org access token", "regex": "ARK-[A-Za-z0-9]{20,}"}
+      ]
+    }
+  }
+}

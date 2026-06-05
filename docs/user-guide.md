@@ -304,6 +304,9 @@ separate read-only layer for CI, local checks, and MCP clients.
 It should not replace human or LLM interpretation. It indexes project assets,
 applies deterministic rules, and returns structured findings.
 
+For the full catalog of rules with rationale — and how the deterministic engine
+compares to the LLM skills — see [`checks-reference.md`](checks-reference.md).
+
 ### CLI
 
 ```bash

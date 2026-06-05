@@ -28,6 +28,11 @@ class AgentAuditBehaviorTests(unittest.TestCase):
             check=False,
         )
 
+    def test_checks_reference_documents_every_rule(self) -> None:
+        doc = (ROOT / "docs" / "checks-reference.md").read_text(encoding="utf-8")
+        for rule in agent_audit.rule_catalog()["rules"]:
+            self.assertIn(rule["rule_id"], doc, f"{rule['rule_id']} missing from checks-reference.md")
+
     def test_rule_catalog_loads_from_shared_json(self) -> None:
         catalog = agent_audit.rule_catalog()
         self.assertEqual(catalog["source"], "references/agent-audit-rules.json")

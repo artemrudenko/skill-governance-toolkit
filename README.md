@@ -500,6 +500,7 @@ For the full architectural reasoning — including anti-patterns like `allowed-t
 │   ├── user-guide.md                  ← English user guide with workflows + examples
 │   ├── user-guide.ru.md               ← Russian user guide with workflows + mermaid diagrams
 │   ├── agent-governance-mcp.md        ← CLI/MCP/Docker audit engine guide
+│   ├── checks-reference.md            ← every governance check + rationale (Layer A rules, Layer B dims)
 │   ├── architecture.md                ← three-layer architecture, install contract, parallelization
 │   ├── skill-authoring-standard.md    ← canonical SKILL.md skeleton
 │   └── benchmarks.md                  ← external claim caveats (CRG 8.2× etc.)

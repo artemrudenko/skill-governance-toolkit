@@ -46,8 +46,11 @@ skill-gate:block:
       --changed-only --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
       --profile release-ready --fail-on high --format text
 
-# Advisory: every finding (medium/low/info included) as a JSON artifact.
-# Never blocks; downstream tooling can post these as MR comments.
+# Advisory: every finding (medium/low/info included) as a JSON artifact, and
+# an idempotent MR comment. Never blocks the pipeline.
+#
+# Set a masked CI/CD variable GITLAB_TOKEN (a project/group access token with
+# `api` scope) to enable the comment. Without it the poster is skipped.
 skill-gate:advisory:
   extends: .sgt_base
   stage: validate
@@ -58,6 +61,12 @@ skill-gate:advisory:
       --changed-only --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
       --profile release-ready --fail-on none --format json
       | tee skill-audit.json
+    - >
+      if [ -n "$GITLAB_TOKEN" ]; then
+        python3 "$SGT_DIR/scripts/post_mr_comment.py" skill-audit.json;
+      else
+        echo "GITLAB_TOKEN not set — skipping MR comment.";
+      fi
   artifacts:
     when: always
     paths:

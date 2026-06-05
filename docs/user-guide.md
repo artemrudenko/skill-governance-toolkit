@@ -476,6 +476,28 @@ three-dot diff, so an author is accountable only for the entities their MR
 touches. The template sets `GIT_DEPTH: 0` so the merge-base commit is reachable.
 A bad or unreachable `--base` ref exits 2 with a sanitized message.
 
+#### MR comment poster
+
+`scripts/post_mr_comment.py` turns the advisory `skill-audit.json` into a
+single, idempotent MR note grouped by severity. Re-running a pipeline updates
+the same note (matched by a hidden marker) instead of stacking duplicates.
+
+```bash
+# Preview the rendered comment without calling the API
+python3 scripts/post_mr_comment.py skill-audit.json --dry-run
+```
+
+| Config | Source | Purpose |
+|---|---|---|
+| `--api-url` | `CI_API_V4_URL` | GitLab API base (auto-set in CI) |
+| `--project-id` | `CI_PROJECT_ID` | Target project (auto-set in CI) |
+| `--mr-iid` | `CI_MERGE_REQUEST_IID` | Target merge request (auto-set in CI) |
+| `--token-env` | `GITLAB_TOKEN` | Env var **name** holding an `api`-scoped token |
+
+The token is read from an environment variable by name — never passed inline.
+Without a token (or in `--dry-run`) the poster prints the comment and skips the
+API call. Stdlib-only: HTTP uses `urllib`, no SDK.
+
 ---
 
 ## Use Case 5 - Make a Skill Portable

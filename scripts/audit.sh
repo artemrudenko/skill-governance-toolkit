@@ -364,6 +364,15 @@ else
   fail "derived version metadata drift — run: python3 scripts/sync_version.py"
 fi
 
+# ── P16: MR comment poster behavior ──────────────────────────────────────────
+
+phase "P16 — MR comment poster behavior"
+if python3 "$ROOT/scripts/test_post_mr_comment.py" >/dev/null 2>&1; then
+  pass "MR comment poster tests pass"
+else
+  fail "MR comment poster tests failed — run: python3 scripts/test_post_mr_comment.py"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""

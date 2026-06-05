@@ -21,7 +21,13 @@ each before upgrading.
 - **`references/ci/gitlab-ci.yml`** — copy-ready GitLab CI template with a
   tiered merge-request gate: a blocking `skill-gate:block` job
   (`--fail-on high`) and a non-blocking `skill-gate:advisory` job that publishes
-  `skill-audit.json` for downstream MR comments.
+  `skill-audit.json` and posts an MR comment.
+- **`scripts/post_mr_comment.py`** — stdlib-only (`urllib`) poster that renders
+  the audit JSON into a single, idempotent GitLab MR note grouped by severity,
+  matched by a hidden marker so re-runs update in place. Reads the API token
+  from an environment variable by name; `--dry-run` previews without the API.
+- **MR comment poster behavior tests** in `scripts/test_post_mr_comment.py`,
+  wired into `scripts/audit.sh` as P16.
 - **`--changed-only` behavior tests** in `scripts/test_agent_audit.py` covering
   scope filtering, empty/`None` scope, the git diff helper, CLI wiring, and
   sanitized handling of an invalid base ref.

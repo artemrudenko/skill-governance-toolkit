@@ -305,6 +305,27 @@ class AgentAuditBehaviorTests(unittest.TestCase):
             self.assertTrue(flagged)
             self.assertTrue(all(p.endswith("new/SKILL.md") for p in flagged), flagged)
 
+    def test_report_includes_policy_provenance(self) -> None:
+        for command, target in (("audit-project", "."), ("audit-skill", "skills/library-audit/SKILL.md")):
+            result = self.run_cli(command, target, "--format", "json")
+            report = json.loads(result.stdout)
+            self.assertIn("rules_version", report, command)
+            self.assertIn("engine_version", report, command)
+            self.assertTrue(report["engine_version"], command)
+
+    def test_changed_only_empty_base_falls_back_to_full_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skills" / "bad"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text("No frontmatter here\n", encoding="utf-8")
+
+            # Empty base (e.g. missing CI_MERGE_REQUEST_DIFF_BASE_SHA) must not error;
+            # it falls back to a full audit so the gate fails on governance, not infra.
+            result = self.run_cli("audit-project", tmp, "--changed-only", "--base", "", "--format", "json", "--fail-on", "high")
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            report = json.loads(result.stdout)
+            self.assertIn("SKILL001", {item["rule_id"] for item in report["findings"]})
+
     def test_cli_changed_only_bad_base_is_sanitized(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

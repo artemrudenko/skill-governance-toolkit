@@ -13,6 +13,21 @@ each before upgrading.
 ## [Unreleased]
 
 ### Added
+- **Pilot-hardening — severity floor.** `load_rule_catalog` now rejects a catalog
+  that downgrades a core safety rule (SKILL001/002/009/014/015) below `high`,
+  preventing accidental (or deliberate) gate-weakening when an org tunes
+  severities.
+- **Pilot-hardening — config validation.** `load_config` validates `thresholds`
+  (positive integers) and `_compile_patterns` rejects invalid/oversized org
+  regexes with a sanitized error instead of an opaque `re.error` mid-audit. The
+  `rules` command now surfaces a malformed `config` block, not only the audit
+  path.
+- **Pilot-hardening — base-ref fallback.** `audit-project --changed-only` with an
+  empty `--base` (e.g. missing `CI_MERGE_REQUEST_DIFF_BASE_SHA`) falls back to a
+  full audit instead of exiting 2 — the gate fails on governance, not infra.
+- **Pilot-hardening — verdict provenance.** Every `audit-skill`/`audit-project`
+  report now carries `engine_version` and `rules_version`, so a verdict is
+  traceable to the policy and engine that produced it.
 - **Externalized audit policy** via an optional `config` block in the rule
   catalog (`references/agent-audit-rules.json`). Organizations can override
   `thresholds` (description length, body budgets), extend `vocabularies`

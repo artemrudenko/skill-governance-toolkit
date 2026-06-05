@@ -36,6 +36,19 @@ DEFAULT_THRESHOLDS = {
 DEFAULT_QUALITY_EXCLUDE = {"SKILL015"}
 IGNORED_DIRS = {".git", ".skill-state", "out", "node_modules", "__pycache__"}
 SEVERITIES = {"high", "medium", "low", "info"}
+SEVERITY_RANK = {"info": 0, "low": 1, "medium": 2, "high": 3}
+# Minimum severity for core safety/structural rules. A custom catalog may not
+# weaken these below the floor — it stops a "downgrade-and-merge" gate bypass and
+# guards against accidental weakening when an org tunes severities.
+SEVERITY_FLOOR = {
+    "SKILL001": "high",
+    "SKILL002": "high",
+    "SKILL009": "high",
+    "SKILL014": "high",
+    "SKILL015": "high",
+}
+# Upper bound on an org-supplied regex length — a coarse ReDoS / footgun guard.
+MAX_PATTERN_LENGTH = 500
 ENGINE_RULE_IDS = {
     "DISC001",
     "DISC002",
@@ -134,6 +147,14 @@ def default_rules_path() -> Path:
     return Path.cwd() / "references" / "agent-audit-rules.json"
 
 
+def engine_version() -> str:
+    """Toolkit version from the root VERSION file — stamped into reports for traceability."""
+    try:
+        return (Path(__file__).resolve().parents[1] / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "unknown"
+
+
 @lru_cache(maxsize=1)
 def load_rule_catalog() -> dict[str, Any]:
     path = default_rules_path()
@@ -161,6 +182,9 @@ def load_rule_catalog() -> dict[str, Any]:
         seen.add(rule_id)
         if severity not in SEVERITIES:
             raise ValueError(f"Rule {rule_id} has invalid severity: {severity}")
+        floor = SEVERITY_FLOOR.get(rule_id)
+        if floor and SEVERITY_RANK[severity] < SEVERITY_RANK[floor]:
+            raise ValueError(f"Rule {rule_id} severity '{severity}' is below the required floor '{floor}'")
         for field in ("title", "description"):
             if not isinstance(rule.get(field), str) or not rule[field]:
                 raise ValueError(f"Rule {rule_id} has invalid {field}")
@@ -190,19 +214,43 @@ def _catalog_config_block() -> dict[str, Any]:
 
 
 def _compile_patterns(entries: Any, *, with_suggestion: bool) -> list[tuple[Any, ...]]:
-    """Compile pattern entries from config into the engine's runtime tuples."""
+    """Compile pattern entries from config into the engine's runtime tuples.
+
+    Org-supplied regexes are validated: a bad pattern raises a clear ValueError
+    (caught and sanitized by the CLI) instead of an opaque re.error mid-audit.
+    """
     compiled: list[tuple[Any, ...]] = []
     for entry in entries or []:
         if not isinstance(entry, dict) or "regex" not in entry:
             continue
-        flags = re.I if entry.get("ignore_case") else 0
-        pattern = re.compile(str(entry["regex"]), flags)
         label = str(entry.get("label", entry["regex"]))
+        regex = str(entry["regex"])
+        if len(regex) > MAX_PATTERN_LENGTH:
+            raise ValueError(f"Config pattern '{label}' exceeds the {MAX_PATTERN_LENGTH}-character limit.")
+        flags = re.I if entry.get("ignore_case") else 0
+        try:
+            pattern = re.compile(regex, flags)
+        except re.error as exc:
+            raise ValueError(f"Config pattern '{label}' has an invalid regex: {exc}") from exc
         if with_suggestion:
             compiled.append((label, pattern, str(entry.get("suggestion", "Review this instruction for safety."))))
         else:
             compiled.append((label, pattern))
     return compiled
+
+
+def _validate_thresholds(raw: Any) -> dict[str, int]:
+    """Coerce/validate config thresholds — each must be a positive integer."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Config `thresholds` must be an object.")
+    validated: dict[str, int] = {}
+    for key, value in raw.items():
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(f"Config threshold '{key}' must be a positive integer, got {value!r}.")
+        validated[str(key)] = value
+    return validated
 
 
 @lru_cache(maxsize=1)
@@ -211,7 +259,7 @@ def load_config() -> dict[str, Any]:
     optional `config` block. Thresholds/profiles override; vocab/patterns extend."""
     raw = _catalog_config_block()
 
-    thresholds = {**DEFAULT_THRESHOLDS, **(raw.get("thresholds") or {})}
+    thresholds = {**DEFAULT_THRESHOLDS, **_validate_thresholds(raw.get("thresholds"))}
 
     vocab = raw.get("vocabularies") or {}
     categories = CLOSED_CATEGORIES | {str(c) for c in (vocab.get("categories") or [])}
@@ -568,6 +616,8 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
         "kind": "skill-audit",
         "profile": profile,
         "generated_at": utc_now(),
+        "engine_version": engine_version(),
+        "rules_version": load_rule_catalog()["version"],
         "target": as_posix(skill_path),
         "summary": summarize_findings(kept),
         "findings": [asdict(f) for f in kept],
@@ -648,6 +698,8 @@ def audit_project(
         "kind": "project-audit",
         "profile": profile,
         "generated_at": utc_now(),
+        "engine_version": engine_version(),
+        "rules_version": load_rule_catalog()["version"],
         "root": as_posix(root_path),
         "discovery": discovery,
         "summary": summarize_findings(findings),
@@ -687,6 +739,7 @@ def explain_rule(rule_id: str) -> dict[str, Any]:
 
 def rule_catalog() -> dict[str, Any]:
     catalog = load_rule_catalog()
+    load_config()  # surface a malformed `config` block here, not only on the audit path
     return {
         "generated_at": utc_now(),
         "version": catalog["version"],
@@ -763,7 +816,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "discover":
             emit(discover_agent_assets(args.root), args.format)
         elif args.command == "audit-project":
-            changed_paths = changed_files_from_git(args.base, args.root) if args.changed_only else None
+            changed_paths = None
+            if args.changed_only:
+                if args.base and args.base.strip():
+                    changed_paths = changed_files_from_git(args.base, args.root)
+                else:
+                    # Empty base (e.g. missing CI_MERGE_REQUEST_DIFF_BASE_SHA): fall back
+                    # to a full audit so the gate fails on governance, not infrastructure.
+                    print("agent_audit: --changed-only given an empty --base; auditing the full tree.", file=sys.stderr)
             report = audit_project(args.root, profile=args.profile, changed_paths=changed_paths)
             emit(report, args.format)
             if should_fail(report, args.fail_on):

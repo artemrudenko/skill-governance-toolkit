@@ -110,5 +110,58 @@ class AuditConfigTests(unittest.TestCase):
             self.assertIn("SKILL008", self._rule_ids(self._audit(skill, CATALOG)))
 
 
+    def _run_rules(self, catalog: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "agent_audit.py"), "rules", "--format", "json"],
+            cwd=ROOT, text=True, capture_output=True, check=False,
+            env={**os.environ, "AGENT_GOVERNANCE_RULES_PATH": str(catalog)},
+        )
+
+    def test_severity_floor_rejects_downgraded_security_rule(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = json.loads(CATALOG.read_text(encoding="utf-8"))
+            for rule in payload["rules"]:
+                if rule["rule_id"] == "SKILL014":
+                    rule["severity"] = "low"  # attempt to weaken a blocking safety rule
+            catalog = Path(tmp) / "rules.json"
+            catalog.write_text(json.dumps(payload), encoding="utf-8")
+
+            result = self._run_rules(catalog)
+
+            self.assertEqual(result.returncode, 2, result.stdout)
+            self.assertIn("SKILL014", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+
+    def test_config_rejects_non_integer_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = self._catalog_with_config(tmp_path, {"thresholds": {"description_min": "lots"}})
+
+            result = self._run_rules(catalog)
+
+            self.assertEqual(result.returncode, 2, result.stdout)
+            self.assertNotIn("Traceback", result.stderr)
+
+    def test_config_rejects_invalid_regex_pattern(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            config = {"patterns": {"dangerous": [{"label": "broken", "regex": "(unclosed", "suggestion": "x"}]}}
+            catalog = self._catalog_with_config(tmp_path, config)
+
+            result = self._run_rules(catalog)
+
+            self.assertEqual(result.returncode, 2, result.stdout)
+            self.assertIn("broken", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+
+    def test_rules_command_validates_config_block(self) -> None:
+        # The `rules` command must surface a bad config, not only the audit path.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = self._catalog_with_config(tmp_path, {"thresholds": {"body_budget": "500"}})
+
+            self.assertEqual(self._run_rules(catalog).returncode, 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

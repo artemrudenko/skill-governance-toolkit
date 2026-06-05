@@ -216,6 +216,10 @@ floor — a catalog that downgrades them below `high` is rejected at load. Confi
 length-capped. Narrow `profiles.security` only to **extend** coverage; weakening
 it is discouraged (a subset-guard is planned).
 
+**Traceability:** every audit report stamps `rules_version` (the catalog
+`version`) and `engine_version`, so a verdict ties back to the exact policy and
+engine that produced it.
+
 ### Separation of duties
 
 Who may change the *standards* should differ from who authors the *skills* a

@@ -39,6 +39,12 @@ The JSON report contains:
 
 ```json
 {
+  "kind": "skill-audit",
+  "profile": "release-ready",
+  "generated_at": "2026-06-05T12:00:00Z",
+  "engine_version": "1.8.1",
+  "rules_version": "0.1.0",
+  "target": "/repo/skills/example/SKILL.md",
   "summary": {"total": 1, "by_severity": {"high": 1}},
   "findings": [
     {
@@ -52,6 +58,10 @@ The JSON report contains:
   ]
 }
 ```
+
+Every `audit-skill`/`audit-project` report carries `engine_version` (from the
+root `VERSION`) and `rules_version` (from the catalog) so a verdict is traceable
+to the engine and policy that produced it.
 
 ## MCP server
 

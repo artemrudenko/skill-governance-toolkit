@@ -330,6 +330,10 @@ python3 scripts/agent_audit.py rules
 python3 scripts/agent_audit.py explain-rule SKILL009
 ```
 
+Every JSON report includes `engine_version` (toolkit `VERSION`) and
+`rules_version` (catalog version) at the top level, so a verdict is traceable to
+the engine and policy that produced it.
+
 Profiles:
 
 | Profile | Use |
@@ -338,6 +342,11 @@ Profiles:
 | `quality` | Structure, usability, and portability |
 | `maintainability` | Broad regular maintenance scan |
 | `release-ready` | Pre-release gate |
+
+Policy guardrails (pilot): core safety rules SKILL001/002/009/014/015 have a
+severity floor — a catalog that downgrades them below `high` is rejected at load.
+See [`checks-reference.md`](checks-reference.md) § Extending the checks for the
+configurable `config` block and separation-of-duties (`CODEOWNERS`).
 
 ### MCP Server
 
@@ -489,7 +498,12 @@ flowchart TD
 `--changed-only` diffs the working tree against `--base` (a git ref) using a
 three-dot diff, so an author is accountable only for the entities their MR
 touches. The template sets `GIT_DEPTH: 0` so the merge-base commit is reachable.
-A bad or unreachable `--base` ref exits 2 with a sanitized message.
+
+Base-ref handling:
+- **Empty `--base`** (e.g. a missing `CI_MERGE_REQUEST_DIFF_BASE_SHA`) falls back
+  to a **full-tree audit** with a stderr notice — the gate fails on governance,
+  not on infrastructure.
+- **A non-empty but bad/unreachable ref** exits 2 with a sanitized message.
 
 #### MR comment poster
 

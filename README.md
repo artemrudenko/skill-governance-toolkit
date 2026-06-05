@@ -85,8 +85,13 @@ preview distribution layer intended for CI and cross-client tool calls.
 python3 scripts/agent_audit.py discover .
 python3 scripts/agent_audit.py audit-project . --profile release-ready --format json
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on high
+python3 scripts/agent_audit.py audit-project . --changed-only --base origin/main --fail-on high
 python3 scripts/agent_audit.py audit-skill skills/skill-evaluate/SKILL.md
 ```
+
+For a GitLab merge-request gate, copy `references/ci/gitlab-ci.yml` into the
+consuming repo as `.gitlab-ci.yml` — it runs `--changed-only` with a tiered
+block/advisory policy. See the user guide for details.
 
 For interactive AI clients, run the same engine as a stdio MCP server:
 

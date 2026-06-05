@@ -405,6 +405,9 @@ python3 scripts/agent_audit.py audit-project . --profile release-ready --format 
 # CI-режим: вернуть exit 1, если есть high findings
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on high
 
+# Scope merge request: аудит только изменённых относительно базовой ветки артефактов
+python3 scripts/agent_audit.py audit-project . --changed-only --base origin/main --fail-on high
+
 # Аудит одного SKILL.md
 python3 scripts/agent_audit.py audit-skill skills/skill-evaluate/SKILL.md
 
@@ -547,6 +550,22 @@ docker run --rm -i \
 Если добавляешь новый skill, меняешь rule catalog или MCP server, CI должен
 оставаться зеленым. Для локального воспроизведения используй команды из
 раздела «Статус компонентов и готовность к GitHub».
+
+### Вариант E — GitLab CI: gate на merge request
+
+Готовый шаблон лежит в `references/ci/gitlab-ci.yml`. Скопируй его в корень
+целевого репозитория маркетплейса как `.gitlab-ci.yml`. Он аудитит только
+изменённые в MR скиллы/агенты по многоуровневой схеме:
+
+| Job | Команда | Эффект |
+|---|---|---|
+| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on high` | High-severity findings роняют pipeline и блокируют merge |
+| `skill-gate:advisory` | то же с `--fail-on none --format json` | Не блокирует; публикует `skill-audit.json` для комментариев в MR |
+
+`--changed-only` сравнивает рабочее дерево с `--base` (git ref) через three-dot
+diff — автор отвечает только за изменённые в его MR сущности. Шаблон ставит
+`GIT_DEPTH: 0`, чтобы базовый коммит был доступен. Неверный или недостижимый
+`--base` завершается с кодом 2 и санитизированным сообщением.
 
 ---
 

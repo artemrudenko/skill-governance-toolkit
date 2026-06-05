@@ -316,6 +316,9 @@ python3 scripts/agent_audit.py audit-project . --profile release-ready --format 
 # Fail CI when high-severity findings exist
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on high
 
+# Merge-request scope: audit only assets changed against a base ref
+python3 scripts/agent_audit.py audit-project . --changed-only --base origin/main --fail-on high
+
 # Audit one SKILL.md
 python3 scripts/agent_audit.py audit-skill skills/skill-evaluate/SKILL.md
 
@@ -456,6 +459,22 @@ Jobs:
 |---|---|
 | `audit` | Shell audit, behavior tests, and release-ready audit gate |
 | `docker` | Docker build, MCP `tools/list`, and Docker `audit_project /workspace` |
+
+### GitLab CI - Merge Request gate
+
+A copy-ready template lives at `references/ci/gitlab-ci.yml`. Copy it to the
+root of the consuming marketplace repo as `.gitlab-ci.yml`. It audits only the
+skills/agents a merge request changes, using a tiered gate:
+
+| Job | Command | Effect |
+|---|---|---|
+| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on high` | High-severity findings fail the pipeline and block the merge |
+| `skill-gate:advisory` | same with `--fail-on none --format json` | Never blocks; publishes `skill-audit.json` for downstream MR comments |
+
+`--changed-only` diffs the working tree against `--base` (a git ref) using a
+three-dot diff, so an author is accountable only for the entities their MR
+touches. The template sets `GIT_DEPTH: 0` so the merge-base commit is reachable.
+A bad or unreachable `--base` ref exits 2 with a sanitized message.
 
 ---
 

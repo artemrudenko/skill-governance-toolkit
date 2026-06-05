@@ -13,6 +13,18 @@ each before upgrading.
 ## [Unreleased]
 
 ### Added
+- **`--changed-only` merge-request scope** for `agent_audit.py audit-project`.
+  Diffs the working tree against `--base` (a git ref, default `origin/main`)
+  via a three-dot diff and scopes findings — including DISC alias findings — to
+  the changed assets only, so an MR author is accountable for the entities they
+  touch. A bad or unreachable `--base` ref exits 2 with a sanitized message.
+- **`references/ci/gitlab-ci.yml`** — copy-ready GitLab CI template with a
+  tiered merge-request gate: a blocking `skill-gate:block` job
+  (`--fail-on high`) and a non-blocking `skill-gate:advisory` job that publishes
+  `skill-audit.json` for downstream MR comments.
+- **`--changed-only` behavior tests** in `scripts/test_agent_audit.py` covering
+  scope filtering, empty/`None` scope, the git diff helper, CLI wiring, and
+  sanitized handling of an invalid base ref.
 - **`scripts/doctor.py`** — quick stdlib-only health check for local
   readiness. It reports required files, Git cleanliness, `skills/INDEX.jsonl`
   freshness, skill category/tier coverage, local runtime directories, and the

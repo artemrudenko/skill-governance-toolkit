@@ -1,0 +1,65 @@
+# Skill governance gate for an AI Tools Marketplace repository (GitLab CI).
+#
+# Copy this file to the ROOT of the marketplace repo as `.gitlab-ci.yml`
+# (or `include:` it from an existing pipeline).
+#
+# It runs the toolkit's deterministic audit engine (stdlib-only Python, no pip)
+# against ONLY the skills/agents changed in a merge request. Tiered gate:
+#   - block job    : fails the pipeline on high-severity findings  -> blocks merge
+#   - advisory job : never fails, publishes findings as a JSON artifact
+#
+# Why `--changed-only`: an author is accountable for the entities their MR
+# touches, not for legacy assets already in the marketplace.
+
+stages:
+  - validate
+
+variables:
+  # Full history so the merge-request base commit is reachable for the diff.
+  GIT_DEPTH: "0"
+  # Toolkit source. Pin SGT_REF to a release tag for reproducible runs.
+  SGT_REPO: "https://REPLACE-WITH-YOUR-GITLAB-HOST/ai-tools/skill-governance-toolkit.git"
+  SGT_REF: "v1.8.1"
+  SGT_DIR: "/tmp/sgt"
+
+# Shared setup: only run on merge requests that touch governed entities.
+.sgt_base:
+  image: python:3.12-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git >/dev/null
+    - git clone --depth 1 --branch "$SGT_REF" "$SGT_REPO" "$SGT_DIR"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "skills/**/*"
+        - "agents/**/*"
+        - "AGENTS.md"
+
+# Blocking gate: high-severity findings (secrets, dangerous shell, broken
+# frontmatter, allowed-tools) fail the pipeline and block the merge.
+skill-gate:block:
+  extends: .sgt_base
+  stage: validate
+  script:
+    - >
+      python3 "$SGT_DIR/scripts/agent_audit.py" audit-project .
+      --changed-only --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+      --profile release-ready --fail-on high --format text
+
+# Advisory: every finding (medium/low/info included) as a JSON artifact.
+# Never blocks; downstream tooling can post these as MR comments.
+skill-gate:advisory:
+  extends: .sgt_base
+  stage: validate
+  allow_failure: true
+  script:
+    - >
+      python3 "$SGT_DIR/scripts/agent_audit.py" audit-project .
+      --changed-only --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+      --profile release-ready --fail-on none --format json
+      | tee skill-audit.json
+  artifacts:
+    when: always
+    paths:
+      - skill-audit.json
+    expire_in: 1 week

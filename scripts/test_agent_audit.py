@@ -217,6 +217,110 @@ class AgentAuditBehaviorTests(unittest.TestCase):
         self.assertIsInstance(responses[0], list)
         self.assertEqual(responses[0][0]["id"], 1)
 
+    def _make_bad_skill(self, root: Path, name: str) -> str:
+        skill_dir = root / "skills" / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("No frontmatter here\n", encoding="utf-8")
+        return f"skills/{name}/SKILL.md"
+
+    def test_changed_only_scopes_findings_to_changed_skills(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            changed = self._make_bad_skill(root, "changed")
+            self._make_bad_skill(root, "untouched")
+
+            report = agent_audit.audit_project(root, changed_paths={changed})
+
+            flagged_files = {item["file"] for item in report["findings"]}
+            self.assertTrue(report["findings"])
+            for path in flagged_files:
+                self.assertTrue(path.endswith("skills/changed/SKILL.md"), path)
+
+    def test_changed_only_empty_set_yields_no_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._make_bad_skill(root, "bad")
+
+            report = agent_audit.audit_project(root, changed_paths=set())
+
+            self.assertEqual(report["findings"], [])
+            self.assertTrue(report["summary"]["passed"])
+
+    def test_none_changed_paths_audits_everything(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._make_bad_skill(root, "alpha")
+            self._make_bad_skill(root, "beta")
+
+            report = agent_audit.audit_project(root, changed_paths=None)
+
+            flagged = {item["file"] for item in report["findings"]}
+            self.assertTrue(any(p.endswith("alpha/SKILL.md") for p in flagged))
+            self.assertTrue(any(p.endswith("beta/SKILL.md") for p in flagged))
+
+    def test_changed_files_from_git_lists_diff_against_base(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._git(root, "init")
+            self._git(root, "config", "user.email", "ci@example.com")
+            self._git(root, "config", "user.name", "ci")
+            (root / "keep.txt").write_text("base\n", encoding="utf-8")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-m", "base")
+            new_skill = self._make_bad_skill(root, "new")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-m", "add skill")
+
+            changed = agent_audit.changed_files_from_git("HEAD~1", root)
+
+            self.assertIn(new_skill, changed)
+            self.assertNotIn("keep.txt", changed)
+
+    def test_cli_changed_only_scopes_to_git_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._git(root, "init")
+            self._git(root, "config", "user.email", "ci@example.com")
+            self._git(root, "config", "user.name", "ci")
+            self._make_bad_skill(root, "old")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-m", "base")
+            self._make_bad_skill(root, "new")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-m", "add")
+
+            result = subprocess.run(
+                [PYTHON, str(ROOT / "scripts" / "agent_audit.py"), "audit-project", str(root),
+                 "--changed-only", "--base", "HEAD~1", "--format", "json", "--fail-on", "high"],
+                cwd=ROOT, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            report = json.loads(result.stdout)
+            flagged = {item["file"] for item in report["findings"]}
+            self.assertTrue(flagged)
+            self.assertTrue(all(p.endswith("new/SKILL.md") for p in flagged), flagged)
+
+    def test_cli_changed_only_bad_base_is_sanitized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._git(root, "init")
+            self._git(root, "config", "user.email", "ci@example.com")
+            self._git(root, "config", "user.name", "ci")
+            (root / "keep.txt").write_text("base\n", encoding="utf-8")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-m", "base")
+
+            result = subprocess.run(
+                [PYTHON, str(ROOT / "scripts" / "agent_audit.py"), "audit-project", str(root),
+                 "--changed-only", "--base", "no-such-ref", "--format", "json"],
+                cwd=ROOT, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+
+    def _git(self, root: Path, *args: str) -> None:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, text=True)
+
     def test_security_profile_keeps_structural_blockers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skill_dir = Path(tmp) / "skills" / "bad"

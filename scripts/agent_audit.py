@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -494,7 +495,34 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
     }
 
 
-def audit_project(root: str | Path = ".", profile: str = "release-ready") -> dict[str, Any]:
+def changed_files_from_git(base: str, root: str | Path = ".") -> set[str]:
+    """Return repo-relative posix paths changed between `base` and HEAD.
+
+    Uses three-dot diff so the comparison is against the merge-base of `base`
+    and HEAD — the same set a merge request introduces over its target branch.
+    """
+    root_path = Path(root).expanduser().resolve()
+    proc = subprocess.run(
+        ["git", "-C", str(root_path), "diff", "--name-only", "--diff-filter=d", f"{base}...HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise ValueError(f"git diff against base '{base}' failed; verify the ref exists and the repo is fetched.")
+    return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+
+
+def _in_scope(relative_path: str, changed_paths: set[str] | None) -> bool:
+    """Whole-repo audit when changed_paths is None; otherwise scope to the set."""
+    return changed_paths is None or relative_path in changed_paths
+
+
+def audit_project(
+    root: str | Path = ".",
+    profile: str = "release-ready",
+    changed_paths: set[str] | None = None,
+) -> dict[str, Any]:
     root_path = Path(root).expanduser().resolve()
     discovery = discover_agent_assets(root_path)
     findings: list[Finding] = []
@@ -503,13 +531,15 @@ def audit_project(root: str | Path = ".", profile: str = "release-ready") -> dic
     instruction_assets = [a for a in discovery["assets"] if a["type"] == "instructions"]
     if len(instruction_assets) > 1:
         for asset in instruction_assets:
+            if not _in_scope(asset["relative_path"], changed_paths):
+                continue
             findings.append(
                 finding("DISC001", Path(asset["path"]), 1, "Additional AGENTS.md instruction root detected.", "Confirm nested instruction scope is intentional and documented.")
             )
 
     for alias_name in ("CLAUDE.md", "GEMINI.md"):
         alias_path = root_path / alias_name
-        if alias_path.exists():
+        if alias_path.exists() and _in_scope(rel_to(alias_path, root_path), changed_paths):
             text = read_text(alias_path)
             if "AGENTS.md" not in text:
                 findings.append(
@@ -517,13 +547,19 @@ def audit_project(root: str | Path = ".", profile: str = "release-ready") -> dic
                 )
 
     copilot_path = root_path / ".github" / "copilot-instructions.md"
-    if copilot_path.exists() and "AGENTS.md" not in read_text(copilot_path):
+    if (
+        copilot_path.exists()
+        and _in_scope(rel_to(copilot_path, root_path), changed_paths)
+        and "AGENTS.md" not in read_text(copilot_path)
+    ):
         findings.append(
             finding("DISC002", copilot_path, 1, ".github/copilot-instructions.md does not appear to import AGENTS.md.", "Keep runtime aliases as thin imports of AGENTS.md.")
         )
 
     for asset in discovery["assets"]:
         if asset["type"] != "skill":
+            continue
+        if not _in_scope(asset["relative_path"], changed_paths):
             continue
         report = audit_skill(asset["path"], profile=profile)
         skill_reports.append(report)
@@ -626,6 +662,8 @@ def main(argv: list[str] | None = None) -> int:
     p_project.add_argument("root", nargs="?", default=".")
     p_project.add_argument("--profile", choices=["security", "quality", "maintainability", "release-ready"], default="release-ready")
     p_project.add_argument("--fail-on", choices=["none", "high", "medium", "low", "info", "any"], default="none", help="Exit 1 when findings meet or exceed this severity.")
+    p_project.add_argument("--changed-only", action="store_true", help="Audit only assets changed against --base (merge request scope).")
+    p_project.add_argument("--base", default="origin/main", help="Git ref to diff against when --changed-only is set.")
 
     p_skill = sub.add_parser("audit-skill", help="Audit one SKILL.md file.")
     p_skill.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
@@ -646,7 +684,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "discover":
             emit(discover_agent_assets(args.root), args.format)
         elif args.command == "audit-project":
-            report = audit_project(args.root, profile=args.profile)
+            changed_paths = changed_files_from_git(args.base, args.root) if args.changed_only else None
+            report = audit_project(args.root, profile=args.profile, changed_paths=changed_paths)
             emit(report, args.format)
             if should_fail(report, args.fail_on):
                 return 1

@@ -14,9 +14,9 @@ Skills in this repository use **Claude Code tool names** as the canonical refere
 | `Glob` | `shell` with `find` | Use the shell tool |
 | `WebFetch` | `web` | Fetch a URL |
 | `WebSearch` | — | Use `web` against a search engine URL |
-| `Task` (subagent dispatch) | `spawn_agent` | Dispatch a sub-agent file from `agents/` |
+| `Task` (subagent dispatch) | `spawn_agent` if available | Optional dispatch of a sub-agent file from `agents/`; use sequential fallback when unavailable |
 | `TodoWrite` | `update_plan` | Codex tracks plans natively via its plan tool |
-| `AskUserQuestion` | `ask_user` | Multiple-choice user input |
+| `AskUserQuestion` | plain chat clarification / host input tool if available | Canonical clarification concept, not a required API |
 | `Skill` tool (manual skill invocation) | — | Skills load natively from `skills/` — no explicit invocation tool; just follow the skill body once activated |
 
 ## Behavioral differences worth knowing
@@ -29,7 +29,7 @@ Skills in this repository use **Claude Code tool names** as the canonical refere
 ### Sub-agents
 
 - Use `agents/{name}.md` for specialized roles. The agent's `tools:` frontmatter declares its allowed tools.
-- Dispatch via `spawn_agent` from an orchestrator skill. Codex enforces the agent's tool restrictions.
+- Dispatch via `spawn_agent` only when the current Codex host exposes it. Otherwise inline the agent instructions and run the documented sequential fallback.
 
 ### Tool restrictions
 

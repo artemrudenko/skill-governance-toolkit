@@ -53,7 +53,7 @@ Runtimes:   {TARGET_RUNTIMES}
 
 🟡 `rules/claude.md` exists with content that should merge into repo-level `references/claude-tools.md` — review and merge manually.
 
-🟡 Line 132 references `Task` orchestration; Gemini fallback note added but verify the fallback path actually works end-to-end on Gemini CLI.
+🟡 Line 132 references `Task` / sub-agent dispatch; sequential fallback note added but verify the fallback path produces the same output schema.
 
 ## Post-transform checklist verification
 
@@ -61,7 +61,7 @@ Runtimes:   {TARGET_RUNTIMES}
 ✓ No Claude-only frontmatter fields (paths/hooks/model/effort/context/disable-model-invocation)
 ✓ `compatibility:` field present
 ✓ Tool names canonical (Read, Grep, Bash, Edit, Write — not aliases)
-✓ Gemini fallback note present where `Task` is used
+✓ Sequential fallback note present where `Task` is used
 ✓ No org-specific paths (`/_audits/`, `/outputs/`, `materials/raw/`, etc.)
 ```
 
@@ -81,6 +81,6 @@ The skill cannot auto-fix the following; always surface them:
 
 1. **Over-length description** (>1024 chars) — semantics matter, machine truncation is unsafe.
 2. **`rules/{tool}.md` content** — needs human judgment for repo-level merge target.
-3. **`Task` calls** — added fallback note, but real end-to-end verification on Gemini is required.
+3. **`Task` calls** — added fallback note, but real end-to-end verification without sub-agent dispatch is required.
 4. **ADR / internal doc references stripped** — make sure the *concept* still reads correctly without the link.
 5. **Org-specific names not in `PROJECT_STYLE`** — anything the skill couldn't auto-detect.

@@ -115,13 +115,17 @@ This works on every supported runtime (Claude / Copilot / Cursor / Codex /
 Gemini) because all five support batched tool calls within one turn.
 
 **Do NOT use `Task` sub-agent dispatch to parallelize work:**
-- Gemini CLI does not support sub-agents — breaks portability.
+- Gemini CLI does not support sub-agents — required `Task` breaks portability.
 - Cross-context insights (collision detection, cross-dim scoring) are lost
   when work is sharded across isolated sub-agent contexts.
 
 `Task` is reserved for **specialized expertise** dispatch (e.g. code-reviewer
 agent for TypeScript review), not for parallelizing work that an agent can
 do itself with batched tool calls.
+
+`Task` / sub-agent dispatch is allowed only as an optional path: the skill
+must also document a sequential fallback that produces the same output schema.
+Never require sub-agents for correctness.
 
 The library-audit and skill-evaluate skills include explicit
 "Parallelization guidance" sections — read them when authoring new skills
@@ -160,7 +164,7 @@ Every SKILL.md and reference file ships into the agent's context on every releva
 
 ## Tool-Name Translation Across Platforms
 
-Skills in this repository use **Claude Code tool names** as the canonical reference (`Read`, `Write`, `Edit`, `Bash`, `Grep`, `Glob`, `Task`, `WebFetch`, `WebSearch`, `TodoWrite`, `AskUserQuestion`).
+Skills in this repository use **Claude Code tool names** as the canonical reference (`Read`, `Write`, `Edit`, `Bash`, `Grep`, `Glob`, `Task`, `WebFetch`, `WebSearch`, `TodoWrite`, `AskUserQuestion`). `AskUserQuestion` is a canonical clarification concept; hosts without a structured question tool ask plainly in chat or fail fast in non-interactive mode.
 
 If you're running on a different platform, your runtime translates these to its native tools. The full mapping is in:
 

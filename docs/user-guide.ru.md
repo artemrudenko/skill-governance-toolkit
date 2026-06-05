@@ -344,7 +344,8 @@ flowchart LR
     P2 --> P3[P3: naming convention]
     P3 --> P4[P4: portability tag]
     P4 --> P45[P4.5: multi-tool compat]
-    P45 --> P5[P5: security<br/>secrets/shell/cred paths]
+    P45 --> P55[P5.5: metainfo coverage]
+    P55 --> P5[P5: security<br/>secrets/shell/cred paths]
     P5 --> P6[P6: aggregate + write report]
     P6 --> OUT["out/library-audit/<br/>library-audit-{date}.md"]
 ```
@@ -361,12 +362,13 @@ Layer 3: Recommendations (impact-ordered)
 
 | Category | Что проверяет |
 |---|---|
-| Handoff contracts | Bidirectional refs · trigger uniqueness · body-based AskUserQuestion policy |
+| Handoff contracts | Bidirectional refs · trigger uniqueness · body-based clarification policy |
 | Token budget | Always-on cost · per-skill body length · claims-vs-actual |
 | Naming | Closed-vocab verbs (find/audit/evaluate/...) · `{entity}-{action}` pattern · kebab-case |
 | Portability tag | `compatibility:` present · `portability:` value valid |
-| Multi-tool compat | `allowed-tools:` absent · no per-skill `rules/{tool}.md` · Gemini Task fallback |
+| Multi-tool compat | `allowed-tools:` absent · no per-skill `rules/{tool}.md` · sequential fallback for `Task`/sub-agent paths |
 | Security | Hardcoded API keys · dangerous shell · credential-path reads (masks secrets) |
+| Metainfo | Обязательные `category` и `tier` · соответствие закрытому словарю (Phase 5.5) |
 
 **State persistence:** аудит большой library может занять минуту-две. Skill
 пишет checkpoint после каждой фазы в `${CWD}/.skill-state/library-audit/`.
@@ -374,7 +376,7 @@ Crash mid-audit → re-run продолжает с last checkpoint.
 
 ---
 
-## Use case 3.5 — Запуск deterministic audit engine: CLI, MCP, Docker
+## Use case 4 — Запуск deterministic audit engine: CLI, MCP, Docker
 
 `library-audit` — это agent skill: он удобен, когда аудит запускает LLM-host.
 Для CI, локальной диагностики и подключения к разным AI-клиентам есть
@@ -383,6 +385,9 @@ Crash mid-audit → re-run продолжает с last checkpoint.
 **Важно:** это preview-слой поверх stable skills. Он детерминированно
 индексирует и проверяет agent assets, но не заменяет LLM-интерпретацию
 findings и не применяет патчи сам.
+
+Полный каталог правил с обоснованием — и сравнение детерминированного engine
+с LLM-навыками — см. [`checks-reference.md`](checks-reference.md).
 
 Архитектура:
 
@@ -465,6 +470,14 @@ python3 scripts/agent_governance_mcp.py
 или корпоративного каталога можно задать `AGENT_GOVERNANCE_RULES_PATH`.
 Override-каталог обязан содержать все `rule_id`, которые использует engine;
 если rule отсутствует, audit fail-fast.
+
+**Policy guardrails (pilot):** core safety rules SKILL001/002/009/014/015 имеют
+severity floor — каталог, который опускает их ниже `high`, отклоняется при
+загрузке. Готовый override лежит в `references/agent-audit-config.example.json`:
+thresholds/profiles переопределяют дефолты, vocabularies/patterns расширяют их, а
+security-gate можно только расширять, но не ослаблять. Подробности — в
+[`checks-reference.md`](checks-reference.md) § Extending the checks (там же про
+separation-of-duties через `CODEOWNERS`).
 
 Доступные tools:
 
@@ -616,7 +629,7 @@ API. Только stdlib: HTTP через `urllib`, без SDK.
 
 ---
 
-## Use case 4 — Сделать скил портабельным
+## Use case 5 — Сделать скил портабельным
 
 Сценарий: есть Claude-Code-only скил с `allowed-tools:`, `paths:`, org-specific путями. Хочешь чтобы работал везде.
 
@@ -648,7 +661,7 @@ sequenceDiagram
 | F7 missing `compatibility:` | grep frontmatter | добавить |
 | B1 org-specific paths (`_audits/`, `outputs/`, `materials/raw/`) | grep body | replace на `out/...` |
 | B5 per-skill `rules/{tool}.md` directory | ls | flag for removal · merge content в repo-level `references/` |
-| B6 `Task` usage без Gemini fallback note | grep body | insert note |
+| B6 `Task` usage без sequential fallback | grep body | insert fallback note |
 
 **Что НЕ трансформируется автоматически** (residual concerns —
 пользователь смотрит вручную):
@@ -658,7 +671,7 @@ sequenceDiagram
 
 ---
 
-## Use case 5 — Сравнить локальный скил с корпоративным
+## Use case 6 — Сравнить локальный скил с корпоративным
 
 Сценарий: команда А выработала local skill, в org-wide репе есть похожий
 corporate. Хочешь понять что delta + merge / adopt / keep.
@@ -701,7 +714,7 @@ corporate content считается untrusted input: не выполнять sc
 
 ---
 
-## Use case 6 — Bootstrap integrations (CRG / repomix / serena)
+## Use case 7 — Bootstrap integrations (CRG / repomix / serena)
 
 Сценарий: новый член команды клонировал toolkit. Нужно поставить
 дополнительные инструменты для code review.
@@ -710,7 +723,7 @@ corporate content считается untrusted input: не выполнять sc
 User: /integration-init
 ```
 
-`integration-init` детектит environment, спрашивает (через AskUserQuestion)
+`integration-init` детектит environment, спрашивает через host clarification flow
 которые тулы ставить, запускает native installers, инжектит per-tool
 документацию в `AGENTS.md` и `agents/code-reviewer.md` через paired markers.
 
@@ -732,6 +745,31 @@ User: /integration-init
 
 **Hard prereq gating:** если выбрал CRG но `pipx` нет — Phase 0 fail'ится
 с понятной ошибкой ДО попытки install (защита от mid-install crash).
+
+---
+
+## Use case 8 — Code review agent
+
+`agents/code-reviewer.md` — специализированный read-only reviewer, которого
+orchestrator-скил может диспатчить через `Task`, если host поддерживает
+sub-agents.
+
+Фокус — TypeScript. Что репортит:
+
+| Category | Примеры |
+|---|---|
+| Correctness | Runtime-баги, сломанные edge cases |
+| Security | Обращение с секретами, unsafe shell, injection-риски |
+| Maintainability | Хрупкая структура, дублированная логика |
+| Tests | Отсутствующее или слабое покрытие |
+| Portability | Host-specific предположения |
+
+Правила:
+
+- Sub-agents не диспатчат другие sub-agents.
+- У Gemini нет sub-agent support — любой опциональный sub-agent path требует
+  sequential fallback.
+- Bash ограничен read-only inspection-командами.
 
 ---
 
@@ -759,7 +797,7 @@ flowchart LR
 | Mode | Скил use case |
 |---|---|
 | `auto` (default for validators) | Silent resume of latest unfinished run. Detect-only skills stay detect-only. |
-| `ask` (default for gateways) | AskUserQuestion: resume latest / pick specific / start fresh. |
+| `ask` (default for gateways) | Clarification prompt: resume latest / pick specific / start fresh. |
 | `new` | Ignore prior state, start fresh. |
 
 **Stale-run filter:** runs older than 24h (по `last_updated`) можно
@@ -767,31 +805,6 @@ flowchart LR
 
 State location: `${CWD}/.skill-state/{skill-name}/run-{utc-ts}.json`
 (gitignored). Schema и helper CLI — `references/checkpointing.md`.
-
----
-
-## Writing Style — как писать скилы
-
-Каждый SKILL.md загружается в context агента на каждом relevant turn'е.
-Концисный, моноязычный, без redundancy скил роутится точнее и стоит меньше
-токенов. `skill-evaluate` Phase 3.6 enforces эти правила лексически.
-
-**Hard rules** (полный список — в [`AGENTS.md`](../AGENTS.md#writing-style)):
-
-1. **Один язык на body скила.** Английский recommended — frontmatter parsers
-   и embedding models тренированы на английских корпусах. Mixing
-   Cyrillic/CJK в Latin-script body — 🔴 D1 ≤ 3.
-2. **Active voice, прямые императивы.** «Read the file» beats «The file
-   should be read».
-3. **Таблицы для parameter specs.** Не prose paragraphs.
-4. **Списки (numbered OR bulleted) — для enumerable content.**
-5. **Уникальные секции.** Restate только когда нужно для cross-reference
-   (например Hard rules deliberately re-state).
-6. **Banned filler phrases:** «It's important to note», «Make sure to»,
-   «In conclusion» и т.п. — каждое +4–8 overhead токенов.
-
-**Verification:** `skill-evaluate` на новый или rewritten скил — Phase 3.6
-surfaces violations, D1 capped автоматически.
 
 ---
 
@@ -1006,11 +1019,36 @@ Track quality trend skill'ов over time.
 
 ---
 
+## Writing Style — как писать скилы
+
+Каждый SKILL.md загружается в context агента на каждом relevant turn'е.
+Концисный, моноязычный, без redundancy скил роутится точнее и стоит меньше
+токенов. `skill-evaluate` Phase 3.6 enforces эти правила лексически.
+
+**Hard rules** (полный список — в [`AGENTS.md`](../AGENTS.md#writing-style)):
+
+1. **Один язык на body скила.** Английский recommended — frontmatter parsers
+   и embedding models тренированы на английских корпусах. Mixing
+   Cyrillic/CJK в Latin-script body — 🔴 D1 ≤ 3.
+2. **Active voice, прямые императивы.** «Read the file» beats «The file
+   should be read».
+3. **Таблицы для parameter specs.** Не prose paragraphs.
+4. **Списки (numbered OR bulleted) — для enumerable content.**
+5. **Уникальные секции.** Restate только когда нужно для cross-reference
+   (например Hard rules deliberately re-state).
+6. **Banned filler phrases:** «It's important to note», «Make sure to»,
+   «In conclusion» и т.п. — каждое +4–8 overhead токенов.
+
+**Verification:** `skill-evaluate` на новый или rewritten скил — Phase 3.6
+surfaces violations, D1 capped автоматически.
+
+---
+
 ## Known limitations + roadmap
 
 ### External MCP-dependent skills (future static check)
 
-Этот раздел не про встроенный `agent-governance` MCP server из Use case 3.5.
+Этот раздел не про встроенный `agent-governance` MCP server из Use case 4.
 Он про будущие пользовательские skills, которые зависят от внешних MCP tools
 вроде `mcp__slack__send_message` или `mcp__atlassian__create_issue`.
 

@@ -14,9 +14,9 @@ Skills in this repository use **Claude Code tool names** as the canonical refere
 | `Glob` | `glob` | Match files by pattern |
 | `WebFetch` | `web_fetch` | Fetch a URL |
 | `WebSearch` | — | No direct equivalent. Use `web_fetch` against a search engine URL, or skip the step |
-| `Task` (subagent dispatch) | `agent` | Spawn a sub-agent. Tool/permission restrictions are taken from the agent file's `tools:` field |
+| `Task` (subagent dispatch) | `agent` if available | Optional sub-agent dispatch. Tool/permission restrictions are taken from the agent file's `tools:` field when supported |
 | `TodoWrite` | `sql` against built-in `todos` table | Copilot stores todos in an internal SQLite table |
-| `AskUserQuestion` | `ask_user` | Multiple-choice question to the user |
+| `AskUserQuestion` | plain chat clarification / host input tool if available | Canonical clarification concept, not a required API |
 | `NotebookEdit` | — | Jupyter notebook editing not supported; treat as `view` + `create` |
 | `SlashCommand` | `skill` | Skills are auto-discovered from installed plugins; no slash needed |
 
@@ -30,8 +30,9 @@ Skills in this repository use **Claude Code tool names** as the canonical refere
 
 ### Sub-agents
 
-- Copilot supports sub-agent dispatch via `agent` tool. Tool restrictions defined in the agent file's `tools:` frontmatter **are honored** by Copilot.
+- Copilot agent-mode hosts may support sub-agent dispatch via `agent` tool. Tool restrictions defined in the agent file's `tools:` frontmatter **are honored** when dispatch is available.
 - Only one level of sub-agent nesting is supported (an agent cannot spawn another agent).
+- Skills must keep a sequential fallback for Copilot versions or modes that do not expose sub-agent dispatch.
 
 ### Path-scoped instructions
 

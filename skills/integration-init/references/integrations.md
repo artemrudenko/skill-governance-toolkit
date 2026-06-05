@@ -295,4 +295,4 @@ Anticipated install: `npm install -g @playwright/test && npx playwright install`
 - `semgrep` — pattern-based static analysis (alternative pattern-rule layer to CRG's graph queries)
 - `dependency-cruiser` — TS/JS-specific import graph (subset of CRG functionality, lighter setup)
 
-If user demand emerges for these — add them via the same multi-stage AskUserQuestion pattern used for CRG.
+If user demand emerges for these — add them via the same multi-stage clarification pattern used for CRG.

@@ -1,6 +1,6 @@
 # Phase 2 — Per-tool sub-configuration questions
 
-Loaded by `integration-init` Phase 2. Full AskUserQuestion definitions for each selected integration. Skip any question already answered via CLI inputs (`USE_FORK`, `USE_MCP`, `BUILD_MODE`, `INSTALL_PRECOMMIT`).
+Loaded by `integration-init` Phase 2. Full clarification definitions for each selected integration. Use `AskUserQuestion` only on hosts that provide it; otherwise ask plainly in chat. Skip any question already answered via CLI inputs (`USE_FORK`, `USE_MCP`, `BUILD_MODE`, `INSTALL_PRECOMMIT`).
 
 ---
 

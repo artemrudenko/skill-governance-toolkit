@@ -102,7 +102,8 @@ can resume from the last checkpoint.
 
 | Skill | Resume mode default |
 |---|---|
-| library-audit, skill-evaluate, skill-build-portable, skill-compare | `auto` (read-mostly, never asks) |
+| library-audit, skill-evaluate, skill-compare | `auto` (read-mostly, never asks) |
+| skill-build-portable | `auto` (single-skill run; prompts only for the documented in-place confirmation gate) |
 | integration-init | `ask` (gateway, user expects prompts) |
 
 See `references/checkpointing.md` for the canonical pattern + helper CLI.
@@ -111,9 +112,14 @@ See `references/checkpointing.md` for the canonical pattern + helper CLI.
 
 Skills use **batched tool calls** (multiple `tool_use` blocks in one
 message) for embarrassingly parallel work, NOT `Task` sub-agent dispatch.
-Reason: Gemini CLI has no sub-agent support, so `Task` would break
+Reason: Gemini CLI has no sub-agent support, so required `Task` would break
 portability. Cross-skill insights (collision detection, cross-dim scoring)
 also benefit from being in one agent context.
+
+`Task` / sub-agent dispatch is still allowed as an optional specialized path
+when a skill also defines a sequential fallback with the same output schema.
+The sub-agent path is an acceleration or expertise layer, never a correctness
+requirement.
 
 See `AGENTS.md` § Parallelization patterns for the full rule.
 
@@ -128,10 +134,10 @@ See `AGENTS.md` § Parallelization patterns for the full rule.
 
 ## Why not multi-agent for skill management
 
-We deliberately chose NOT to layer sub-agent orchestration on top of
+We deliberately chose NOT to make sub-agent orchestration required for
 the meta-skills. Reasons:
 
-- **Sub-agent support is uneven.** Gemini CLI has none. Adding agents
+- **Sub-agent support is uneven.** Gemini CLI has none. Requiring agents
   breaks the «works in all 5 runtimes» promise.
 - **Cross-skill insights need single context.** Trigger collisions,
   cross-dim scoring (D3+D4, D5 vs D9) require one agent holding all
@@ -140,5 +146,6 @@ the meta-skills. Reasons:
   → skill-build-portable IS the orchestration. Wrapping it in agents adds
   complexity without speed gain on small libraries.
 
-If we ever add an orchestrator skill (e.g. `library-cleanup`), it stays
-a skill (visible to all 5 runtimes), not an agent.
+If we add an orchestrator skill (e.g. `library-cleanup`), it stays a skill
+(visible to all 5 runtimes). It may optionally dispatch specialized agents
+on hosts that support them, but it must keep a sequential fallback.

@@ -74,7 +74,7 @@ target. Survives mid-write process death without leaving half-files for the resu
 | Mode | Behavior | Recommended default for |
 |---|---|---|
 | `auto` | List runs without `completed_at` and without `error`. If exactly one, pick it. If more than one, pick the most recent and log others to stderr. If zero, start fresh. **Never asks.** | **Validator** skills that must stay detect-only (library-audit, skill-evaluate, skill-compare, skill-build-portable). |
-| `ask` | If any unfinished run exists, ask the user via `AskUserQuestion` whether to resume the latest, pick a specific one, or start fresh. | **Gateway** skills (integration-init) where the user expects interactive prompts. |
+| `ask` | If any unfinished run exists, ask the user whether to resume the latest, pick a specific one, or start fresh. Use `AskUserQuestion` only on hosts that provide it; otherwise ask plainly in chat. | **Gateway** skills (integration-init) where the user expects interactive prompts. |
 | `new` | Ignore all prior runs unconditionally. Start fresh. | Any time the user explicitly asks to "start over". |
 
 Skills MUST log to stderr which mode was applied and which run-id (if any) is being

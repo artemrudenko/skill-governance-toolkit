@@ -1,6 +1,6 @@
 {
   "name": "skill-governance-toolkit",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "Universal AGENTS.md + SKILL.md toolkit — six stable meta-skills, a TypeScript code-reviewer agent, optional integrations, and a preview read-only agent-governance audit engine with CLI/MCP/Docker runners.",
   "license": "MIT",
   "skills": "./skills/",
@@ -9,7 +9,11 @@
   "interface": {
     "displayName": "Skill Governance Toolkit",
     "category": "Coding",
-    "capabilities": ["Interactive", "Read", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
     "brandColor": "#7C5C3A"
   }
 }

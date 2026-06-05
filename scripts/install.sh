@@ -539,7 +539,7 @@ install_gemini() {
   _copy_file "$SOURCE/AGENTS.md" "$dest/AGENTS.md"
   _copy_file "$SOURCE/gemini-extension.json" "$dest/extension.json"
   echo "✓ Gemini CLI:     $dest/  (${#SELECTED_SKILLS[@]} skills)"
-  echo "  ! Gemini does NOT support sub-agents — Task-orchestration skills fall back to linear flow"
+  echo "  ! Gemini does NOT support sub-agents — optional Task paths use sequential fallback"
 }
 
 install_cursor() {

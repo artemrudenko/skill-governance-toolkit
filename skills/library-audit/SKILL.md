@@ -1,8 +1,8 @@
 ---
 name: library-audit
 description: |
-  Meta-validator for an entire skill library (operates on the collection, not one skill). Runs detect-only phases for handoff contracts, trigger uniqueness, AskUserQuestion policy, token budget, naming, portability, multi-tool compatibility, security baseline, and metainfo coverage.
-  Checks include `allowed-tools:`, per-skill `rules/{tool}.md`, Gemini Task fallback, secrets, dangerous shell, credential paths, category/tier presence, closed-vocab drift, and deprecation consistency.
+  Meta-validator for an entire skill library (operates on the collection, not one skill). Runs detect-only phases for handoff contracts, trigger uniqueness, clarification policy, token budget, naming, portability, multi-tool compatibility, security baseline, and metainfo coverage.
+  Checks include `allowed-tools:`, per-skill `rules/{tool}.md`, required Task/sub-agent dispatch without sequential fallback, secrets, dangerous shell, credential paths, category/tier presence, closed-vocab drift, and deprecation consistency.
   Use when: «audit my skills», «audit the library», «library health check», «handoff audit»,
   «security audit», «secrets scan». Never edits files, never asks questions, idempotent.
   Output: markdown report at `out/library-audit/library-audit-{date}.md` with Category roll-up table.
@@ -20,7 +20,7 @@ metainfo:
 
 > **Skill type:** Detect-only — never edits any source file. Writes ONLY to OUTPUT_PATH_OVERRIDE (default `out/library-audit/library-audit-{date}.md`) + checkpoint state.
 
-**Purpose:** comprehensive validation of a skill library — handoff contracts, token budget, naming convention, portability tagging, multi-tool compatibility, security baseline, and metainfo coverage (since 1.8.0). **Pure detect** mode: no file edits, no `AskUserQuestion`, no mutations of any kind.
+**Purpose:** comprehensive validation of a skill library — handoff contracts, token budget, naming convention, portability tagging, multi-tool compatibility, security baseline, and metainfo coverage (since 1.8.0). **Pure detect** mode: no file edits, no user clarification prompts, no mutations of any kind.
 
 **Runtime notes:** Claude/Copilot/Cursor/Codex — normal workflow. Gemini — no sub-agent dispatch (this skill doesn't use Task; per-skill checks are batched tool calls — see Parallelization guidance).
 
@@ -28,7 +28,7 @@ metainfo:
 
 **Triggers:**
 - General: «audit my skills», «check skill library», «skill governance health check»
-- Phase 1 specific: «handoff audit», «trigger collision check», «AskUserQuestion compliance»
+- Phase 1 specific: «handoff audit», «trigger collision check», «clarification policy compliance»
 - Phase 2 specific: «token audit», «budget hygiene», «context size check»
 - Phase 3 specific: «naming audit», «verify naming convention»
 - Phase 4 specific: «portability check», «multi-tool compatibility», «allowed-tools audit»
@@ -94,7 +94,7 @@ Phases 1–5 are **embarrassingly parallel within phase** — per-skill checks (
 
 **Recommended pattern: batched tool calls in one message.** When ≥ 3 skills need checking in a single phase, emit ALL supporting `Read` / `Grep` / `Bash` tool uses in **one message** with multiple `tool_use` blocks — the host runs them concurrently; aggregation happens in your context after results return. Works on every supported runtime (Claude / Copilot / Cursor / Codex / Gemini).
 
-**Do NOT** dispatch sub-agents via `Task` for per-skill work: Gemini CLI has no sub-agent support (would break the portability promise), and cross-skill insights (trigger collisions, handoff asymmetry, naming drift) must surface in ONE context — sub-agent fragmentation loses them.
+**Do NOT** dispatch sub-agents via `Task` for per-skill parallelization: Gemini CLI has no sub-agent support, and cross-skill insights (trigger collisions, handoff asymmetry, naming drift) must surface in ONE context. Optional specialized sub-agent paths are acceptable only when the skill also documents a sequential fallback with the same output schema.
 
 **Phase 6 (aggregate + report) is sequential** — depends on all prior phases.
 
@@ -106,12 +106,12 @@ Apply 3 atomic passes per `references/handoff-spec.md`:
 
 1. **Bidirectional handoff:** for each SKILL.md, every `Predecessor` / `Successor` reference must match its counterpart in the referenced skill.
 2. **Trigger uniqueness:** all `description` trigger phrases must be unique across the library. Disambiguation by entity prefix is allowed when two skills share an action verb (e.g. `library-audit` vs `presentation-audit`).
-3. **AskUserQuestion compliance (body-based, see `handoff-spec.md` Pass 1.3):**
-   - Grep body for `AskUserQuestion` invocations. If none → pass clean.
+3. **Clarification compliance (body-based, see `handoff-spec.md` Pass 1.3):**
+   - Grep body for user-prompt signals. If none → pass clean.
    - If ≥1 found, scan `## Hard rules` for explicit policy:
      - Permit statement found → 🟢 (consistent self-declared role).
      - Forbid statement found but call sites exist → 🔴 H1.4 (self-contradiction).
-     - Neither found → 🟡 H1.5 («role unclear — document policy in Hard rules»).
+     - Neither found → 🟡 H1.5 («role unclear — document clarification policy in Hard rules»).
 
 ### Phase 2 — Token budget
 
@@ -231,7 +231,7 @@ process timeouts). It saves a checkpoint after every phase so it can resume.
 ## Hard rules
 
 - ❌ No file edits (other than the checkpoint state files and the final report).
-- ❌ No `AskUserQuestion` regardless of phase (per the validator-skill contract).
+- ❌ **Clarification policy:** never. No user clarification prompts regardless of phase (per the validator-skill contract).
 - ✅ Idempotent — running twice on the same library produces identical output.
 - ✅ Composable — can be called by a parent health-check skill with `MODE=full`.
 - ✅ Resumable — interrupted runs continue from the last checkpoint when re-invoked.

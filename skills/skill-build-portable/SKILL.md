@@ -51,7 +51,7 @@ This skill is the **counterpart** of:
 **Skip / Don't use for:**
 - The skill is already portable — run `library-audit` first to confirm; this skill refuses to write when source has zero violations.
 - User wants only to *check* portability, not transform — use `library-audit` or `skill-evaluate` instead.
-- Source uses Claude-only features the user *wants* to keep — first ask whether to remove them or document them as Claude-only (see `KEEP_CLAUDE_FALLBACK` input).
+- Source uses Claude-only features the user *wants* to keep — choose `KEEP_CLAUDE_FALLBACK=true` to preserve them as documented Claude-only comments.
 
 **Don't skip when:**
 - «It's a small skill, conversion is obvious» — automated transformation surfaces edge cases users miss (e.g. forgotten Claude-only frontmatter fields, hardcoded paths).
@@ -77,6 +77,7 @@ This skill is the **counterpart** of:
 | `OUTPUT_MODE` | enum: `preview` / `new-file` / `in-place` | `preview` | `preview` — print diff only, no write; `new-file` — write to `{path}.portable.md` next to source; `in-place` — overwrite source (creates `.bak`) |
 | `TARGET_RUNTIMES` | list | `[claude, copilot, cursor, codex, gemini]` | Which runtimes the output should support. If a subset (e.g. `[claude, copilot]`), some restrictions relax |
 | `KEEP_CLAUDE_FALLBACK` | boolean | `false` | If `true`, Claude-only frontmatter fields are preserved as comments with explanation rather than removed |
+| `FORCE` | boolean | `false` | If true, skip the final confirmation gate after previewing the diff. Only applies to `OUTPUT_MODE=in-place`; preview is still mandatory. |
 | `PROJECT_STYLE` | path | none | Optional `.portable-style.md` declaring project-specific replacement rules (e.g. «replace `/internal-audits/` with `out/audits/`») |
 
 ---
@@ -84,8 +85,8 @@ This skill is the **counterpart** of:
 ## Workflow
 
 Six explicit phases. The skill **never** writes to disk before Phase 3 has shown the diff
-and Phase 4 has received user confirmation (in `in-place` mode). Phase 5 re-audits the
-output to prove portability.
+and Phase 4 has received user confirmation (in `in-place` mode, unless `FORCE=true`).
+Phase 5 re-audits the output to prove portability.
 
 ### Phase 0 — Locate and read source
 
@@ -102,7 +103,7 @@ Run the full rule catalog — see [`references/audit-rules.md`](references/audit
 
 Compose an ordered transformation list (one entry per violation), e.g. `[F1 / frontmatter:line 3] remove allowed-tools` · `[B1 / body:line 47] replace _audits/legacy-audit/ → out/legacy-audit/` · `[F7] add compatibility:` · etc. See [`references/examples.md`](references/examples.md) for full sample plans.
 
-If the list contains any 🔴 **and** `OUTPUT_MODE=in-place` **and** `--force` is not set → **AskUserQuestion** confirmation gate (the only user prompt in this skill). Display the plan and the target path before proceeding.
+If the list contains any 🔴 **and** `OUTPUT_MODE=in-place`, mark the write as requiring a final confirmation gate unless `FORCE=true`. Do not prompt in this phase; Phase 3 must show the diff first.
 
 ### Phase 3 — Preview diff (always shown before any write)
 
@@ -112,7 +113,12 @@ Transformation order: frontmatter rewrite (F1–F7) → body substitutions (B1�
 
 If `OUTPUT_MODE=preview` → **stop here**, no file written.
 
-### Phase 4 — Write (only after confirmation in in-place mode)
+### Phase 4 — Confirm + write
+
+If `OUTPUT_MODE=in-place` and `FORCE=false`, run the single clarification
+confirmation gate now, after the user has seen the diff. Use `AskUserQuestion`
+only on hosts that provide it; otherwise ask plainly in chat. Display the target
+path, backup path, and transformation count. If the user declines, stop with no write.
 
 - `OUTPUT_MODE=new-file` → write to `{source_dir}/SKILL.portable.md`.
 - `OUTPUT_MODE=in-place` → create `{source}.bak`, then overwrite source.
@@ -139,10 +145,10 @@ running it twice on the same file must produce zero changes the second time.
 - ✅ Always create `.bak` before in-place writes.
 - ✅ Always emit «Residual concerns» section — there are violations this skill **cannot** auto-fix and the user must review.
 - ✅ **Idempotency:** running twice on the same skill must produce zero changes on second run. Phase 5 verifies this.
-- ✅ **Post-transform checklist** (verify ALL after write): no `allowed-tools`, no Claude-only frontmatter, `compatibility:` present, tool names canonical, Gemini fallback note where `Task` used, no org-specific paths.
+- ✅ **Post-transform checklist** (verify ALL after write): no `allowed-tools`, no Claude-only frontmatter, `compatibility:` present, tool names canonical, sequential fallback note where `Task` used, no org-specific paths.
 - ✅ Resumable — checkpoint at P1, P2, P3 lets the user re-run after a crash without re-auditing or re-generating.
 - ✅ If source has zero violations, refuse to write — report «already portable».
-- ✅ **AskUserQuestion policy:** permitted ONLY as a single confirmation gate in Phase 2 when 🔴 transformations are queued AND `OUTPUT_MODE=in-place` AND `--force` is not set. No other phase may prompt the user.
+- ✅ **Clarification policy:** permitted ONLY as a single confirmation gate in Phase 4, after diff preview, when 🔴 transformations are queued AND `OUTPUT_MODE=in-place` AND `FORCE=false`. No other phase may prompt the user.
 
 ---
 
@@ -161,7 +167,7 @@ persisted before any write happens.
 | P4 — write | no (terminal write step) | — |
 | P5 — verify portability | no (read-only re-audit) | — |
 
-- Default `RESUME=auto` — single-skill operation, never asks.
+- Default `RESUME=auto` — single-skill operation; resume selection is non-interactive. The only allowed prompt is the Phase 4 in-place confirmation gate.
 - State location: `${CWD}/.skill-state/skill-build-portable/run-{utc-timestamp}.json`.
 - The `.bak` from the previous successful write and the checkpoint JSON together let the user roll back in-place writes safely.
 

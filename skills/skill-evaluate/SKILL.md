@@ -20,6 +20,8 @@ metainfo:
 
 # Skill Evaluate
 
+> **Skill type:** Detect-only by default — reads one SKILL.md, writes only checkpoint state and the documented score/report output. `REWRITE=true` produces an improved version as an explicit draft output; it never silently overwrites the source skill.
+
 **Purpose:** score the quality of any SKILL.md across 9 measurable dimensions (D1–D9: clarity, completeness, specificity, examples, constraints, portability, testability, discoverability, safety), identify overload (> 200 lines without `references/`), verify frontmatter and body conformance to the universal Agent Skills standard. Return a scored report with concrete, section-specific improvements and an optional rewritten version. Persist the score to a JSONL index.
 
 ## When to use
@@ -88,7 +90,7 @@ metainfo:
 - **Phase 1 (D1–D9) — do NOT parallelize.** Cross-dim insights (D3+D4 interaction, D5 vs D9, D9 caps from 3.5, D1 caps from 3.6) require all 9 dims in ONE context.
 - **Phase 3 sub-checks — batch tool calls.** 3.0/3.0b/3.1/3.2/3.3/3.4/3.4b/3.5/3.6 are independent; emit supporting `grep`/`ls`/`Read` in ONE message with multiple `tool_use` blocks. Aggregate in context to apply caps.
 - **Phase 0 / 4 / 5 / 6 — sequential** (trivially fast or synthesis-dependent).
-- **Never `Task` sub-agent dispatch** — Gemini CLI has no sub-agent support (portability) and fragments cross-dim insights.
+- **Never require `Task` / sub-agent dispatch for scoring correctness.** Optional specialized sub-agent paths are acceptable only when the skill also documents a sequential fallback with the same output schema. Do not use sub-agents for plain parallelization; use batched tool calls.
 
 ## Phase 1 — Dimension scoring
 

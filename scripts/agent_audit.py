@@ -72,6 +72,9 @@ ENGINE_RULE_IDS = {
     "SKILL018",
     "SKILL019",
     "SKILL020",
+    "SKILL021",
+    "SKILL022",
+    "SKILL023",
 }
 SECURITY_PROFILE_RULE_IDS = {
     "SKILL001",
@@ -86,6 +89,7 @@ SECURITY_PROFILE_RULE_IDS = {
     "SKILL015",
     "SKILL016",
     "SKILL017",
+    "SKILL023",
 }
 
 
@@ -109,11 +113,14 @@ class AgentAsset:
 
 
 DANGEROUS_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
-    ("rm -rf", re.compile(r"\brm\s+-rf\b"), "Avoid destructive deletion examples or require explicit confirmation."),
-    ("sudo", re.compile(r"\bsudo\b"), "Avoid privileged command requirements unless scoped and justified."),
-    ("chmod 777", re.compile(r"\bchmod\s+777\b"), "Avoid world-writable permission guidance."),
+    ("rm -rf", re.compile(r"\brm\s+-rf\s+(?:/(?:\s|$)|\$[A-Za-z_][A-Za-z0-9_]*\b)"), "Avoid destructive deletion examples or require explicit confirmation."),
+    ("sudo rm", re.compile(r"\bsudo\s+rm\b"), "Avoid privileged delete commands unless scoped and explicitly approved."),
+    ("chmod 777", re.compile(r"\bchmod\s+777\s+(?!/tmp\b)"), "Avoid world-writable permission guidance outside /tmp."),
     ("curl pipe shell", re.compile(r"\b(curl|wget)\b[^\n|]{0,120}\|\s*(sh|bash)\b"), "Avoid pipe-to-shell installers."),
-    ("eval argv", re.compile(r"\beval\s+[\"']?\$@"), "Avoid eval on user-controlled argv."),
+    ("eval argv", re.compile(r"\beval\s+(?:[\"']?\$@|\$\(|\"\$\{)"), "Avoid eval on user-controlled input."),
+    ("disk wipe", re.compile(r"\bdd\s+if=/dev/(?:random|urandom|zero)\s+of=", re.I), "Avoid disk-wipe command patterns."),
+    ("fork bomb", re.compile(r":\(\)\s*\{\s*:\|:\s*&\s*\}\s*;?\s*:"), "Do not include executable fork-bomb patterns."),
+    ("block device write", re.compile(r">\s*/dev/(?:sd[a-z]|nvme\d+n\d+|disk\d+)"), "Avoid raw block-device writes."),
     ("git reset hard", re.compile(r"\bgit\s+reset\s+--hard\b"), "Do not normalize destructive git reset."),
     ("force push", re.compile(r"\bgit\s+push\b[^\n]{0,80}\s--force\b"), "Avoid force push unless user explicitly approves."),
     ("approval bypass", re.compile(r"\b(bypass|skip|circumvent)\b[^\n]{0,80}\b(approval|sandbox|permission)s?\b", re.I), "Do not instruct agents to bypass approvals or sandboxes."),
@@ -122,11 +129,16 @@ DANGEROUS_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
 SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("OpenAI-style token", re.compile(r"\bsk-[A-Za-z0-9]{20,}\b")),
     ("Anthropic token", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{32,}\b")),
+    ("Slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
     ("GitHub token", re.compile(r"\bghp_[A-Za-z0-9]{36}\b")),
+    ("GitHub App token", re.compile(r"\bghs_[A-Za-z0-9]{36}\b")),
     ("AWS access key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b")),
+    ("generic secret assignment", re.compile(r"\b(api[-_]?key|password|secret|token)\s*[:=]\s*[\"'][^\"']{8,}[\"']", re.I)),
     ("private key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
-    ("credential path", re.compile(r"(\.aws/credentials|\.ssh/id_[a-z0-9_]+|\.config/gh/hosts\.yml)", re.I)),
+    ("Bearer token", re.compile(r"\bbearer\s+[A-Za-z0-9_\-.]{20,}\b", re.I)),
+    ("credential path", re.compile(r"(\.aws/(?:credentials|config)|\.ssh/id_[a-z0-9_]+|\.gnupg/|\.gpg/|\.netrc|\.authinfo|\.kube/config|\.docker/config\.json|\.config/gh/hosts\.yml)", re.I)),
+    ("env secret file read", re.compile(r"\b(?:cat|open|read|load|source)\s+(?:[./]*)\.env(?:\.[A-Za-z0-9_-]+)?\b", re.I)),
 ]
 
 
@@ -350,6 +362,39 @@ def is_detection_context(line: str) -> bool:
     return bool(re.search(r"\b(detect|flag|scan|sweep|regex|pattern|anti-pattern|allowlist|denylist)\b", line, re.I))
 
 
+def has_skill_type_tag(body: str) -> bool:
+    return bool(re.search(r"Skill type:\**\s*(?:Detect-only|MUTATING|Mutating)", body, re.I))
+
+
+def has_ask_user_policy(body: str) -> bool:
+    return bool(
+        re.search(r"Clarification policy", body, re.I)
+        or re.search(r"AskUserQuestion policy", body, re.I)
+        or re.search(r"No `?AskUserQuestion`?\b", body, re.I)
+        or re.search(r"All AskUserQuestion calls are scoped", body, re.I)
+    )
+
+
+def has_user_prompt_language(body: str) -> bool:
+    prompt_patterns = [
+        r"\bAskUserQuestion\b",
+        r"\bask the user\b",
+        r"\bask whether\b",
+        r"\botherwise ask\b",
+        r"\bthen ask\b",
+        r"\bprompts? via AskUserQuestion\b",
+    ]
+    return any(re.search(pattern, body, re.I) for pattern in prompt_patterns)
+
+
+def has_never_asks_contract(body: str) -> bool:
+    return bool(re.search(r"\bnever asks?\b", body, re.I))
+
+
+def is_mutating_skill(body: str) -> bool:
+    return bool(re.search(r"Skill type:\**\s*(?:MUTATING|Mutating)", body, re.I))
+
+
 def finding(rule_id: str, file: Path, line: int, message: str, suggestion: str) -> Finding:
     rules = rules_by_id()
     if rule_id not in rules:
@@ -561,6 +606,35 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
             finding("SKILL013", skill_path, 1, "No explicit verification guidance detected.", "Add concrete verification steps or acceptance criteria.")
         )
 
+    if not has_skill_type_tag(body):
+        findings.append(
+            finding("SKILL021", skill_path, 1, "Missing required `Skill type` declaration near the top of the skill body.", "Add `> **Skill type:** Detect-only ...` or `> **Skill type:** MUTATING ...` near the title.")
+        )
+
+    if has_user_prompt_language(body) and not has_ask_user_policy(body):
+        findings.append(
+            finding("SKILL022", skill_path, line_for_body_regex(text, body, r"(AskUserQuestion|ask the user|ask whether|otherwise ask|then ask)", re.I), "Skill can prompt the user but lacks an explicit clarification policy.", "Add a Hard rules bullet limiting exactly when user prompts are allowed, or remove the prompt path.")
+        )
+    if has_never_asks_contract(body) and re.search(r"\b(ask the user|ask whether|otherwise ask|then ask)\b", body, re.I):
+        findings.append(
+            finding("SKILL022", skill_path, line_for_body_regex(text, body, r"\b(ask the user|ask whether|otherwise ask|then ask)\b", re.I), "Skill says it never asks but also contains user-prompt language.", "Make the skill fully non-interactive or replace `never asks` with a precise clarification policy.")
+        )
+
+    if is_mutating_skill(body):
+        missing_controls: list[str] = []
+        if not re.search(r"\b(preview|dry-run|diff)\b", body, re.I):
+            missing_controls.append("preview/dry-run/diff")
+        if not re.search(r"\b(confirm|confirmation|AskUserQuestion)\b", body, re.I):
+            missing_controls.append("confirmation gate")
+        if not re.search(r"\b(verify|verification|re-audit|idempotent)\b", body, re.I):
+            missing_controls.append("post-write verification")
+        if not re.search(r"\b(write|modify|inject|install|overwrite|OUTPUT_MODE|marker)\b", body, re.I):
+            missing_controls.append("write scope")
+        if missing_controls:
+            findings.append(
+                finding("SKILL023", skill_path, line_for_body_regex(text, body, r"Skill type:\**\s*(?:MUTATING|Mutating)", re.I), f"Mutating skill contract is missing: {', '.join(missing_controls)}.", "Document preview, confirmation, verification, and exact mutation scope for every mutating skill.")
+            )
+
     for label, pattern, suggestion in cfg["dangerous_patterns"]:
         for match in pattern.finditer(text):
             if is_detection_context(line_text_for_offset(text, match.start())):
@@ -589,9 +663,9 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
             finding("SKILL017", skill_path, line_for_offset(text, text.find(body) + match.start()), "Hardcoded local user path detected.", "Replace local paths with repo-relative paths or input parameters.")
         )
 
-    if re.search(r"\bTask\b", body) and not re.search(r"\bGemini\b[^\n]{0,120}\b(fallback|does not support|no sub-agent)", body, re.I):
+    if re.search(r"\bTask\b", body) and not re.search(r"\b(fallback|linear|sequential|inline)\b", body, re.I):
         findings.append(
-            finding("SKILL018", skill_path, line_for_body_regex(text, body, r"\bTask\b"), "`Task` orchestration appears without a Gemini fallback note.", "Document the linear/manual fallback for Gemini CLI users.")
+            finding("SKILL018", skill_path, line_for_body_regex(text, body, r"\bTask\b"), "`Task` or sub-agent dispatch appears without a sequential fallback.", "Document the linear/manual fallback and ensure sub-agent dispatch is optional, not required for correctness.")
         )
 
     overbroad_pattern = r"\b(do anything|handle everything|all tasks|be an? universal agent|always handle|handle any request)\b"

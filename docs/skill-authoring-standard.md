@@ -69,7 +69,7 @@ metainfo:
 
 - ❌ {forbidden action}
 - ✅ {required behavior}
-- ✅ **AskUserQuestion policy:** {scope of permitted prompts, or «never»}
+- ✅ **Clarification policy:** {scope of permitted prompts, host fallback, non-interactive override, or «never»}
 - ✅ **Mutation policy:** {detect-only OR specific write scope}
 
 ## References
@@ -189,17 +189,35 @@ Mutating skills need stronger safety controls:
 - Mutations of user-owned files MUST use marker-block append (see
   `scripts/marker_block.py`) — never raw overwrite.
 
-## AskUserQuestion policy (required when used)
+## Clarification policy (required when used)
 
-If a skill uses `AskUserQuestion`, its Hard rules MUST contain a one-line
-policy stating exactly when prompts are emitted. Examples:
+If a skill asks the user for missing input, confirmation, or choices, its Hard
+rules MUST contain a one-line policy stating exactly when prompts are emitted.
+`Clarification policy` is the preferred label. `AskUserQuestion policy` remains
+accepted as a legacy-compatible label.
 
-- «AskUserQuestion permitted ONLY in Phase 0 to elicit the `NEED` input
-  when missing.» (skill-find)
-- «AskUserQuestion permitted ONLY as a single confirmation gate in Phase 2
-  when 🔴 transformations are queued AND `OUTPUT_MODE=in-place` AND
-  `--force` not set.» (skill-build-portable)
-- «No AskUserQuestion in any phase.» (validators like library-audit)
+Hosts without a structured question tool ask plainly in chat. Non-interactive
+runs must either provide the matching input override or fail fast.
+
+Examples:
+
+- «Clarification policy: permitted ONLY in Phase 0 to elicit the `NEED` input
+  when missing; non-interactive runs must provide `NEED`.» (skill-find)
+- «Clarification policy: permitted ONLY as a single confirmation gate after
+  diff preview when 🔴 transformations are queued AND `OUTPUT_MODE=in-place`
+  AND `FORCE=false`.» (skill-build-portable)
+- «Clarification policy: never.» (validators like library-audit)
+
+## Optional sub-agent policy
+
+Skills may use `Task` / sub-agent dispatch for specialized expertise when the
+host supports it. They MUST NOT require sub-agents for correctness.
+
+Required contract when `Task` appears:
+- Mark the sub-agent path as optional.
+- Name the sequential fallback for hosts without sub-agents.
+- Keep the fallback's output schema equivalent to the sub-agent path.
+- Do not use sub-agents for plain parallelization; use batched tool calls.
 
 ## What goes where
 

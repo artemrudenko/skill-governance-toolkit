@@ -171,22 +171,17 @@ phase "P7 — Secret-pattern scan (skill bodies + agents)"
 SECRETS=$(python3 -c "
 import re, sys
 from pathlib import Path
+sys.path.insert(0, str(Path('$ROOT') / 'scripts'))
+import agent_audit
 root = Path('$ROOT')
-patterns = [
-    r'sk-[A-Za-z0-9]{20,}',
-    r'sk-ant-[a-zA-Z0-9_-]{32,}',
-    r'xox[baprs]-[A-Za-z0-9-]{10,}',
-    r'ghp_[A-Za-z0-9]{36}',
-    r'AKIA[0-9A-Z]{16}',
-    r'AIza[0-9A-Za-z\-_]{35}',
-    r'-----BEGIN .* PRIVATE KEY-----',
-]
 hits = 0
 for f in list(root.rglob('skills/**/SKILL.md')) + list(root.rglob('agents/**/*.md')):
     if 'library-audit' in str(f) or 'skill-evaluate' in str(f): continue  # spec self-exclude
     text = f.read_text()
-    for pat in patterns:
-        for m in re.finditer(pat, text):
+    for label, pat in agent_audit.load_config()['secret_patterns']:
+        for m in pat.finditer(text):
+            if agent_audit.is_detection_context(agent_audit.line_text_for_offset(text, m.start())):
+                continue
             print(f'  ! secret pattern in {f}: {m.group(0)[:8]}...REDACTED')
             hits += 1
 print(hits)

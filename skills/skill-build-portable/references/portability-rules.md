@@ -145,13 +145,15 @@ If `{skill_dir}/rules/claude.md`, `{skill_dir}/rules/copilot.md`, etc. exist:
 3. Recommend: merge tool-mapping logic into the **repo-level** `references/{tool}-tools.md` (one file per tool, shared by all skills).
 4. Recommend: remove the per-skill `rules/` directory after merge.
 
-### B6 — `Task` orchestration without Gemini fallback (🟡)
+### B6 — `Task` / sub-agent dispatch without sequential fallback (🟡)
 
-If body uses `Task` tool for sub-agent dispatch, insert a fallback note:
+If body uses `Task` tool for sub-agent dispatch, insert an optional-dispatch
+contract and fallback note:
 
 ```markdown
-> **Gemini CLI users:** Gemini does not support sub-agents. Inline the agent's instructions
-> into this skill body manually, or split into sequential skill invocations.
+> **Sub-agent fallback:** If this host supports `Task` / sub-agent dispatch,
+> use the named agent. Otherwise inline the agent's instructions and produce
+> the same output schema before continuing.
 ```
 
 Place this note near the first occurrence of `Task` in the body.

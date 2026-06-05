@@ -147,6 +147,26 @@ install, prints the planned writes, and exits before mutating files.
 
 ## Skill Map
 
+```mermaid
+flowchart LR
+    A[I want to do<br/>something with a skill] --> B{What exactly?}
+
+    B -->|"is there a skill for X?"| FIND[skill-find]
+    B -->|"how good is<br/>THIS skill?"| EVAL[skill-evaluate]
+    B -->|"compare with<br/>corporate"| COMP[skill-compare]
+    B -->|"health of my<br/>skill LIBRARY"| AUDIT[library-audit]
+    B -->|"make a skill<br/>portable"| BUILD[skill-build-portable]
+    B -->|"install<br/>CRG/repomix/serena"| INIT[integration-init]
+
+    FIND -->|found candidate| EVAL
+    EVAL -->|score below target| BUILD
+    AUDIT -->|findings| BUILD
+    AUDIT -->|findings| EVAL
+    COMP -->|MERGE recommendation| EVAL
+    BUILD -->|post-conversion| EVAL
+    BUILD -->|verify| AUDIT
+```
+
 | Need | Use |
 |---|---|
 | Find whether a useful skill already exists | `skill-find` |
@@ -170,6 +190,24 @@ Scope rule:
 
 When a teammate or upstream repository provides a `SKILL.md`, evaluate it
 before adding it to your library.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant E as skill-evaluate
+    participant R as references/rubrics.md
+    participant J as out/scores/index.jsonl
+
+    U->>E: "evaluate this skill"<br/>SKILL_TARGET=path/to/foreign-skill.md
+    E->>R: load D1-D9 rubrics
+    E->>E: Phase 0-3: score 9 dimensions
+    E->>E: Phase 3.5: lexical security scan
+    E->>E: Phase 3.6: writing-quality scan
+    E-->>U: report: summary + per-dim blocks + verdict
+    E->>J: append JSONL entry (idempotent)
+
+    Note over U,E: Safety gate: D9 at or below 1 on a mutating<br/>skill forces a red verdict regardless of score
+```
 
 ```text
 evaluate this skill
@@ -201,6 +239,30 @@ Decision guide:
 
 The toolkit does not include a boilerplate-first scaffolder. Start from a
 working skill, trim it to the new purpose, then evaluate it.
+
+```mermaid
+flowchart TD
+    A[New skill idea] --> B[1. Search existing]
+    B --> C[skill-find NEED='...']
+    C --> D{Already exists?}
+    D -->|Yes| E[Use existing]
+    D -->|No, but similar| F[skill-compare with existing]
+    D -->|No match| G[2. Create SKILL.md by hand]
+
+    G --> H[Copy structure from any<br/>ship-quality skill, e.g. skill-find]
+    H --> I[Replace frontmatter:<br/>name, description, compatibility]
+    I --> J[Fill body: Purpose / When to use /<br/>Phases / Hard rules]
+    J --> K[3. skill-evaluate the new skill]
+    K --> L{Score at least 80<br/>AND safety gate clear?}
+    L -->|No| M[Apply top 3 improvements]
+    M --> K
+    L -->|Yes| N[4. library-audit the whole library]
+    N --> O{Library clean?}
+    O -->|No: trigger collision<br/>or naming violation| P[Fix collision / rename]
+    P --> N
+    O -->|Yes| Q[5. python3 scripts/build_index.py]
+    Q --> R[Done]
+```
 
 Recommended flow:
 
@@ -238,6 +300,8 @@ metainfo:
 - Use for ...
 - Skip for ...
 
+## Predecessor / Successor
+
 ## Required inputs
 
 | Input | Type | Default | Description |
@@ -263,6 +327,21 @@ metainfo:
 
 Use `library-audit` before releases and after major skill changes.
 
+```mermaid
+flowchart LR
+    U[User] -->|"audit my skills"| LA[library-audit]
+    LA --> P0[P0: env + rules setup]
+    P0 --> P1[P1: handoff contracts]
+    P1 --> P2[P2: token budget]
+    P2 --> P3[P3: naming convention]
+    P3 --> P4[P4: portability tag]
+    P4 --> P45[P4.5: multi-tool compat]
+    P45 --> P55[P5.5: metainfo coverage]
+    P55 --> P5[P5: security<br/>secrets / shell / cred paths]
+    P5 --> P6[P6: aggregate + write report]
+    P6 --> OUT["out/library-audit/<br/>library-audit-{date}.md"]
+```
+
 ```text
 audit my skills
 ```
@@ -275,7 +354,7 @@ It checks:
 | Token budget | Always-on cost, oversized skill bodies |
 | Naming | Kebab-case, closed-vocabulary verbs, `{entity}-{action}` pattern |
 | Portability | Missing compatibility metadata, host-specific fields |
-| Multi-tool compatibility | `allowed-tools:`, per-skill tool mappings, missing Gemini fallback |
+| Multi-tool compatibility | `allowed-tools:`, per-skill tool mappings, missing sequential fallback for sub-agent paths |
 | Security | Secrets, credential paths, dangerous shell, prompt-injection risks |
 | Metainfo | Required `category` and `tier`, closed vocabulary compliance |
 
@@ -306,6 +385,15 @@ applies deterministic rules, and returns structured findings.
 
 For the full catalog of rules with rationale — and how the deterministic engine
 compares to the LLM skills — see [`checks-reference.md`](checks-reference.md).
+
+```mermaid
+flowchart LR
+    RULES["references/agent-audit-rules.json<br/>rule metadata + optional config"] --> CORE
+    CORE["agent_audit.py<br/>core + CLI"] --> MCP["agent_governance_mcp.py<br/>stdio MCP server"]
+    CORE --> CI[CI / local terminal]
+    MCP --> CLIENT[Codex / Claude / Cursor / VS Code agent]
+    DOCKER[Docker image] --> MCP
+```
 
 ### CLI
 
@@ -346,7 +434,10 @@ Profiles:
 Policy guardrails (pilot): core safety rules SKILL001/002/009/014/015 have a
 severity floor — a catalog that downgrades them below `high` is rejected at load.
 See [`checks-reference.md`](checks-reference.md) § Extending the checks for the
-configurable `config` block and separation-of-duties (`CODEOWNERS`).
+configurable `config` block and separation-of-duties (`CODEOWNERS`). A ready-to-copy
+policy override lives at `references/agent-audit-config.example.json`: thresholds
+and profiles override the defaults, vocabularies and patterns extend them, and the
+security gate can only be extended, never weakened.
 
 ### MCP Server
 
@@ -533,6 +624,24 @@ API call. Stdlib-only: HTTP uses `urllib`, no SDK.
 
 Use `skill-build-portable` when a skill is tied to one host or organization.
 
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant B as skill-build-portable
+    participant S as Source SKILL.md
+    participant T as Target portable file
+
+    U->>B: "universalize this skill"<br/>OUTPUT_MODE=preview
+    B->>S: Phase 0: read source
+    B->>B: Phase 1: audit (F1-F7 + B1-B7 + S1-S3)
+    B->>B: Phase 2: plan transformations
+    B-->>U: blockers + warnings + diff preview
+    U->>B: apply with OUTPUT_MODE=new-file
+    B->>T: write target
+    B-->>U: diff report + residual concerns
+    Note over U: User reviews the diff before merge
+```
+
 Common issues:
 
 | Issue | Example | Expected fix |
@@ -541,7 +650,7 @@ Common issues:
 | Claude-only fields | `model`, `effort`, `hooks`, `paths` | Remove or move to host-specific packaging |
 | Organization-specific paths | `_audits/`, internal folders | Replace with portable `out/...` paths |
 | Per-skill tool mappings | `rules/codex.md` inside one skill | Move to repo-level `references/{tool}-tools.md` |
-| Missing fallback | `Task` without Gemini note | Add non-subagent fallback |
+| Missing fallback | `Task` without sequential fallback | Add non-subagent fallback with equivalent output |
 
 Recommended workflow:
 
@@ -559,6 +668,22 @@ Avoid rewriting source files until the diff is reviewed.
 
 Use `skill-compare` when a local skill overlaps with a corporate or upstream
 version.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant C as skill-compare
+    participant L as Local SKILL.md
+    participant CR as Corporate library
+
+    U->>C: "compare with corporate"<br/>LOCAL_SKILL=path · CORPORATE_DIR=path
+    C->>L: Phase 0: read local
+    C->>CR: Phase 1: find candidates (overlap signals)
+    C->>C: Phase 2: deep comparison<br/>SHARED / CORP_ONLY / LOCAL_ONLY / CONFLICT
+    C->>C: Phase 3: classify each diff<br/>ADOPT / PROPOSE / KEEP / RULES_FILE
+    C->>C: Phase 4: recommendation
+    C-->>U: report + optional draft blocks<br/>or OUTPUT_DIR artifacts
+```
 
 ```text
 compare with corporate
@@ -635,8 +760,43 @@ It focuses on TypeScript and reports:
 Rules:
 
 - Sub-agents do not dispatch other sub-agents.
-- Gemini has no sub-agent support, so orchestrator skills need a fallback path.
+- Gemini has no sub-agent support, so any optional sub-agent path needs a sequential fallback.
 - Bash is limited to read-only inspection commands.
+
+---
+
+## State Persistence - Resumable Runs
+
+Every multi-phase skill writes a checkpoint after each expensive phase. On a
+crash, timeout, or Ctrl-C, the next invocation resumes from the last checkpoint.
+
+```mermaid
+flowchart LR
+    Start([Phase 0]) --> Save0["checkpoint.py start<br/>-> run_id"]
+    Save0 --> P1[Phase 1]
+    P1 --> Save1["checkpoint.py save-phase<br/>--phase P1 --output {...}"]
+    Save1 --> P2[Phase 2]
+    P2 --> Save2["save-phase --phase P2"]
+    Save2 --> Pn[...]
+    Pn --> Done["checkpoint.py complete<br/>-> completed_at set"]
+
+    Save1 -.crash.-> Resume[Next invocation:<br/>list-resumable]
+    Resume --> P2
+```
+
+Resume modes:
+
+| Mode | Behavior |
+|---|---|
+| `auto` (default for validators) | Silent resume of the latest unfinished run. Detect-only skills stay detect-only. |
+| `ask` (default for gateways) | Clarification prompt: resume latest, pick a specific run, or start fresh. |
+| `new` | Ignore prior state and start fresh. |
+
+Stale-run filter: runs older than 24h (by `last_updated`) can be filtered with
+`checkpoint.py list-resumable --max-age-hours 24`.
+
+State location: `${CWD}/.skill-state/{skill-name}/run-{utc-ts}.json` (gitignored).
+Schema and helper CLI: `references/checkpointing.md`.
 
 ---
 
@@ -734,6 +894,16 @@ Inspect the current skill index:
 ```bash
 python3 scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories
 ```
+
+Where things are installed:
+
+| Runtime | Project rules | Skills | Sub-agents |
+|---|---|---|---|
+| Claude Code | `CLAUDE.md` (`@AGENTS.md`) | `~/.claude/skills/` or `./.claude/skills/` | `~/.claude/agents/` |
+| Copilot | `AGENTS.md` + `.github/copilot-instructions.md` | workspace auto-discovery | `agents/` via `agent` tool |
+| Codex CLI | `AGENTS.md` | `~/.codex/skills/` | `agents/` via `spawn_agent` |
+| Gemini CLI | `GEMINI.md` (`@./AGENTS.md`) | `~/.gemini/skills/` | — (no sub-agent support) |
+| Cursor v2.2+ | `AGENTS.md` (native) | `./.cursor/skills/` (auto-discovery) | via Cursor marketplace |
 
 ---
 
@@ -846,6 +1016,13 @@ For now, any skill that needs an external MCP server should include a
 - How to install or enable it.
 - Which environment variables or scopes are needed.
 - What the skill does when the connection is unavailable.
+
+### Other Planned Improvements
+
+- `skill-scaffold` (or a plain template generator) is intentionally absent for
+  now, to avoid boilerplate copy-paste.
+- Telemetry / usage tracking — which skills actually fire and on which triggers
+  — is separate infrastructure planned for a later release.
 
 ---
 

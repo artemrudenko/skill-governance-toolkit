@@ -24,9 +24,9 @@ metainfo:
 
 **Purpose:** bootstrap optional integrations into the toolkit. Walk the user through a two-stage selection (which tools, then per-tool config), run native installers, and inject conditional documentation that reflects **actual install state** — never mention a tool that isn't installed.
 
-This skill is a **gateway** (AskUserQuestion permitted per library-audit Phase 1.3).
+This skill is a **gateway** (clarification prompts permitted per library-audit Phase 1.3).
 
-**Runtime notes:** Interactive AskUserQuestion in Phase 1/2 only. For non-interactive use, `scripts/init.sh` is the bash fallback. Claude/Copilot/Cursor/Codex — full skill flow. Gemini — same skill flow but AskUserQuestion fallback to host prompts may differ.
+**Runtime notes:** Interactive clarification in Phase 1/2 only. Use `AskUserQuestion` only on hosts that provide it; otherwise ask plainly in chat. For non-interactive use, `scripts/init.sh` is the bash fallback. Claude/Copilot/Cursor/Codex — full skill flow. Gemini — same skill flow but structured prompt fallback may differ.
 
 ## When to use
 
@@ -68,7 +68,7 @@ All optional; defaults drive interactive flow.
 | `MODE` | enum: `auto-install` / `advise-only` | `auto-install` | `advise-only` prints commands instead of running them — safer on locked-down corporate machines |
 | `WITH` | comma list | none | Non-interactive selection (e.g. `WITH=crg,repomix`); skips Phase 1 user prompt |
 | `USE_FORK` | boolean | `false` | If `true` and CRG selected, install `better-code-review-graph` fork instead of upstream main |
-| `USE_MCP` | enum: `mcp` / `cli` / `ask` | `ask` | For CRG: MCP server mode vs CLI mode; `ask` prompts via AskUserQuestion |
+| `USE_MCP` | enum: `mcp` / `cli` / `ask` | `ask` | For CRG: MCP server mode vs CLI mode; `ask` prompts through the host's clarification mechanism |
 | `BUILD_MODE` | enum: `full-now` / `full-later` / `skip` / `ask` | `ask` | For CRG: initial graph build strategy |
 | `INSTALL_PRECOMMIT` | enum: `yes` / `no` / `ask` | `ask` | For CRG: optional supplementary pre-commit hook (CRG already installs its own post-edit hook) |
 
@@ -84,11 +84,11 @@ Full detection logic, prereq matrix, and state-snapshot schema → [`references/
 
 ### Phase 1 — Ask which tools to install
 
-If `WITH` input is provided, skip this phase and use that list. Otherwise **AskUserQuestion** with multi-select across `code-review-graph` · `repomix` · `serena`. If user selects nothing → emit no-op report and exit cleanly.
+If `WITH` input is provided, skip this phase and use that list. Otherwise ask a multi-select clarification across `code-review-graph` · `repomix` · `serena`. If user selects nothing → emit no-op report and exit cleanly.
 
 ### Phase 2 — Per-tool configuration
 
-For each selected tool, run sub-config via AskUserQuestion. Skip configs already answered via CLI inputs.
+For each selected tool, run sub-config via the host's clarification mechanism. Skip configs already answered via CLI inputs.
 
 - **CRG:** Q-CRG-1 variant · Q-CRG-2 MCP/CLI · Q-CRG-3 enrichment · Q-CRG-4 build · Q-CRG-5 pre-commit
 - **repomix:** Q-RPX-1 `--init` y/n
@@ -143,14 +143,14 @@ Highest-risk skill for partial completion: a network failure mid-install can lea
 - ❌ Never inject documentation for tools that are not actually installed (verified via `which`).
 - ❌ Never modify content outside paired BEGIN/END markers.
 - ❌ Never auto-install in `--advise-only` mode.
-- ❌ Never overwrite user-customized content between markers without diff preview.
+- ❌ Never overwrite user-customized content outside paired markers. Content inside toolkit-managed markers is owned by this skill and may be replaced on re-run; users customize outside markers.
 - ✅ **Verify-before-inject:** after `pipx install` / `npm install` etc., MUST run a verification command (e.g. `which {tool}` or `{tool} --version`). ONLY if verification passes, inject the per-tool documentation block. If verification fails, log the failure AND skip the doc injection for that tool.
 - ✅ **Rollback for marker-block writes:** if a Phase 4 injection fails partway, the `marker_block.py` tool ensures atomic write — partial state is impossible. If a tool needs to be uninstalled, run `marker_block.py remove --file AGENTS.md --marker-id skill-init:integration:{tool}` to undo the block.
 - ✅ **`--advise-only` mode** emits commands to stdout for user copy-paste; runs NO installers, injects NO docs. For locked-down environments where the skill cannot execute installers.
 - ✅ Idempotent — re-running with no changes produces no diff.
 - ✅ Re-running with a tool deselected removes its blocks from both files.
 - ✅ Detection via `which {tool}` is authoritative — markers reflect reality, not user intent.
-- ✅ All AskUserQuestion calls are scoped to Phase 1, Phase 2, and the resume prompt.
+- ✅ **Clarification policy:** permitted ONLY in Phase 1, Phase 2, and the resume prompt. Non-interactive runs must provide `WITH` and per-tool inputs or use `scripts/init.sh`.
 - ✅ Resumable — per-tool checkpoint in Phase 3 makes mid-install crashes recoverable without re-prompting the user.
 
 ---

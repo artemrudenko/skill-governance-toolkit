@@ -117,7 +117,8 @@ Cross-checks aligned with `library-audit` Phase 4.5 (but for a single skill):
 |---|---|---|
 | `allowed-tools:` absent | grep frontmatter | 🔴 if portability claimed; 🟡 otherwise |
 | No per-skill `rules/{tool}.md` files | `ls {skill_dir}/rules/{tool}.md` | 🟡 (should use repo-level `references/`) |
-| If body uses `Task`, mentions Gemini limitation | grep body | 🟡 if missing note |
+| If body uses `Task` / sub-agent dispatch, documents sequential fallback | grep body | 🟡 if missing fallback |
+| If body prompts the user, documents clarification policy + non-interactive override | grep body | 🟡 if missing policy or override |
 
 ## 3.5 — Lexical security scan (THIS skill)
 

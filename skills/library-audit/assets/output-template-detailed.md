@@ -34,7 +34,7 @@ Always present (every verbosity). One row per category + Overall row at bottom.
 | Token budget (P2) | 3 | 2 | 1 | 🔴 action required | integration-init body 612 lines (threshold 600); push examples to references/. |
 | Naming convention (P3) | 6 | 0 | 0 | 🟢 healthy | All 6 names match closed vocabulary. |
 | Portability tag (P4) | 6 | 0 | 0 | 🟢 healthy | All carry `compatibility:`. |
-| Multi-tool compat (P4.5) | 5 | 1 | 0 | 🟢 healthy | skill-build-portable Task call without Gemini fallback note (line 132). |
+| Multi-tool compat (P4.5) | 5 | 1 | 0 | 🟢 healthy | skill-build-portable Task call without sequential fallback note (line 132). |
 | Security (P5) | 6 | 0 | 0 | 🟢 healthy | No secrets, dangerous shell, or credential-path reads. |
 | **Overall** | — | — | — | **🔴** | Budget category requires action. |
 ```
@@ -169,7 +169,7 @@ action, and impact tier.
 1. 🔴 [Token budget] Extract integration-init §Examples → `references/examples.md`. Closes the 612-line overload. **Impact: highest.**
 2. 🔴 [Token budget] Extract skill-evaluate Phase 4 template → `assets/output-template-detailed.md`. Brings body into 🟡 range.
 3. 🟡 [Handoff] Add skill-find as optional Predecessor in skill-evaluate's `## Predecessor` section. Restores bidirectional handoff symmetry.
-4. 🟡 [Multi-tool compat] In skill-build-portable line 132, add Gemini fallback note for the `Task` invocation.
+4. 🟡 [Multi-tool compat] In skill-build-portable line 132, add a sequential fallback note for the `Task` invocation.
 ```
 
 Aim for ≤ 10 recommendations; if more exist, list top 10 and note the

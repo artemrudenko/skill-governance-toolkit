@@ -359,6 +359,182 @@ class AgentAuditBehaviorTests(unittest.TestCase):
             rule_ids = {item["rule_id"] for item in report["findings"]}
             self.assertIn("SKILL001", rule_ids)
 
+    def _valid_skill_text(self, body: str) -> str:
+        return "\n".join(
+            [
+                "---",
+                "name: sample-skill",
+                "description: this sample skill has enough routing words and trigger phrases for deterministic audit tests",
+                "compatibility: all",
+                "license: MIT",
+                "metainfo:",
+                "  category: [governance]",
+                "  tier: stable",
+                "---",
+                body,
+            ]
+        )
+
+    def _write_valid_skill(self, root: Path, body: str) -> Path:
+        skill_dir = root / "skills" / "sample"
+        skill_dir.mkdir(parents=True)
+        path = skill_dir / "SKILL.md"
+        path.write_text(self._valid_skill_text(body), encoding="utf-8")
+        return path
+
+    def test_missing_skill_type_is_flagged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "## When to use\nUse this to audit and verify sample skills.\n## Predecessor\nnone\n## Successor\nterminal\n",
+            )
+
+            report = agent_audit.audit_skill(skill)
+
+            self.assertIn("SKILL021", {item["rule_id"] for item in report["findings"]})
+
+    def test_ask_contract_contradiction_is_flagged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "\n".join(
+                    [
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit and verify sample skills.",
+                        "Default `RESUME=auto` — never asks.",
+                        "If the target is ambiguous, otherwise ask the user which one to inspect.",
+                        "## Predecessor",
+                        "none",
+                        "## Successor",
+                        "terminal",
+                    ]
+                ),
+            )
+
+            report = agent_audit.audit_skill(skill)
+
+            self.assertIn("SKILL022", {item["rule_id"] for item in report["findings"]})
+
+    def test_clarification_policy_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "\n".join(
+                    [
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit and verify sample skills.",
+                        "If NEED is missing, ask the user for it before proceeding.",
+                        "## Predecessor",
+                        "none",
+                        "## Successor",
+                        "terminal",
+                        "## Hard rules",
+                        "- ✅ **Clarification policy:** permitted only in Phase 0 when NEED is missing.",
+                    ]
+                ),
+            )
+
+            report = agent_audit.audit_skill(skill)
+
+            self.assertNotIn("SKILL022", {item["rule_id"] for item in report["findings"]})
+
+    def test_task_without_sequential_fallback_is_flagged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "\n".join(
+                    [
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit and verify sample skills.",
+                        "Call `Task` to run agents/code-reviewer.md.",
+                        "## Predecessor",
+                        "none",
+                        "## Successor",
+                        "terminal",
+                    ]
+                ),
+            )
+
+            report = agent_audit.audit_skill(skill)
+
+            self.assertIn("SKILL018", {item["rule_id"] for item in report["findings"]})
+
+    def test_task_with_sequential_fallback_is_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "\n".join(
+                    [
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit and verify sample skills.",
+                        "Optionally call `Task` to run agents/code-reviewer.md.",
+                        "Sequential fallback: inline the agent instructions and emit the same finding schema.",
+                        "## Predecessor",
+                        "none",
+                        "## Successor",
+                        "terminal",
+                    ]
+                ),
+            )
+
+            report = agent_audit.audit_skill(skill)
+
+            self.assertNotIn("SKILL018", {item["rule_id"] for item in report["findings"]})
+
+    def test_mutating_skill_contract_requires_safety_controls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "\n".join(
+                    [
+                        "# Sample",
+                        "> **Skill type:** MUTATING.",
+                        "## When to use",
+                        "Use this to audit sample skills.",
+                        "This skill changes project files.",
+                        "## Predecessor",
+                        "none",
+                        "## Successor",
+                        "terminal",
+                    ]
+                ),
+            )
+
+            report = agent_audit.audit_skill(skill)
+
+            self.assertIn("SKILL023", {item["rule_id"] for item in report["findings"]})
+
+    def test_security_catalog_catches_extended_secret_patterns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "\n".join(
+                    [
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit and verify sample skills.",
+                        "Example leaked token: xoxb-1234567890-abcdef",
+                        "## Predecessor",
+                        "none",
+                        "## Successor",
+                        "terminal",
+                    ]
+                ),
+            )
+
+            report = agent_audit.audit_skill(skill)
+
+            self.assertIn("SKILL015", {item["rule_id"] for item in report["findings"]})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

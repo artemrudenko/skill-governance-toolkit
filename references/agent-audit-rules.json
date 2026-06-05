@@ -118,8 +118,8 @@
     {
       "rule_id": "SKILL018",
       "severity": "medium",
-      "title": "Task orchestration lacks Gemini fallback",
-      "description": "Gemini CLI has no sub-agent support, so Task workflows need a documented fallback."
+      "title": "Sub-agent dispatch lacks sequential fallback",
+      "description": "Task or sub-agent dispatch may be used as an optional path, but skills need a documented sequential fallback for hosts without sub-agents."
     },
     {
       "rule_id": "SKILL019",
@@ -132,6 +132,24 @@
       "severity": "low",
       "title": "Missing predecessor or successor metadata",
       "description": "Workflow contracts are clearer when related skills are documented."
+    },
+    {
+      "rule_id": "SKILL021",
+      "severity": "medium",
+      "title": "Missing Skill type declaration",
+      "description": "Every skill body must declare whether it is detect-only or mutating so users understand the mutation surface."
+    },
+    {
+      "rule_id": "SKILL022",
+      "severity": "medium",
+      "title": "Ambiguous clarification contract",
+      "description": "Skills that can prompt the user need an explicit clarification policy, and must not contradict a never-asks contract. `AskUserQuestion policy` remains accepted as a legacy term."
+    },
+    {
+      "rule_id": "SKILL023",
+      "severity": "high",
+      "title": "Incomplete mutating skill safety contract",
+      "description": "Mutating skills must document preview, confirmation, verification, and exact mutation scope."
     }
   ]
 }

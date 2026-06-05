@@ -25,12 +25,12 @@ For each pair of skills, compute trigger-phrase overlap:
 - If two skills share an **action verb** but with **different entity prefixes** (e.g. `library-audit` vs `wiki-audit`) → acceptable; no finding.
 - If two skills share an **entity-action** combination with only a qualifier differing → 🟡: review whether one should subsume the other.
 
-## Pass 1.3 — AskUserQuestion compliance (body-based)
+## Pass 1.3 — Clarification compliance (body-based)
 
 **Self-exclusion (meta-rule):** files inside `skills/library-audit/` are
 **exempt** from Pass 1.3 scanning of their own bodies. The library-audit
 skill documents how Pass 1.3 detection works — it contains the literal
-string `AskUserQuestion` in its rule description AND a Hard-rules line
+strings `AskUserQuestion` and `Clarification policy` in its rule description AND a Hard-rules line
 forbidding the call. Naive grep would self-flag every run. The
 implementer MUST exclude `skills/library-audit/**` from Pass 1.3.
 Analogous to security-spec.md self-exclusion for Phase 5.
@@ -42,31 +42,33 @@ skill body, not the frontmatter.
 
 **Detection (3 atomic steps):**
 
-1. **Grep body for `AskUserQuestion`** (case-sensitive). If zero hits, the skill
-   is non-interactive — pass clean, no finding.
+1. **Grep body for prompt signals**: `AskUserQuestion`, `ask the user`,
+   `ask whether`, `otherwise ask`, `then ask`, or `Clarification policy`.
+   If zero hits, the skill is non-interactive — pass clean, no finding.
 2. If ≥1 hit, scan `## Hard rules` (or equivalent) for an explicit policy
    statement:
-   - **Permit:** the section contains a line that allows AskUserQuestion, e.g.
+   - **Permit:** the section contains a line that allows clarification, e.g.
+     «Clarification policy: permitted only in Phase 0 when NEED is missing»,
      «All AskUserQuestion calls are scoped to Phase 1 and Phase 2 only»,
      «AskUserQuestion permitted in gateway mode», etc.
    - **Forbid:** the section contains a line that explicitly disallows it,
-     e.g. «❌ No `AskUserQuestion` regardless of phase».
-3. If `Permit` is found → 🟢 (skill declared role and uses AskUserQuestion
+     e.g. «Clarification policy: never» or «❌ No `AskUserQuestion` regardless of phase».
+3. If `Permit` is found → 🟢 (skill declared role and uses clarification
    consistent with it). If `Forbid` is found but call sites exist → 🔴 H1.4
    (self-contradiction — skill bans the call but uses it anyway). If neither
    `Permit` nor `Forbid` and call sites exist → 🟡 H1.5 («role unclear —
    document the policy in Hard rules»).
 
 **Findings:**
-- **H1.4** — Skill declares «no AskUserQuestion» in Hard rules but uses it
+- **H1.4** — Skill declares «no clarification» in Hard rules but uses it
   in body → 🔴 (self-contradiction)
-- **H1.5** — Skill uses AskUserQuestion without an explicit Hard-rules policy
+- **H1.5** — Skill prompts the user without an explicit Hard-rules policy
   statement → 🟡 («role unclear»)
 
 **Why body-based:** A skill that follows the portability rules has no
 frontmatter role marker. Forcing one would contradict
 `skill-build-portable` F2. The Hard-rules section is the conventional place
-for the skill author to declare interaction policy — and it's already
+for the skill author to declare clarification policy — and it's already
 required by the standard skill structure.
 
 ---

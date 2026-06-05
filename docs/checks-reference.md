@@ -26,7 +26,7 @@ adds the *what it detects* and *why it matters* that the JSON omits.
 
 ## Deterministic engine rules
 
-22 rules across two families: `DISC*` (project-level discovery) and `SKILL*`
+25 rules across two families: `DISC*` (project-level discovery) and `SKILL*`
 (per-`SKILL.md`). Severity drives the CI gate: `--fail-on high` blocks a merge
 on `high`; `medium`/`low`/`info` are advisory.
 
@@ -58,9 +58,12 @@ on `high`; `medium`/`low`/`info` are advisory.
 | SKILL015 | high | Embedded secret or a path toward credentials | Skills must never carry tokens or steer agents at credential stores |
 | SKILL016 | medium | External content (web, email, project docs) trusted without verification | Untrusted input treated as instructions enables prompt injection |
 | SKILL017 | medium | Hardcoded home path or org-specific location | Absolute/org paths break portability across machines and teams |
-| SKILL018 | medium | `Task` orchestration with no documented Gemini fallback | Gemini CLI has no sub-agents; the workflow breaks there without a fallback |
+| SKILL018 | medium | `Task` / sub-agent dispatch with no documented sequential fallback | Hosts differ on sub-agent support; dispatch must be optional, not required for correctness |
 | SKILL019 | medium | Overbroad scope language ("scan all", universal-agent phrasing) | Skills should be narrow workflows, not catch-all agents |
 | SKILL020 | low | No predecessor/successor workflow metadata | Handoff contracts are clearer when adjacent skills are declared |
+| SKILL021 | medium | Missing `Skill type` declaration | Users need to know whether a skill is detect-only or mutating before trusting it |
+| SKILL022 | medium | User prompt language without clarification policy, or prompt language contradicting `never asks` | Interactive behavior must be bounded so non-interactive and CI flows do not hang or guess |
+| SKILL023 | high | Mutating skill missing preview, confirmation, verification, or exact write scope | Mutations need a visible safety contract before an agent edits files or external state |
 
 ### Profile scope
 
@@ -69,7 +72,7 @@ applies after filtering.
 
 | Profile | Rules applied | Use |
 |---|---|---|
-| `security` | Only the safety/portability subset: SKILL001, 002, 005–010, 014–017 | Safety-focused scan |
+| `security` | Only the safety/portability subset: SKILL001, 002, 005–010, 014–017, 023 | Safety-focused scan |
 | `quality` | All rules **except** SKILL015 | Structure, usability, portability |
 | `maintainability` | All rules | Broad regular maintenance scan |
 | `release-ready` | All rules | Pre-release gate (CI default) |
@@ -107,7 +110,7 @@ the numeric score.
 ### `library-audit` — collection-level phases
 
 Meta-validates a whole library: handoff contracts, trigger uniqueness,
-`AskUserQuestion` policy, token budget, naming, portability, multi-tool
+clarification policy, token budget, naming, portability, multi-tool
 compatibility, security baseline, and metainfo coverage (Phase 5.5).
 Full procedure: [`skills/library-audit/SKILL.md`](../skills/library-audit/SKILL.md).
 

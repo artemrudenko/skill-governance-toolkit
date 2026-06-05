@@ -18,9 +18,9 @@ Skills use these names directly (no translation needed in Claude Code):
 | `Glob` | Match files by pattern |
 | `WebFetch` | Fetch a URL |
 | `WebSearch` | Search the web |
-| `Task` | Dispatch a sub-agent |
+| `Task` | Dispatch a sub-agent; portable skills still need a sequential fallback |
 | `TodoWrite` | Manage task list (rendered as widget in some hosts) |
-| `AskUserQuestion` | Multiple-choice user input |
+| `AskUserQuestion` | Multiple-choice user input; canonical form of a clarification gate |
 | `NotebookEdit` | Edit Jupyter notebook cells |
 | `Skill` | Manually invoke a skill |
 | `SlashCommand` | Invoke a defined slash command |

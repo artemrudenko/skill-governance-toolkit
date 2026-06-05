@@ -89,10 +89,10 @@ Does this skill work across runtimes (Claude Code / Copilot / Cursor / Codex / G
 
 | Score | Description |
 |---|---|
-| 5 | No `allowed-tools:`; tool-name references go through repo-level mapping; `compatibility:` field present; Task usage notes Gemini limitation if relevant |
-| 4 | Mostly portable; one missing portability tag or one Claude-specific feature called out clearly |
+| 5 | No `allowed-tools:`; tool-name references go through repo-level mapping; `compatibility:` field present; any `Task` / sub-agent path is optional with a sequential fallback and equivalent output schema |
+| 4 | Mostly portable; one missing portability tag or one host-specific feature called out clearly with a fallback |
 | 3 | Portable in spirit but missing portability declaration in frontmatter |
-| 2 | Some host-specific assumptions baked in (e.g. references Claude-only frontmatter fields without alternatives) |
+| 2 | Some host-specific assumptions baked in (e.g. references Claude-only frontmatter fields, structured prompts, or sub-agents without alternatives) |
 | 1 | Frontmatter uses `allowed-tools:` or hard whitelists |
 | 0 | Skill body assumes one specific runtime throughout |
 
@@ -169,5 +169,8 @@ Does the skill identify and document mitigations for safety-critical concerns? T
   D4 only on input → output transformations shown end-to-end. A skill
   with three rich templates and one happy-path fragment is D4 = 3, not 5.
 - **D6 trap:** a skill scoring 5 on D1–D5 but using `allowed-tools:` deserves no higher than 2 on D6 — it will silently break on Copilot / Cursor / Codex.
+- **D6 cap:** `Task` / sub-agent dispatch without a sequential fallback caps D6 at 3. Structured user prompts without a plain-chat or fail-fast fallback also cap D6 at 3.
+- **D7 cap:** an interactive branch without a non-interactive input override caps D7 at 3 because CI and scripted runs cannot verify it reliably.
 - **D5 vs D9 distinction:** D5 (Constraints) asks «are there hard rules at all?» — counts presence. D9 (Safety) asks «do those rules cover safety-critical surface?» — counts coverage of the six sub-concerns. A skill can have many constraints (D5 = 5) that all miss safety (D9 = 2): hard rules forbid invented project keys but say nothing about idempotency, prompt injection, or rollback. Always score D5 and D9 independently.
+- **D9 cap for mutating prompts:** a mutating skill with a confirmation gate but no explicit preview semantics, no `FORCE`/equivalent override, or no fail-fast path caps D9 at 3.
 - **D9 floor for read-only skills:** a discovery / lookup / scoring skill that mutates nothing and ingests no untrusted content starts at D9 = 4. Do not penalize it for not having rollback logic when it has nothing to roll back.

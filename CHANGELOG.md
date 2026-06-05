@@ -10,9 +10,26 @@ each before upgrading.
 
 ---
 
-## [Unreleased]
+## [1.9.0] — 2026-06-05 — governance-contract checks (SKILL021–023) + pilot-hardening + security baseline parity
 
 ### Added
+- **Audit-engine governance contract checks.** The deterministic engine now
+  enforces three rules that were previously documented but not checked:
+  `SKILL021` (required `Skill type` declaration), `SKILL022` (explicit and
+  non-contradictory clarification policy), and `SKILL023` (mutating skills
+  must document preview/confirmation/verification/write scope). Behavior tests
+  cover all three rules.
+- **Portable clarification/sub-agent policy.** `Clarification policy` is now the
+  preferred contract label (`AskUserQuestion policy` remains accepted for
+  legacy skills), and `Task`/sub-agent dispatch is allowed only as an optional
+  specialized path with a sequential fallback and equivalent output schema.
+- **Security baseline pattern parity.** `agent_audit.py` now covers the full
+  documented minimum secret/dangerous-command baseline from
+  `security-spec.md`, including Slack/GitHub App/Bearer/generic secret
+  patterns, credential-store paths, `.env` read attempts, disk-wipe patterns,
+  and fork-bomb/block-device writes. `audit.sh` now imports the engine's
+  pattern catalog instead of carrying a second regex list.
+
 - **`marker_block` behavior tests** (`scripts/test_marker_block.py`, wired as
   `audit.sh` P19) covering the installer's "we never overwrite your files"
   guarantee: managed-block create, append-preserving-user-content, byte-for-byte
@@ -104,6 +121,13 @@ each before upgrading.
   derived version metadata in plugin manifests, `pyproject.toml`, and README
   install pins. `scripts/audit.sh` now checks drift as P15.
 - **Version sync behavior tests** in `scripts/test_sync_version.py`.
+
+### Changed
+- **Skill contract cleanup.** `skill-evaluate` now declares its `Skill type`;
+  `skill-compare` is explicitly non-interactive when inputs are missing or
+  candidate selection is ambiguous; `skill-build-portable` uses a documented
+  `FORCE` input and confirms only after the diff preview; `integration-init`
+  now states that content inside managed marker blocks is toolkit-owned.
 
 ## [1.8.1] — 2026-05-25 — install.ps1 parity + commands/ in per-host + subset-aware AGENTS.md
 

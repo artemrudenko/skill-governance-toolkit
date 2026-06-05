@@ -61,7 +61,7 @@ Search all configured skill sources for skills matching a natural-language need.
 | `NEED` | string | required | Natural-language description of what the user wants to accomplish |
 | `LIMIT` | integer | 5 (max 20) | Max results to return |
 
-If `NEED` is not provided, ask the user for it before proceeding (this is the only place an `AskUserQuestion` is permitted in this skill).
+If `NEED` is not provided, ask the user for it before proceeding. Use `AskUserQuestion` only on hosts that provide it; otherwise ask plainly in chat. Non-interactive runs must provide `NEED`.
 
 ---
 
@@ -195,4 +195,4 @@ Three worked examples (strong match, partial → skill-compare, no-match → sug
 - ❌ Never print bearer tokens, auth headers, or credential-bearing source URLs. Refer to env var names only.
 - ✅ Idempotent.
 - ✅ Fast path: prefer `INDEX.jsonl` over directory scanning.
-- ✅ **AskUserQuestion policy:** permitted ONLY in Phase 0 to elicit the `NEED` input when not provided. No other phase may prompt the user.
+- ✅ **Clarification policy:** permitted ONLY in Phase 0 to elicit the `NEED` input when not provided. No other phase may prompt the user.

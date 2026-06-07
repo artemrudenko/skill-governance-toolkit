@@ -89,13 +89,22 @@ python3 scripts/agent_audit.py audit-project . --changed-only --base origin/main
 python3 scripts/agent_audit.py audit-skill skills/skill-evaluate/SKILL.md
 ```
 
-For a GitLab merge-request gate, copy `references/ci/gitlab-ci.yml` into the
-consuming repo as `.gitlab-ci.yml` — it runs `--changed-only` with a tiered
-block/advisory policy. Tune policy via the `config` block (template:
-`references/agent-audit-config.example.json`) and protect who can change the
-standards with the root `CODEOWNERS`. **Step-by-step setup (env vars, pinned SHA,
-test commands): [`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).** See also
-the user guide and `docs/checks-reference.md` for details.
+For a merge/pull-request gate in a consuming marketplace repo, copy the matching
+template — both run `--changed-only` (only the assets the MR/PR touches, so legacy
+assets never block an unrelated change) with a tiered block/advisory policy:
+
+- **GitLab** → `references/ci/gitlab-ci.yml` as `.gitlab-ci.yml`. Step-by-step
+  setup (env vars, pinned SHA, masked token): [`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).
+- **GitHub** → `references/ci/github-pr.yml` as `.github/workflows/skill-gate.yml`.
+  Findings surface inline on the PR diff as annotations; the full JSON is uploaded
+  as an artifact.
+
+> The toolkit's own `.github/workflows/ci.yml` is **self-CI** (whole-tree audit +
+> test suite) — don't copy it as a consumer gate; use `github-pr.yml` instead.
+
+Tune policy via the `config` block (template: `references/agent-audit-config.example.json`)
+and protect who can change the standards with the root `CODEOWNERS`. See the user
+guide and `docs/checks-reference.md` for details.
 
 For interactive AI clients, run the same engine as a stdio MCP server:
 

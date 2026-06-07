@@ -1,3 +1,7 @@
+# This is the TOOLKIT'S OWN self-CI — it audits the whole tree and runs the full
+# test/behavior suite on every push/PR to this repo. It is NOT the template a
+# consuming marketplace repo should copy. Consumers want the changed-only PR gate:
+#   GitHub: references/ci/github-pr.yml   GitLab: references/ci/gitlab-ci.yml
 name: CI
 
 on:

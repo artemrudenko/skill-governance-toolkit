@@ -1,0 +1,113 @@
+# Skill governance gate for a GitHub-hosted AI Tools Marketplace repository.
+#
+# Copy this file into the CONSUMING repo as `.github/workflows/skill-gate.yml`.
+#
+# NOTE: this is the *consumer* template — it audits ONLY the skills/agents a pull
+# request changes (`--changed-only`), so pre-existing legacy assets never block an
+# unrelated PR. (The toolkit's OWN `.github/workflows/ci.yml` deliberately audits
+# the whole tree — that is self-CI for the toolkit, not a consumer gate.)
+#
+# It mirrors the GitLab template (`references/ci/gitlab-ci.yml`): same engine,
+# same three-dot diff, same immutable-SHA pin. Results surface inline on the PR
+# diff as GitHub annotations, and the full JSON is uploaded as an artifact.
+
+name: skill-governance-gate
+
+on:
+  pull_request:
+    # Keep in sync with the engine's governed asset types (agent_audit.py
+    # asset_type). A path the engine governs but CI ignores is a silent gap.
+    paths:
+      - "skills/**"
+      - "agents/**"
+      - "commands/**"
+      - "prompts/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "GEMINI.md"
+      - ".github/copilot-instructions.md"
+      - "gemini-extension.json"
+      - "**/plugin.json"
+      - "**/.mcp.json"
+      - "**/mcp.json"
+      - "references/agent-audit-rules.json"
+
+permissions:
+  contents: read
+
+env:
+  # Toolkit source. Pin SGT_REF to an IMMUTABLE 40-char commit SHA (not a tag) so
+  # a re-tagged release cannot silently change gate behaviour. Replace both.
+  SGT_REPO: "https://github.com/REPLACE-WITH-YOUR-ORG/skill-governance-toolkit.git"
+  SGT_REF: "REPLACE-WITH-40-CHAR-COMMIT-SHA"
+  SGT_DIR: "${{ runner.temp }}/sgt"
+
+jobs:
+  skill-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the merge-base of the PR base is reachable for the
+          # three-dot diff. A shallow clone breaks --changed-only.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch the pinned toolkit
+        run: |
+          set -euo pipefail
+          git clone "$SGT_REPO" "$SGT_DIR"
+          git -C "$SGT_DIR" checkout -q "$SGT_REF"
+          test "$(git -C "$SGT_DIR" rev-parse HEAD)" = "$SGT_REF" \
+            || { echo "Toolkit SHA mismatch — expected $SGT_REF"; exit 1; }
+
+      - name: Ensure the PR base ref is present
+        # `origin/<base>` must resolve for the three-dot diff. checkout fetches
+        # the PR ref; fetch the base branch explicitly into a tracking ref.
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+
+      - name: Block on high-severity findings (changed assets only)
+        run: |
+          python3 "$SGT_DIR/scripts/agent_audit.py" audit-project . \
+            --changed-only --base "origin/${GITHUB_BASE_REF}" \
+            --profile release-ready --fail-on high --format text
+
+      - name: Annotate every finding on the PR diff (advisory)
+        if: always()
+        run: |
+          set -euo pipefail
+          # --fail-on none so this advisory pass never changes the job result.
+          # An empty/unreachable base makes the engine exit non-zero (fail-closed,
+          # per the --changed-only contract); `|| true` keeps the annotate step
+          # itself green while the block step above carries the real verdict.
+          python3 "$SGT_DIR/scripts/agent_audit.py" audit-project . \
+            --changed-only --base "origin/${GITHUB_BASE_REF}" \
+            --profile release-ready --fail-on none --format json > skill-audit.json || true
+          python3 - <<'PY'
+          import json, pathlib
+          data = pathlib.Path("skill-audit.json").read_text() or "{}"
+          try:
+              report = json.loads(data)
+          except json.JSONDecodeError:
+              report = {}
+          for f in report.get("findings", []):
+              level = "error" if f.get("severity") == "high" else "warning"
+              msg = str(f.get("message", "")).replace("\n", " ")
+              # GitHub workflow command — renders inline on the changed line.
+              print(f"::{level} file={f.get('file')},line={f.get('line')}::"
+                    f"[{f.get('rule_id')}] {msg}")
+          PY
+
+      - name: Upload findings artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skill-audit
+          path: skill-audit.json
+          if-no-files-found: ignore

@@ -364,6 +364,77 @@ _copy_filtered_skills() {
   python3 "$SOURCE/scripts/filter_skills.py" "${fargs[@]}" > "$dest/INDEX.jsonl"
 }
 
+# _copy_runtime_scripts DEST — copy ONLY whitelisted runtime scripts (see
+# scripts/runtime-manifest.txt) into DEST/. Dev/test/release tooling
+# (test_*.py, install.sh, sync_version.py, audit.sh, generate_subset_agents_md.py)
+# is NEVER shipped. Installer-internal helpers still run from $SOURCE/scripts/.
+_copy_runtime_scripts() {
+  local dest="$1"
+  local manifest="$SOURCE/scripts/runtime-manifest.txt"
+  if [[ ! -f "$manifest" ]]; then
+    echo "✗ scripts/runtime-manifest.txt not found — cannot resolve runtime script set." >&2
+    exit 1
+  fi
+  mkdir -p "$dest"
+  local raw name
+  while IFS= read -r raw; do
+    name="${raw%%#*}"                 # strip trailing comment
+    name="$(echo "$name" | tr -d '[:space:]')"
+    [[ -z "$name" ]] && continue
+    if [[ -f "$SOURCE/scripts/$name" ]]; then
+      cp "$SOURCE/scripts/$name" "$dest/$name"
+    else
+      echo "  ! manifest lists $name but scripts/$name missing — skipped" >&2
+    fi
+  done < "$manifest"
+}
+
+# _copy_owned_tree SRC DEST — copy a toolkit-owned dir tree into DEST WITHOUT
+# ever deleting or clobbering the user's own files. Ownership is tracked in a
+# sidecar "$DEST/.sgt-owned" (one relative path per line). On upgrade:
+#   · files we ship (in SRC) are overwritten;
+#   · files previously owned but now gone from SRC are removed (renamed/removed);
+#   · user files (never in .sgt-owned) are left untouched — fixes the rsync
+#     --delete data-loss bug;
+#   · a user file colliding with one of our names is preserved — OUR copy lands
+#     beside it as "<name>.skill-governance-toolkit.<ext>".
+# bash 3.2 compatible (no associative arrays — macOS default shell).
+_copy_owned_tree() {
+  local src="${1%/}" dest="${2%/}"
+  [[ -d "$src" ]] || return 0
+  mkdir -p "$dest"
+  local owned_file="$dest/.sgt-owned"
+  local was_owned=""
+  [[ -f "$owned_file" ]] && was_owned="$(cat "$owned_file")"
+  local now_list="" f rel d base dir renamed prev
+  while IFS= read -r f; do
+    rel="${f#"$src"/}"
+    now_list+="$rel"$'\n'
+    d="$dest/$rel"
+    mkdir -p "$(dirname "$d")"
+    if [[ -e "$d" ]] && ! printf '%s\n' "$was_owned" | grep -qxF "$rel" && ! cmp -s "$f" "$d"; then
+      # User file collides with our name and we never owned it → preserve theirs.
+      base="${rel##*/}"; dir="${rel%/*}"; [[ "$dir" == "$rel" ]] && dir=""
+      renamed="${base%.*}.skill-governance-toolkit.${base##*.}"
+      [[ -n "$dir" ]] && renamed="$dir/$renamed"
+      cp "$f" "$dest/$renamed"
+      echo "  ⚠ conflict: user has $rel — saved ours as $renamed" >&2
+    else
+      cp "$f" "$d"
+    fi
+  done < <(find "$src" -type f ! -name '.DS_Store' ! -path '*/__pycache__/*' ! -path '*/.skill-state/*')
+  # Remove files we used to own but no longer ship — never user files.
+  if [[ -n "$was_owned" ]]; then
+    while IFS= read -r prev; do
+      [[ -z "$prev" ]] && continue
+      if ! printf '%s\n' "$now_list" | grep -qxF "$prev"; then
+        [[ -e "$dest/$prev" ]] && rm -f "$dest/$prev"
+      fi
+    done <<< "$was_owned"
+  fi
+  printf '%s' "$now_list" | grep -v '^$' | sort > "$owned_file"
+}
+
 # ── Ensure project root user-owned files (only for --project scope) ──────────
 # These four files are USER-OWNED. The installer NEVER overwrites them — it
 # manages a single block between BEGIN/END markers. User edits outside the
@@ -466,10 +537,10 @@ ensure_project_root_canonical_dirs() {
            "$TARGET_PROJECT/references" "$TARGET_PROJECT/scripts" \
            "$TARGET_PROJECT/commands"
   _copy_filtered_skills "$TARGET_PROJECT/skills"
-  _smart_copy "$SOURCE/agents/"     "$TARGET_PROJECT/agents/"
-  _smart_copy "$SOURCE/references/" "$TARGET_PROJECT/references/"
-  _smart_copy "$SOURCE/scripts/"    "$TARGET_PROJECT/scripts/"
-  _smart_copy "$SOURCE/commands/"   "$TARGET_PROJECT/commands/"
+  _copy_owned_tree "$SOURCE/agents/"     "$TARGET_PROJECT/agents/"
+  _copy_owned_tree "$SOURCE/references/" "$TARGET_PROJECT/references/"
+  _copy_runtime_scripts "$TARGET_PROJECT/scripts"
+  _copy_owned_tree "$SOURCE/commands/"   "$TARGET_PROJECT/commands/"
   # Also place manifests at root (Codex marketplace etc reads ./{...}-plugin/)
   mkdir -p "$TARGET_PROJECT/.codex-plugin" "$TARGET_PROJECT/.claude-plugin"
   _copy_file "$SOURCE/.codex-plugin/plugin.json" "$TARGET_PROJECT/.codex-plugin/plugin.json"
@@ -486,10 +557,10 @@ install_claude() {
   _pre_install_cleanup "$dest" skills agents scripts references commands
   mkdir -p "$dest/skills" "$dest/agents" "$dest/scripts" "$dest/references" "$dest/commands"
   _copy_filtered_skills "$dest/skills"
-  _smart_copy "$SOURCE/agents/" "$dest/agents/"
-  _smart_copy "$SOURCE/scripts/" "$dest/scripts/"
-  _smart_copy "$SOURCE/references/" "$dest/references/"
-  _smart_copy "$SOURCE/commands/" "$dest/commands/"
+  _copy_owned_tree "$SOURCE/agents/" "$dest/agents/"
+  _copy_runtime_scripts "$dest/scripts"
+  _copy_owned_tree "$SOURCE/references/" "$dest/references/"
+  _copy_owned_tree "$SOURCE/commands/" "$dest/commands/"
   _copy_file "$SOURCE/CLAUDE.md" "$dest/CLAUDE.md"
   # AGENTS.md INSIDE $dest — CLAUDE.md's `@AGENTS.md` resolves relative to its location
   _copy_file "$SOURCE/AGENTS.md" "$dest/AGENTS.md"
@@ -517,10 +588,10 @@ install_codex() {
   _pre_install_cleanup "$dest" skills agents scripts references commands
   mkdir -p "$dest/skills" "$dest/agents" "$dest/scripts" "$dest/references" "$dest/commands"
   _copy_filtered_skills "$dest/skills"
-  _smart_copy "$SOURCE/agents/" "$dest/agents/"
-  _smart_copy "$SOURCE/scripts/" "$dest/scripts/"
-  _smart_copy "$SOURCE/references/" "$dest/references/"
-  _smart_copy "$SOURCE/commands/" "$dest/commands/"
+  _copy_owned_tree "$SOURCE/agents/" "$dest/agents/"
+  _copy_runtime_scripts "$dest/scripts"
+  _copy_owned_tree "$SOURCE/references/" "$dest/references/"
+  _copy_owned_tree "$SOURCE/commands/" "$dest/commands/"
   _copy_file "$SOURCE/.codex-plugin/plugin.json" "$dest/plugin.json"
   echo "✓ Codex CLI:      $dest/  (${#SELECTED_SKILLS[@]} skills)"
   echo "  → Codex reads AGENTS.md from TARGET_PROJECT root, not from $dest"
@@ -531,9 +602,9 @@ install_gemini() {
   _pre_install_cleanup "$dest" skills scripts references commands
   mkdir -p "$dest/skills" "$dest/scripts" "$dest/references" "$dest/commands"
   _copy_filtered_skills "$dest/skills"
-  _smart_copy "$SOURCE/scripts/" "$dest/scripts/"
-  _smart_copy "$SOURCE/references/" "$dest/references/"
-  _smart_copy "$SOURCE/commands/" "$dest/commands/"
+  _copy_runtime_scripts "$dest/scripts"
+  _copy_owned_tree "$SOURCE/references/" "$dest/references/"
+  _copy_owned_tree "$SOURCE/commands/" "$dest/commands/"
   _copy_file "$SOURCE/GEMINI.md" "$dest/GEMINI.md"
   # AGENTS.md INSIDE $dest — GEMINI.md uses `@./AGENTS.md` import
   _copy_file "$SOURCE/AGENTS.md" "$dest/AGENTS.md"
@@ -547,9 +618,9 @@ install_cursor() {
   _pre_install_cleanup "$dest" skills scripts references commands
   mkdir -p "$dest/skills" "$dest/scripts" "$dest/references" "$dest/commands"
   _copy_filtered_skills "$dest/skills"
-  _smart_copy "$SOURCE/scripts/" "$dest/scripts/"
-  _smart_copy "$SOURCE/references/" "$dest/references/"
-  _smart_copy "$SOURCE/commands/" "$dest/commands/"
+  _copy_runtime_scripts "$dest/scripts"
+  _copy_owned_tree "$SOURCE/references/" "$dest/references/"
+  _copy_owned_tree "$SOURCE/commands/" "$dest/commands/"
   echo "✓ Cursor:         $dest/skills/  (${#SELECTED_SKILLS[@]} skills)"
   echo "  → Cursor reads AGENTS.md natively from TARGET_PROJECT root (already ensured above for --project scope)"
 }

@@ -10,6 +10,59 @@ each before upgrading.
 
 ---
 
+## [1.10.0] — 2026-06-07 — install-safety hardening: runtime whitelist, non-destructive upgrade, path-resolution contract
+
+### Added
+- **Runtime script whitelist** — `scripts/runtime-manifest.txt` is now the single
+  source of truth for which scripts ship into an install. Only runtime/CLI/MCP
+  helpers and their transitive imports are copied; dev/test/release tooling
+  (`test_*.py`, `install.sh`, `sync_version.py`, `audit.sh`,
+  `generate_subset_agents_md.py`) is never shipped. A `--all --project` install
+  drops from 26 to 13 scripts per dir and stops scattering 45 test-file copies.
+- **Path-resolution contract** — `references/path-resolution.md` defines how a
+  skill resolves the install root before shelling out to a script or reading a
+  shared reference: `$CLAUDE_PLUGIN_ROOT` → `$CODEX_HOME` → `$SGT_ROOT` → the
+  active `AGENTS.md` dir → `$PWD`. Fixes script/reference resolution under plugin
+  and global installs, where the runtime CWD is the user's project, not the
+  install dir. Codex has no plugin-root variable — the contract anchors on
+  `$CODEX_HOME` per the official Codex skill pattern.
+- **Guard tests** (`scripts/test_install.py`) — the runtime manifest is asserted
+  import-closed; every script referenced by a shipped skill/reference/agent/
+  command or the Dockerfile must be whitelisted; no dev/test file may land in an
+  install; runtime CLI/MCP scripts must be present after install.
+
+### Fixed
+- **🟠 Data loss on `--upgrade`.** Previously `rsync --delete` removed a user's
+  own files from `scripts/`, `references/`, `commands/` (project root AND per-host
+  dirs) on upgrade. The installer now copies these via an ownership-tracked merge
+  (`.sgt-owned` sidecar): toolkit files are refreshed, files we previously shipped
+  but dropped are removed, and **the user's own files are never deleted**. A user
+  file colliding with one of our names is preserved — our copy lands beside it as
+  `<name>.skill-governance-toolkit.<ext>` (same contract as `docs/`).
+- **🔴 Release packaging.** `scripts/runtime-manifest.txt` and
+  `references/path-resolution.md` — both load-bearing (the installer reads the
+  manifest to decide what ships; `AGENTS.md`/`checkpointing.md` link the resolver)
+  — were untracked. They are now committed so a clean checkout / archive installs.
+- **Docker engine version.** The image now `COPY`s `VERSION`, so MCP/Docker audit
+  reports are stamped with the real `engine_version` instead of `"unknown"`.
+- **Portability.** The GitLab CI template and onboarding doc no longer embed an
+  org-internal GitLab hostname — they ship a `REPLACE-WITH-YOUR-GITLAB-HOST`
+  placeholder (per the AGENTS.md "no org-specific domains" rule).
+
+### Changed
+- `AGENTS.md` documents the script/reference path-resolution rule and points at
+  the runtime manifest.
+- `install.ps1` mirrors all of the above (whitelist copy + ownership-safe merge)
+  so the Windows-native path matches bash exactly.
+
+### Upgrade notes
+- No action required. The first `--upgrade` after this release stops deleting your
+  own `scripts/`/`references/`/`commands/` files and trims previously-shipped
+  dev/test tooling from install dirs. Skills that shell out to toolkit scripts
+  should follow `references/path-resolution.md` for plugin/global installs.
+
+---
+
 ## [1.9.0] — 2026-06-05 — governance-contract checks (SKILL021–023) + pilot-hardening + security baseline parity
 
 ### Added

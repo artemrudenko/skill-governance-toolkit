@@ -937,6 +937,13 @@ The upgrade process should not remove:
 | `.skill-state/` | Resumable run checkpoints |
 | `out/` | Reports and quality-score logs |
 | Custom text outside `<!-- skill-init: ... -->` markers | Project-specific instructions |
+| Your own files in `scripts/` · `references/` · `commands/` | Since 1.10.0 the installer merges via a `.sgt-owned` ownership sidecar instead of mirror-deleting — it refreshes/removes only files it shipped, never yours |
+
+Since 1.10.0 the installer also ships only the runtime scripts in
+[`scripts/runtime-manifest.txt`](../scripts/runtime-manifest.txt) (dev/test tooling
+stays in the source repo), and skills resolve the install root per
+[`references/path-resolution.md`](../references/path-resolution.md) before shelling
+out — relevant for plugin and global installs where CWD is your project.
 
 ---
 

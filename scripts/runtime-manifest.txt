@@ -1,0 +1,35 @@
+# runtime-manifest.txt — single source of truth for which scripts ship into an install.
+#
+# Consumed by: scripts/install.sh, install.ps1, scripts/test_install.py.
+# One basename per line; blank lines and #-comments ignored.
+#
+# Rule: list ONLY scripts that run at user runtime — skill helpers, the CLI
+# facade, the audit engine, and the MCP/Docker server (incl. their transitive
+# sibling imports). Dev/test/release tooling is INTENTIONALLY EXCLUDED and must
+# never appear here:
+#   test_*.py · install.sh · sync_version.py · audit.sh · generate_subset_agents_md.py
+#
+# Guard tests (test_install.py) enforce: every entry exists on disk, the set is
+# import-closed, every script referenced by a shipped skill/reference/agent/
+# command or by the Dockerfile is listed, and no dev/test file leaks in.
+
+# ── Audit engine (CLI + CI + MCP + Docker) ──
+agent_audit.py
+agent_governance_mcp.py
+build_index.py
+filter_skills.py
+
+# ── CLI facade (stable) + its transitive deps ──
+sgt.py
+doctor.py
+quickstart.py
+
+# ── Skill runtime helpers ──
+checkpoint.py
+marker_block.py
+post_mr_comment.py
+init.sh
+install-pre-commit-hook.sh
+
+# ── Marketplace publishing helper (referenced by .claude-plugin/marketplace.json) ──
+configure_org.sh

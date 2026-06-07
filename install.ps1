@@ -342,6 +342,78 @@ function Copy-Tree {
         -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 }
 
+# Mirror of _copy_runtime_scripts() in scripts/install.sh — copy ONLY the
+# whitelisted runtime scripts (scripts/runtime-manifest.txt) into $Dest.
+# Dev/test/release tooling is never shipped.
+function Copy-RuntimeScripts {
+    param([string]$Dest, [string]$Mode)
+
+    $manifest = Join-Path $RepoRoot 'scripts\runtime-manifest.txt'
+    if (-not (Test-Path $manifest)) {
+        throw "scripts/runtime-manifest.txt not found — cannot resolve runtime script set."
+    }
+    if ($Mode -in 'force','upgrade' -and (Test-Path $Dest)) {
+        Remove-Item -Recurse -Force $Dest
+    }
+    New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+    foreach ($raw in Get-Content $manifest) {
+        $name = ($raw -replace '#.*$', '').Trim()
+        if ([string]::IsNullOrWhiteSpace($name)) { continue }
+        $srcScript = Join-Path $RepoRoot ('scripts\' + $name)
+        if (Test-Path $srcScript) {
+            Copy-Item -Force -Path $srcScript -Destination (Join-Path $Dest $name)
+        } else {
+            Write-Warning "manifest lists $name but scripts\$name missing — skipped"
+        }
+    }
+}
+
+# Mirror of _copy_owned_tree() in scripts/install.sh — copy a toolkit-owned tree
+# WITHOUT deleting or clobbering the user's own files. Ownership tracked in
+# "$Dest/.sgt-owned". User files (never owned) are left untouched; a user file
+# colliding with our name is preserved (ours saved as *.skill-governance-toolkit.*).
+function Copy-OwnedTree {
+    param([string]$Src, [string]$Dest)
+
+    if (-not (Test-Path $Src)) { return }
+    New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+    $ownedFile = Join-Path $Dest '.sgt-owned'
+    $wasOwned = if (Test-Path $ownedFile) { @(Get-Content $ownedFile) } else { @() }
+    $nowOwned = New-Object System.Collections.Generic.List[string]
+    $srcFull  = (Resolve-Path $Src).Path.TrimEnd('\', '/')
+
+    Get-ChildItem -Path $Src -Recurse -File -Force |
+        Where-Object { $_.Name -ne '.DS_Store' -and $_.FullName -notmatch '__pycache__' -and $_.FullName -notmatch '\.skill-state' } |
+        ForEach-Object {
+            $rel = ($_.FullName.Substring($srcFull.Length).TrimStart('\', '/')) -replace '\\', '/'
+            $nowOwned.Add($rel)
+            $d = Join-Path $Dest $rel
+            New-Item -ItemType Directory -Force -Path (Split-Path $d -Parent) | Out-Null
+            $collision = (Test-Path $d) -and ($wasOwned -notcontains $rel) -and `
+                         ((Get-FileHash $_.FullName).Hash -ne (Get-FileHash $d).Hash)
+            if ($collision) {
+                $base = Split-Path $rel -Leaf
+                $dir  = Split-Path $rel -Parent
+                $ext  = [System.IO.Path]::GetExtension($base)
+                $stem = [System.IO.Path]::GetFileNameWithoutExtension($base)
+                $renamed = "$stem.skill-governance-toolkit$ext"
+                if ($dir) { $renamed = "$dir/$renamed" }
+                Copy-Item -Force $_.FullName (Join-Path $Dest $renamed)
+                Write-Warning "conflict: user has $rel — saved ours as $renamed"
+            } else {
+                Copy-Item -Force $_.FullName $d
+            }
+        }
+    foreach ($prev in $wasOwned) {
+        if ([string]::IsNullOrWhiteSpace($prev)) { continue }
+        if ($nowOwned -notcontains $prev) {
+            $p = Join-Path $Dest $prev
+            if (Test-Path $p) { Remove-Item -Force $p }
+        }
+    }
+    ($nowOwned | Sort-Object) -join "`n" | Set-Content -Path $ownedFile -Encoding UTF8
+}
+
 function Install-Host {
     param([hashtable]$Target, [string]$ScopePrefix, [string]$Mode)
 
@@ -349,10 +421,10 @@ function Install-Host {
     switch ($Target.Kind) {
         'claude' {
             Copy-FilteredSkills (Join-Path $dest 'skills')     $Mode
-            Copy-Tree (Join-Path $RepoRoot 'agents')     (Join-Path $dest 'agents')     $Mode
-            Copy-Tree (Join-Path $RepoRoot 'scripts')    (Join-Path $dest 'scripts')    $Mode
-            Copy-Tree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references') $Mode
-            Copy-Tree (Join-Path $RepoRoot 'commands')   (Join-Path $dest 'commands')   $Mode
+            Copy-OwnedTree (Join-Path $RepoRoot 'agents') (Join-Path $dest 'agents')
+            Copy-RuntimeScripts (Join-Path $dest 'scripts') $Mode
+            Copy-OwnedTree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references')
+            Copy-OwnedTree (Join-Path $RepoRoot 'commands') (Join-Path $dest 'commands')
             Copy-Item (Join-Path $RepoRoot 'CLAUDE.md')  (Join-Path $dest 'CLAUDE.md') -Force
             Copy-Item (Join-Path $RepoRoot 'AGENTS.md')  (Join-Path $dest 'AGENTS.md') -Force
             if ($ScopePrefix -ne $HOME) {
@@ -375,19 +447,19 @@ function Install-Host {
         }
         'codex' {
             Copy-FilteredSkills (Join-Path $dest 'skills')     $Mode
-            Copy-Tree (Join-Path $RepoRoot 'agents')     (Join-Path $dest 'agents')     $Mode
-            Copy-Tree (Join-Path $RepoRoot 'scripts')    (Join-Path $dest 'scripts')    $Mode
-            Copy-Tree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references') $Mode
-            Copy-Tree (Join-Path $RepoRoot 'commands')   (Join-Path $dest 'commands')   $Mode
+            Copy-OwnedTree (Join-Path $RepoRoot 'agents') (Join-Path $dest 'agents')
+            Copy-RuntimeScripts (Join-Path $dest 'scripts') $Mode
+            Copy-OwnedTree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references')
+            Copy-OwnedTree (Join-Path $RepoRoot 'commands') (Join-Path $dest 'commands')
             Copy-Item (Join-Path $RepoRoot '.codex-plugin/plugin.json') `
                       (Join-Path $dest 'plugin.json') -Force
             Write-Host "[ok] Codex CLI:  $dest  ($($selectedSkills.Count) skills)"
         }
         'gemini' {
             Copy-FilteredSkills (Join-Path $dest 'skills')     $Mode
-            Copy-Tree (Join-Path $RepoRoot 'scripts')    (Join-Path $dest 'scripts')    $Mode
-            Copy-Tree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references') $Mode
-            Copy-Tree (Join-Path $RepoRoot 'commands')   (Join-Path $dest 'commands')   $Mode
+            Copy-RuntimeScripts (Join-Path $dest 'scripts') $Mode
+            Copy-OwnedTree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references')
+            Copy-OwnedTree (Join-Path $RepoRoot 'commands') (Join-Path $dest 'commands')
             Copy-Item (Join-Path $RepoRoot 'GEMINI.md') (Join-Path $dest 'GEMINI.md') -Force
             Copy-Item (Join-Path $RepoRoot 'gemini-extension.json') `
                       (Join-Path $dest 'extension.json') -Force
@@ -395,9 +467,9 @@ function Install-Host {
         }
         'cursor' {
             Copy-FilteredSkills (Join-Path $dest 'skills')     $Mode
-            Copy-Tree (Join-Path $RepoRoot 'scripts')    (Join-Path $dest 'scripts')    $Mode
-            Copy-Tree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references') $Mode
-            Copy-Tree (Join-Path $RepoRoot 'commands')   (Join-Path $dest 'commands')   $Mode
+            Copy-RuntimeScripts (Join-Path $dest 'scripts') $Mode
+            Copy-OwnedTree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references')
+            Copy-OwnedTree (Join-Path $RepoRoot 'commands') (Join-Path $dest 'commands')
             Write-Host "[ok] Cursor:     $dest\skills  ($($selectedSkills.Count) skills) (AGENTS.md read from repo root)"
         }
     }
@@ -410,10 +482,10 @@ function Install-Host {
 if ($scopePrefix -ne $HOME -and $scopePrefix -ne $RepoRoot) {
     Write-Host "── Placing canonical dirs at project root (root-first layout) ──"
     Copy-FilteredSkills (Join-Path $scopePrefix 'skills') $mode
-    Copy-Tree (Join-Path $RepoRoot 'agents')     (Join-Path $scopePrefix 'agents')     $mode
-    Copy-Tree (Join-Path $RepoRoot 'references') (Join-Path $scopePrefix 'references') $mode
-    Copy-Tree (Join-Path $RepoRoot 'scripts')    (Join-Path $scopePrefix 'scripts')    $mode
-    Copy-Tree (Join-Path $RepoRoot 'commands')   (Join-Path $scopePrefix 'commands')   $mode
+    Copy-OwnedTree (Join-Path $RepoRoot 'agents') (Join-Path $scopePrefix 'agents')
+    Copy-OwnedTree (Join-Path $RepoRoot 'references') (Join-Path $scopePrefix 'references')
+    Copy-RuntimeScripts (Join-Path $scopePrefix 'scripts') $mode
+    Copy-OwnedTree (Join-Path $RepoRoot 'commands') (Join-Path $scopePrefix 'commands')
     Write-Host "  · root layout ready: skills/, agents/, references/, scripts/, commands/"
     Write-Host ""
 }

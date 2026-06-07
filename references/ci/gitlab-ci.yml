@@ -20,7 +20,7 @@ variables:
   # Toolkit source. Pin SGT_REF to an IMMUTABLE commit SHA (not a tag) so a
   # re-tagged release cannot silently change gate behaviour. Replace with the
   # 40-char SHA of the toolkit commit your org has reviewed and approved.
-  SGT_REPO: "https://REPLACE-WITH-YOUR-GITLAB-HOST/ai-tools/skill-governance-toolkit.git"
+  SGT_REPO: "https://REPLACE-WITH-YOUR-GITLAB-HOST/your-group/skill-governance-toolkit.git"
   SGT_REF: "REPLACE-WITH-40-CHAR-COMMIT-SHA"
   SGT_DIR: "/tmp/sgt"
 

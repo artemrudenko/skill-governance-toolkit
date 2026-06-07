@@ -345,8 +345,8 @@ If the toolkit lives in a private org repo:
    - Codex / Gemini: standard `GH_TOKEN` env var works.
 2. **Pin a release tag** for reproducibility:
    ```bash
-   /plugin install skill-governance-toolkit@1.9.0    # Claude
-   gemini extensions install ...@1.9.0                # Gemini
+   /plugin install skill-governance-toolkit@1.10.0    # Claude
+   gemini extensions install ...@1.10.0                # Gemini
    ```
 3. **CI auto-update** — set up a CI job in each consuming project that opens a PR when the toolkit publishes a new tag. Pattern: scheduled `dependabot.yml` config pointing at the toolkit repo, or a custom workflow.
 
@@ -428,6 +428,18 @@ These directories are NEVER touched by upgrades and remain yours:
 - Any AGENTS.md edits **outside** the `<!-- skill-init: ... -->` marker
   blocks (the markers themselves get re-injected by `integration-init`,
   the surrounding text stays).
+- **Your own files in `scripts/`, `references/`, `commands/`** (since 1.10.0).
+  The installer tracks the files it owns in a `.sgt-owned` sidecar and merges
+  rather than mirror-deletes, so `--upgrade` refreshes toolkit files and removes
+  ones it previously shipped — but never deletes files you added. A file you
+  named exactly like one of ours is preserved; our copy lands beside it as
+  `<name>.skill-governance-toolkit.<ext>`.
+
+> Since 1.10.0 the installer ships only the runtime scripts listed in
+> [`scripts/runtime-manifest.txt`](scripts/runtime-manifest.txt) — dev/test/release
+> tooling stays in the source repo. Skills that shell out to a toolkit script
+> resolve the install root per [`references/path-resolution.md`](references/path-resolution.md)
+> (matters for plugin and global installs, where CWD is your project, not the install dir).
 
 ---
 

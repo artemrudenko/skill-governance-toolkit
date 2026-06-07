@@ -954,9 +954,10 @@ claude plugin install skill-governance-toolkit@skill-governance-marketplace --sc
 В v1.5.3+ есть два режима upgrade:
 
 ```bash
-# Чистый upgrade (recommended) — rsync --delete убирает файлы которые
-# были в старой версии но нет в новой (важно для renamed скилов).
-# Сохраняет user-edited файлы вне наших managed-директорий.
+# Чистый upgrade (recommended) — обновляет наши файлы и убирает те, что были
+# в старой версии но нет в новой (важно для renamed скилов). С 1.10.0 для
+# scripts/ references/ commands/ используется ownership-merge (.sgt-owned),
+# а не rsync --delete — твои собственные файлы НИКОГДА не удаляются.
 ./scripts/install.sh --claude --project --upgrade
 
 # Nuclear option — wipe target dirs entirely, потом fresh copy.
@@ -978,6 +979,13 @@ claude plugin install skill-governance-toolkit@skill-governance-marketplace --sc
 | `.skill-state/` | Resumable-run checkpoints (твоё runtime state) |
 | `out/` | Audit reports, quality-score logs |
 | `AGENTS.md` правки **вне** `<!-- skill-init: ... -->` маркеров | Твои additions к project rules. Marker blocks re-injected by integration-init на upgrade; вокруг них всё остаётся. |
+| Твои файлы в `scripts/` · `references/` · `commands/` | С 1.10.0 installer мёржит через ownership-sidecar `.sgt-owned` вместо mirror-delete — обновляет/удаляет только свои файлы, твои не трогает. Файл с именем как у нашего сохраняется; наш кладётся рядом как `<name>.skill-governance-toolkit.<ext>`. |
+
+С 1.10.0 в установку попадают только runtime-скрипты из
+[`scripts/runtime-manifest.txt`](../scripts/runtime-manifest.txt) (dev/test
+остаётся в исходном репо), а скиллы резолвят корень установки по
+[`references/path-resolution.md`](../references/path-resolution.md) перед запуском
+скрипта — важно для plugin/global установок, где CWD это твой проект.
 
 ### Что НЕ обновляется автоматически
 

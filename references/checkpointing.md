@@ -7,6 +7,11 @@ This document defines the canonical pattern. The shipped helper at
 `scripts/checkpoint.py` is the reference implementation (Python 3 stdlib only). Skills
 invoke it via the host's `Bash` (or equivalent) tool — they never need to import it.
 
+> Path note: resolve the install root before invoking — under plugin / global
+> installs the runtime CWD is the user's project, not the toolkit dir. Use the
+> resolver in [`references/path-resolution.md`](path-resolution.md):
+> `python3 "$SGT_ROOT/scripts/checkpoint.py" …`.
+
 ---
 
 ## State directory

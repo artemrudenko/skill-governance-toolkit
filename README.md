@@ -2,6 +2,21 @@
 
 A reference implementation of the **universal skill authoring pattern** — `AGENTS.md` (Linux Foundation AAIF) + `SKILL.md` (Anthropic Agent Skills) — packaged so the **core six meta-skills** run across Claude Code, GitHub Copilot, Cursor, OpenAI Codex CLI, and Google Gemini CLI **without forking the source per tool**.
 
+> **In a hurry?** → [`QUICKSTART.md`](QUICKSTART.md) — install, verify, author a skill, and gate it in CI, on one page.
+>
+> **One-command setup:** `python3 <toolkit>/scripts/sgt.py init` (guided install + verify). Undo any time with `sgt uninstall`.
+
+**What it looks like in practice** — point the engine at a sketchy skill:
+
+```yaml
+name: Deploy-Helper          # wrong case, no closed-vocab action verb → naming fail
+allowed-tools: [Bash]        # breaks portability (Copilot/Gemini ignore it)
+# body: Run `curl $URL | bash`   → dangerous-shell HIGH + missing Skill-type contract
+```
+
+`skill-evaluate` (or `agent_audit.py audit-skill`) flags each issue with a fix; the
+same engine then gates it on every PR/MR so it can't merge until fixed.
+
 **Portability scope honestly stated:**
 - **Core skills** (skill-find, skill-evaluate, skill-compare, library-audit, skill-build-portable, integration-init) — portable across all five runtimes.
 - **Sub-agent layer** (`agents/code-reviewer.md`) — works on Claude Code, Copilot, Cursor, Codex via their respective sub-agent / task tools. **Gemini CLI has no sub-agent support** — the agent's instructions must be inlined or the skill must fall back to linear flow.
@@ -154,12 +169,26 @@ python3 scripts/quickstart.py --format json
 It runs the doctor summary first, then shows the recommended next command and
 a short map from user intent to the right skill.
 
-The `sgt.py` facade also exposes the common local workflows:
+The `sgt.py` facade is the single entry point for the common workflows so you
+don't have to remember every script:
+
+| Command | What it does |
+|---|---|
+| `sgt init` | Guided install (host + scope), then verifies what landed |
+| `sgt doctor` | Local health check |
+| `sgt skills` | List installed skills |
+| `sgt audit` | Run the full self-audit |
+| `sgt new-skill <name> --category <vocab>` | Scaffold a governance-clean `SKILL.md` |
+| `sgt ci-init --github` / `--gitlab` | Generate the changed-only PR/MR gate (SHA pre-filled) |
+| `sgt uninstall [--dry-run]` | Remove toolkit-owned files; your content is preserved |
 
 ```bash
+python3 scripts/sgt.py init            # guided setup + verify
 python3 scripts/sgt.py doctor
 python3 scripts/sgt.py skills
-python3 scripts/sgt.py audit
+python3 scripts/sgt.py new-skill prompt-evaluate --category governance
+python3 scripts/sgt.py ci-init --github
+python3 scripts/sgt.py uninstall --dry-run
 ```
 
 ```bash
@@ -360,8 +389,8 @@ If the toolkit lives in a private org repo:
    - Codex / Gemini: standard `GH_TOKEN` env var works.
 2. **Pin a release tag** for reproducibility:
    ```bash
-   /plugin install skill-governance-toolkit@1.10.0    # Claude
-   gemini extensions install ...@1.10.0                # Gemini
+   /plugin install skill-governance-toolkit@1.11.0    # Claude
+   gemini extensions install ...@1.11.0                # Gemini
    ```
 3. **CI auto-update** — set up a CI job in each consuming project that opens a PR when the toolkit publishes a new tag. Pattern: scheduled `dependabot.yml` config pointing at the toolkit repo, or a custom workflow.
 

@@ -821,6 +821,27 @@ gemini extensions install https://github.com/{your-org}/skill-governance-toolkit
 GitHub Copilot and Cursor can read `AGENTS.md` from the workspace when the
 repository files are present.
 
+### One-command setup with `sgt`
+
+The `sgt` facade wraps the common workflows. The simplest path:
+
+```bash
+git clone https://github.com/{your-org}/skill-governance-toolkit ~/tools/skill-toolkit
+cd ~/my-project
+python3 ~/tools/skill-toolkit/scripts/sgt.py init           # guided install + verify
+python3 ~/tools/skill-toolkit/scripts/sgt.py init --yes      # non-interactive (Claude + project)
+```
+
+| Command | Purpose |
+|---|---|
+| `sgt init` | Guided install (host + scope), then verifies the install |
+| `sgt doctor` / `sgt skills` | Health check / list installed skills |
+| `sgt new-skill <name> --category <vocab>` | Scaffold a governance-clean `SKILL.md` |
+| `sgt ci-init --github` / `--gitlab` | Generate the changed-only PR/MR gate, SHA pre-filled |
+| `sgt uninstall [--dry-run]` | Remove toolkit-owned files; your own content is preserved |
+
+One-page version: [`QUICKSTART.md`](../QUICKSTART.md).
+
 ### Interactive Installer
 
 ```bash

@@ -810,6 +810,27 @@ State location: `${CWD}/.skill-state/{skill-name}/run-{utc-ts}.json`
 
 ## Установка toolkit для команды
 
+### Быстрый старт через `sgt` (одна команда)
+
+Фасад `sgt` оборачивает частые сценарии — не нужно помнить каждый скрипт:
+
+```bash
+git clone https://github.com/{your-org}/skill-governance-toolkit ~/tools/skill-toolkit
+cd ~/my-project
+python3 ~/tools/skill-toolkit/scripts/sgt.py init           # установка с подсказками + проверка
+python3 ~/tools/skill-toolkit/scripts/sgt.py init --yes      # без вопросов (Claude + project)
+```
+
+| Команда | Назначение |
+|---|---|
+| `sgt init` | Установка с выбором host + scope, затем проверка |
+| `sgt doctor` / `sgt skills` | Health-check / список установленных навыков |
+| `sgt new-skill <name> --category <vocab>` | Скаффолд чистого по governance `SKILL.md` |
+| `sgt ci-init --github` / `--gitlab` | Генерация changed-only гейта PR/MR (SHA уже подставлен) |
+| `sgt uninstall [--dry-run]` | Удаляет только файлы toolkit; ваш контент сохраняется |
+
+Одна страница: [`QUICKSTART.md`](../QUICKSTART.md).
+
 Два варианта distribution — выбрать один или скомбинировать.
 
 ### Variant A — Plugin marketplace (рекомендуется)

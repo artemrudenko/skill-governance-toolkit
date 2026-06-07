@@ -10,6 +10,41 @@ each before upgrading.
 
 ---
 
+## [1.11.0] — 2026-06-07 — developer experience: `sgt init / uninstall / new-skill / ci-init`
+
+Adoption-friction fixes from a real-user UX review. The `sgt` facade is now the
+single entry point for the whole lifecycle, so you don't navigate a flag matrix
+or remember individual scripts.
+
+### Added
+- **`sgt init`** — one guided command: detects host CLIs on PATH to suggest a
+  default, asks host + scope (or `--yes` for non-interactive/CI), delegates to the
+  installer, then runs an explicit install-verification step ("did it work?").
+- **`sgt uninstall [--dry-run]`** — the precise inverse of install that **never
+  deletes user content**: marker blocks removed content-preservingly, skills by
+  toolkit INDEX name, agents/references/commands via their `.sgt-owned` sidecars,
+  scripts by manifest name, and full-file copies only when byte-identical to
+  source. Closes the "no clean way to undo" trust gap. `--dry-run` prints the plan.
+- **`sgt new-skill <entity-action[-qualifier]> --category <vocab>`** — scaffolds a
+  detect-only `SKILL.md` that is governance-clean by construction (valid
+  frontmatter, naming, `Skill type` contract) and passes `audit-skill --fail-on
+  medium` out of the box. Validates the name + category, refuses to overwrite.
+- **`sgt ci-init --github | --gitlab`** — generates the changed-only PR/MR gate
+  from the shipped template with the toolkit's current HEAD SHA and origin URL
+  pre-filled, writes it to the conventional path, and prints the exact remaining
+  setup (token scope, branch protection, CODEOWNERS).
+- **`QUICKSTART.md`** — a one-page install → verify → author → gate → uninstall
+  guide, linked from the top of the README, with a "lite adoption" path for small
+  teams.
+
+### Changed
+- README now leads with the one-command setup, a before/after example, and an
+  `sgt` command table; both user guides document the new commands (EN + RU).
+- All new commands are covered by `test_sgt.py` (P14 self-CI), including an
+  install→uninstall integration test asserting user files survive.
+
+---
+
 ## [1.10.0] — 2026-06-07 — install-safety hardening: runtime whitelist, non-destructive upgrade, path-resolution contract
 
 ### Added

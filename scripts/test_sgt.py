@@ -108,5 +108,50 @@ class NewSkillTests(unittest.TestCase):
             self.assertEqual(forced.returncode, 0, forced.stderr)
 
 
+class CiInitTests(unittest.TestCase):
+    def run_sgt(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "sgt.py"), *args],
+            cwd=ROOT, text=True, capture_output=True, check=False,
+        )
+
+    def test_github_writes_workflow_with_explicit_ref(self) -> None:
+        sha = "a" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("--root", tmp, "ci-init", "--github", "--ref", sha)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            wf = Path(tmp) / ".github" / "workflows" / "skill-gate.yml"
+            self.assertTrue(wf.exists(), "workflow not written")
+            body = wf.read_text(encoding="utf-8")
+            self.assertIn(sha, body)
+            self.assertNotIn("REPLACE-WITH-40-CHAR-COMMIT-SHA", body)
+            # Setup guidance must mention the token/branch-protection steps.
+            self.assertRegex(result.stdout, r"(?i)branch protection|CODEOWNERS|secret")
+
+    def test_default_ref_is_current_head_sha(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("--root", tmp, "ci-init", "--gitlab")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            wf = Path(tmp) / ".gitlab-ci.yml"
+            self.assertTrue(wf.exists())
+            body = wf.read_text(encoding="utf-8")
+            self.assertNotIn("REPLACE-WITH-40-CHAR-COMMIT-SHA", body)
+            self.assertRegex(body, r'SGT_REF:\s*"[0-9a-f]{40}"')
+
+    def test_refuses_overwrite_without_force(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            first = self.run_sgt("--root", tmp, "ci-init", "--github", "--ref", "b" * 40)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            again = self.run_sgt("--root", tmp, "ci-init", "--github", "--ref", "b" * 40)
+            self.assertNotEqual(again.returncode, 0)
+            forced = self.run_sgt("--root", tmp, "ci-init", "--github", "--ref", "b" * 40, "--force")
+            self.assertEqual(forced.returncode, 0, forced.stderr)
+
+    def test_requires_exactly_one_platform(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            none = self.run_sgt("--root", tmp, "ci-init")
+            self.assertNotEqual(none.returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

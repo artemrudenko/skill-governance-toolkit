@@ -192,6 +192,89 @@ def command_new_skill(args: argparse.Namespace) -> int:
     return 0
 
 
+def _current_head_sha() -> str | None:
+    """The toolkit's own HEAD commit — the immutable ref a consumer should pin."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(SGT_ROOT), "rev-parse", "HEAD"],
+            text=True, capture_output=True, check=False,
+        )
+        sha = out.stdout.strip()
+        return sha if re.fullmatch(r"[0-9a-f]{40}", sha) else None
+    except OSError:
+        return None
+
+
+def _origin_url() -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(SGT_ROOT), "remote", "get-url", "origin"],
+            text=True, capture_output=True, check=False,
+        )
+        url = out.stdout.strip()
+        return url or None
+    except OSError:
+        return None
+
+
+def command_ci_init(args: argparse.Namespace) -> int:
+    if bool(args.github) == bool(args.gitlab):
+        print("sgt ci-init: pass exactly one of --github or --gitlab.", file=sys.stderr)
+        return 2
+
+    platform = "github" if args.github else "gitlab"
+    template = SGT_ROOT / "references" / "ci" / ("github-pr.yml" if args.github else "gitlab-ci.yml")
+    if not template.exists():
+        print(f"sgt ci-init: template not found at {template}", file=sys.stderr)
+        return 1
+
+    ref = args.ref or _current_head_sha()
+    if not ref:
+        print("sgt ci-init: could not resolve the toolkit HEAD SHA; pass --ref <40-char-sha>.",
+              file=sys.stderr)
+        return 1
+    if not re.fullmatch(r"[0-9a-f]{40}", ref):
+        print(f"sgt ci-init: --ref must be a 40-char commit SHA, got '{ref}'.", file=sys.stderr)
+        return 2
+
+    content = template.read_text(encoding="utf-8")
+    content = re.sub(r'(SGT_REF:\s*")[^"]*(")', lambda m: m.group(1) + ref + m.group(2), content)
+    repo = args.repo or _origin_url()
+    if repo:
+        content = re.sub(r'(SGT_REPO:\s*")[^"]*(")', lambda m: m.group(1) + repo + m.group(2), content)
+
+    if args.output:
+        dest = (args.root.expanduser() / args.output).resolve()
+    elif args.github:
+        dest = (args.root.expanduser() / ".github" / "workflows" / "skill-gate.yml").resolve()
+    else:
+        dest = (args.root.expanduser() / ".gitlab-ci.yml").resolve()
+
+    if dest.exists() and not args.force:
+        print(f"sgt ci-init: {dest} already exists. Pass --force to overwrite.", file=sys.stderr)
+        return 1
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(content, encoding="utf-8")
+
+    rel = dest.relative_to(args.root.expanduser().resolve()) if str(dest).startswith(
+        str(args.root.expanduser().resolve())) else dest
+    print(f"✓ wrote {platform} gate to {rel}")
+    print(f"  · toolkit pinned to SGT_REF = {ref}")
+    if not repo:
+        print("  ! SGT_REPO left as a placeholder — set it to your toolkit mirror URL.")
+    print("  Required setup:")
+    if args.gitlab:
+        print("    1. Add a MASKED CI/CD variable GITLAB_TOKEN — a project/group access")
+        print("       token with `api` scope (enables the idempotent MR comment).")
+    else:
+        print("    1. No secret needed for the gate; GITHUB_TOKEN is read-only on fork PRs")
+        print("       (annotations still render). Add a token only if you later post comments.")
+    print("    2. Enable branch protection requiring this check to pass before merge.")
+    print("    3. Protect the standards: add the gate file + rules to CODEOWNERS so policy")
+    print("       changes need a governance reviewer.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Skill Governance Toolkit command facade.")
     parser.add_argument("--root", type=Path, default=Path("."), help="Project root to operate on.")
@@ -220,6 +303,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Comma-separated metainfo categories. Closed vocab: {', '.join(CATEGORIES)}.")
     new_skill.add_argument("--force", action="store_true", help="Overwrite an existing SKILL.md.")
     new_skill.set_defaults(func=command_new_skill)
+
+    ci_init = subcommands.add_parser(
+        "ci-init", help="Generate a changed-only PR/MR gate workflow, SHA pre-filled.")
+    ci_init.add_argument("--github", action="store_true", help="Emit a GitHub Actions workflow.")
+    ci_init.add_argument("--gitlab", action="store_true", help="Emit a GitLab CI pipeline.")
+    ci_init.add_argument("--ref", default="", help="Toolkit commit SHA to pin (default: current HEAD).")
+    ci_init.add_argument("--repo", default="", help="Toolkit repo URL (default: detected origin).")
+    ci_init.add_argument("--output", default="", help="Override the output path (relative to --root).")
+    ci_init.add_argument("--force", action="store_true", help="Overwrite an existing file.")
+    ci_init.set_defaults(func=command_ci_init)
 
     return parser
 

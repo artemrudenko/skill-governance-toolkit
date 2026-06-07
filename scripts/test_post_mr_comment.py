@@ -60,6 +60,21 @@ class PostMrCommentTests(unittest.TestCase):
 
         self.assertIn("3 more", body)
 
+    def test_render_escapes_table_breaking_finding_text(self) -> None:
+        # Finding text comes from audited file content; a `|` or newline must not
+        # break the Markdown table or inject extra rows/markup into the MR note.
+        report = _report([
+            {"rule_id": "SKILL015", "severity": "high", "file": "skills/z/SKILL.md", "line": 7,
+             "message": "secret | injected\n| evil | row |", "suggestion": "Remove the | pipe."},
+        ])
+
+        body = post_mr_comment.render_comment(report)
+
+        # The raw pipe from the message must be escaped, and no stray newline may
+        # split the single finding row into multiple table rows.
+        self.assertIn("secret \\| injected", body)
+        self.assertNotIn("\n| evil | row |", body)
+
     def test_find_marker_note_returns_id(self) -> None:
         notes = [
             {"id": 10, "body": "unrelated review note"},

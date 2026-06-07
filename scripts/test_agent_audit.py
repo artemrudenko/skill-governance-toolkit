@@ -313,18 +313,20 @@ class AgentAuditBehaviorTests(unittest.TestCase):
             self.assertIn("engine_version", report, command)
             self.assertTrue(report["engine_version"], command)
 
-    def test_changed_only_empty_base_falls_back_to_full_audit(self) -> None:
+    def test_changed_only_empty_base_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skill_dir = Path(tmp) / "skills" / "bad"
             skill_dir.mkdir(parents=True)
             (skill_dir / "SKILL.md").write_text("No frontmatter here\n", encoding="utf-8")
 
-            # Empty base (e.g. missing CI_MERGE_REQUEST_DIFF_BASE_SHA) must not error;
-            # it falls back to a full audit so the gate fails on governance, not infra.
+            # Empty base (e.g. unset CI_MERGE_REQUEST_DIFF_BASE_SHA) must FAIL CLOSED
+            # with exit 2 — not silently switch scope to the whole tree, which could
+            # block unrelated MRs on legacy assets or (under --fail-on none) pass green
+            # having audited nothing meaningful.
             result = self.run_cli("audit-project", tmp, "--changed-only", "--base", "", "--format", "json", "--fail-on", "high")
-            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            report = json.loads(result.stdout)
-            self.assertIn("SKILL001", {item["rule_id"] for item in report["findings"]})
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("non-empty --base", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
 
     def test_cli_changed_only_bad_base_is_sanitized(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

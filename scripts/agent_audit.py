@@ -895,9 +895,21 @@ def main(argv: list[str] | None = None) -> int:
                 if args.base and args.base.strip():
                     changed_paths = changed_files_from_git(args.base, args.root)
                 else:
-                    # Empty base (e.g. missing CI_MERGE_REQUEST_DIFF_BASE_SHA): fall back
-                    # to a full audit so the gate fails on governance, not infrastructure.
-                    print("agent_audit: --changed-only given an empty --base; auditing the full tree.", file=sys.stderr)
+                    # Empty base (e.g. unset CI_MERGE_REQUEST_DIFF_BASE_SHA on the first
+                    # pipeline of a new MR, or a non-merge-request pipeline). Fail CLOSED
+                    # and VISIBLY rather than silently switching scope to the whole tree —
+                    # a silent switch can both block unrelated MRs on legacy assets and,
+                    # under --fail-on none, produce a green pipeline that audited nothing
+                    # meaningful. The caller must supply a base or drop --changed-only.
+                    print(
+                        "agent_audit: --changed-only requires a non-empty --base, but it was empty.\n"
+                        "  In CI this usually means CI_MERGE_REQUEST_DIFF_BASE_SHA was not set\n"
+                        "  (first pipeline of a new MR, or a non-merge-request pipeline).\n"
+                        "  Refusing to silently audit the whole tree. Re-run on a merge-request\n"
+                        "  pipeline, or drop --changed-only to audit the full project on purpose.",
+                        file=sys.stderr,
+                    )
+                    return 2
             report = audit_project(args.root, profile=args.profile, changed_paths=changed_paths)
             emit(report, args.format)
             if should_fail(report, args.fail_on):

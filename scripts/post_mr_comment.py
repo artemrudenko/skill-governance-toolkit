@@ -29,6 +29,19 @@ SEVERITY_ORDER = ("high", "medium", "low", "info")
 SEVERITY_LABEL = {"high": "🔴 High", "medium": "🟠 Medium", "low": "🟡 Low", "info": "🔵 Info"}
 
 
+def _md_cell(value: Any) -> str:
+    """Make an arbitrary finding value safe inside a Markdown table cell.
+
+    Finding text derives from audited file content (e.g. a SKILL.md body), so a
+    crafted asset could contain `|`, newlines, or backticks that break the table
+    or inject Markdown into the rendered MR note. Neutralise them.
+    """
+    text = "" if value is None else str(value)
+    text = text.replace("\\", "\\\\").replace("|", "\\|")
+    text = text.replace("\r", " ").replace("\n", " ")
+    return text.strip()
+
+
 def render_comment(report: dict[str, Any], max_findings: int = 50) -> str:
     """Render a markdown comment body for a project-audit report."""
     findings = report.get("findings") or []
@@ -58,9 +71,10 @@ def render_comment(report: dict[str, Any], max_findings: int = 50) -> str:
         lines.append("| Rule | Location | Finding | Suggestion |")
         lines.append("|---|---|---|---|")
         for item in group:
-            location = f"`{item.get('file')}:{item.get('line')}`"
+            location = f"`{_md_cell(item.get('file'))}:{_md_cell(item.get('line'))}`"
             lines.append(
-                f"| {item.get('rule_id')} | {location} | {item.get('message')} | {item.get('suggestion')} |"
+                f"| {_md_cell(item.get('rule_id'))} | {location} "
+                f"| {_md_cell(item.get('message'))} | {_md_cell(item.get('suggestion'))} |"
             )
         lines.append("")
 
@@ -141,6 +155,20 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         action = post_or_update(args.api_url, args.project_id, args.mr_iid, token, body)
+    except urllib.error.HTTPError as exc:
+        # Surface the GitLab response body — it explains WHY (e.g. a token with
+        # the wrong scope returns 403 "insufficient_scope"). Without it the author
+        # only sees "HTTP Error 403" and cannot self-diagnose.
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", "replace").strip()
+        except Exception:  # noqa: BLE001 — diagnostics only, never mask the original error
+            detail = ""
+        msg = f"post_mr_comment: API call failed: HTTP {exc.code} {exc.reason}"
+        if detail:
+            msg += f" — {detail}"
+        print(msg, file=sys.stderr)
+        return 1
     except (urllib.error.URLError, OSError, ValueError) as exc:
         print(f"post_mr_comment: API call failed: {exc}", file=sys.stderr)
         return 1

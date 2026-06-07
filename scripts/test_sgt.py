@@ -54,5 +54,59 @@ class SgtBehaviorTests(unittest.TestCase):
             self.assertIn("INDEX.jsonl not found", result.stderr)
 
 
+class NewSkillTests(unittest.TestCase):
+    def run_sgt(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "sgt.py"), *args],
+            cwd=ROOT, text=True, capture_output=True, check=False,
+        )
+
+    def _audit_skill(self, skill_md: Path, fail_on: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "agent_audit.py"), "audit-skill",
+             str(skill_md), "--fail-on", fail_on],
+            cwd=ROOT, text=True, capture_output=True, check=False,
+        )
+
+    def test_scaffold_is_governance_clean_by_construction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("--root", tmp, "new-skill", "thing-evaluate",
+                                  "--category", "governance")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            skill_md = Path(tmp) / "skills" / "thing-evaluate" / "SKILL.md"
+            self.assertTrue(skill_md.exists(), "SKILL.md not created")
+            # The scaffold must pass the engine's own gate with no medium+ findings.
+            audit = self._audit_skill(skill_md, "medium")
+            self.assertEqual(audit.returncode, 0, audit.stdout + audit.stderr)
+            body = skill_md.read_text(encoding="utf-8")
+            self.assertIn("name: thing-evaluate", body)
+            self.assertIn("tier: preview", body)               # new skills start at preview
+            self.assertRegex(body, r"Skill type:\**\s*Detect-only")
+
+    def test_rejects_non_vocab_action_verb(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("--root", tmp, "new-skill", "thing-frobnicate",
+                                  "--category", "governance")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("action verb", result.stderr.lower())
+
+    def test_rejects_unknown_category(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("--root", tmp, "new-skill", "thing-find",
+                                  "--category", "made-up")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("category", result.stderr.lower())
+
+    def test_refuses_overwrite_without_force(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            first = self.run_sgt("--root", tmp, "new-skill", "thing-find", "--category", "discovery")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            again = self.run_sgt("--root", tmp, "new-skill", "thing-find", "--category", "discovery")
+            self.assertNotEqual(again.returncode, 0)
+            forced = self.run_sgt("--root", tmp, "new-skill", "thing-find",
+                                  "--category", "discovery", "--force")
+            self.assertEqual(forced.returncode, 0, forced.stderr)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

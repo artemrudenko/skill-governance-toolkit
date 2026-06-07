@@ -173,6 +173,32 @@ class UninstallTests(unittest.TestCase):
             self.assertTrue((target / "skills" / "skill-find").exists())
 
 
+class InitTests(unittest.TestCase):
+    def run_sgt(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "sgt.py"), *args],
+            cwd=ROOT, text=True, capture_output=True, check=False,
+        )
+
+    def test_dry_run_prints_plan_and_writes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("init", "--yes", "--dry-run", "--target-project", tmp)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("Dry-run install plan", result.stdout)
+            self.assertFalse((Path(tmp) / "skills").exists(), "dry-run wrote files")
+
+    def test_init_installs_then_runs_doctor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("init", "--host", "claude", "--scope", "project",
+                                  "--target-project", tmp, "--yes")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            # One command produced a working install...
+            self.assertTrue((Path(tmp) / "skills" / "skill-find").exists(),
+                            "init did not install skills")
+            # ...and ended with the doctor verification step.
+            self.assertRegex(result.stdout, r"(?i)verifying install|doctor")
+
+
 class CiInitTests(unittest.TestCase):
     def run_sgt(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(

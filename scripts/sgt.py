@@ -470,6 +470,80 @@ def _safe_read(p: Path) -> str:
         return ""
 
 
+def _detect_hosts() -> list[str]:
+    """Which known host CLIs are on PATH — used to suggest a default in init."""
+    present = []
+    for host, binary in (("claude", "claude"), ("codex", "codex"),
+                         ("gemini", "gemini"), ("cursor", "cursor")):
+        if shutil.which(binary):
+            present.append(host)
+    return present
+
+
+def command_init(args: argparse.Namespace) -> int:
+    host, scope = args.host, args.scope
+    target = Path(args.target_project or args.root).expanduser().resolve()
+
+    interactive = not args.yes and not args.dry_run and sys.stdin.isatty()
+    if interactive:
+        detected = _detect_hosts()
+        hint = f" (detected on PATH: {', '.join(detected)})" if detected else ""
+        print("Skill Governance Toolkit — guided setup")
+        default_host = detected[0] if len(detected) == 1 else "claude"
+        ans = input(f"  Host [claude/copilot/codex/gemini/cursor/all]{hint} (default {default_host}): ")
+        host = ans.strip() or default_host
+        ans = input("  Scope [project/global] (default project): ")
+        scope = ans.strip() or scope
+
+    if host != "all" and host not in HOST_DIRS:
+        print(f"sgt init: unknown host '{host}'. Choose one of {', '.join([*HOST_DIRS, 'all'])}.",
+              file=sys.stderr)
+        return 2
+
+    installer = SGT_ROOT / "scripts" / "install.sh"
+    if not installer.exists():
+        print(f"sgt init: installer not found at {installer}", file=sys.stderr)
+        return 1
+
+    host_flag = "--all" if host == "all" else f"--{host}"
+    cmd = ["bash", str(installer), host_flag, f"--{scope}"]
+    if scope == "project":
+        cmd.append(f"--target-project={target}")
+    for flag, val in (("--category", args.category), ("--tier", args.tier), ("--skill", args.skill)):
+        if val:
+            cmd += [flag, val]
+    if args.dry_run:
+        cmd.append("--dry-run")
+
+    print(f"── Installing ({host}, {scope}) ──")
+    rc = subprocess.run(cmd, cwd=SGT_ROOT, check=False).returncode
+    if rc != 0 or args.dry_run:
+        return rc
+
+    # Mandatory "did it work?" final step. We verify what the install actually
+    # placed (skills + index) rather than running full `sgt doctor`, which is a
+    # toolkit-checkout health check and would false-flag a normal consumer project
+    # (no pyproject, not a git repo). `sgt doctor` stays available for deeper checks.
+    if scope == "project":
+        print("\n── Verifying install ──")
+        skills_dir = target / "skills"
+        installed = sorted(p.name for p in skills_dir.iterdir() if p.is_dir()) if skills_dir.is_dir() else []
+        index_ok = (skills_dir / "INDEX.jsonl").exists()
+        if installed and index_ok:
+            print(f"  ✓ {len(installed)} skill(s) installed: {', '.join(installed)}")
+            print("  ✓ skills/INDEX.jsonl present")
+            print("\n✓ Setup complete. Invoke a skill by its trigger phrase, e.g. «is there a skill for…».")
+            print("  Deeper health check any time: sgt doctor")
+            return 0
+        print("  ! Expected skills/ with INDEX.jsonl in the target but did not find them.",
+              file=sys.stderr)
+        return 1
+
+    print("\n✓ Global install complete. Verify with: sgt doctor")
+    print("  Claude: invoke skill-find · Codex: codex plugins list · Gemini: gemini extensions list")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Skill Governance Toolkit command facade.")
     parser.add_argument("--root", type=Path, default=Path("."), help="Project root to operate on.")
@@ -518,6 +592,19 @@ def build_parser() -> argparse.ArgumentParser:
     uninstall.add_argument("--dry-run", action="store_true", help="Print the plan, remove nothing.")
     uninstall.add_argument("--yes", action="store_true", help="Skip the confirmation prompt.")
     uninstall.set_defaults(func=command_uninstall)
+
+    init = subcommands.add_parser(
+        "init", help="Guided one-command install, then verify with doctor.")
+    init.add_argument("--host", default="claude",
+                      help="claude|copilot|codex|gemini|cursor|all (default claude).")
+    init.add_argument("--scope", choices=["project", "global"], default="project")
+    init.add_argument("--target-project", default="", help="Project to install into (project scope).")
+    init.add_argument("--category", default="", help="Skill category filter (closed vocab).")
+    init.add_argument("--tier", default="", help="Skill tier filter (default stable,preview).")
+    init.add_argument("--skill", default="", help="Explicit skill names to install.")
+    init.add_argument("--yes", action="store_true", help="Non-interactive: accept defaults.")
+    init.add_argument("--dry-run", action="store_true", help="Print the install plan, write nothing.")
+    init.set_defaults(func=command_init)
 
     return parser
 

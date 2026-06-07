@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import shutil
@@ -230,6 +231,58 @@ class UpgradeSafetyTests(unittest.TestCase):
             # user's content must still be recoverable (ours conflict-renamed)
             self.assertEqual(collide.read_text(encoding="utf-8"), "USER OVERRIDE",
                              "user's same-named file was clobbered on fresh install")
+
+    def test_user_owned_skill_survives_fresh_and_upgrade(self) -> None:
+        """A user's OWN skill dir in the install tree must survive fresh+upgrade.
+
+        skills/ uses a different copy path than refs/commands/agents, so it needs
+        its own coverage — a user skill that shares the tree with toolkit skills
+        must not be deleted in the default (fresh) or --upgrade modes.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            user_skill = target / "skills" / "my-personal-skill" / "SKILL.md"
+            user_skill.parent.mkdir(parents=True, exist_ok=True)
+            user_skill.write_text("USER SKILL", encoding="utf-8")
+            self.assertEqual(self._install(target).returncode, 0)
+            self.assertEqual(self._install(target, "--upgrade").returncode, 0)
+            self.assertTrue(user_skill.exists(), "user's own skill was deleted")
+            self.assertEqual(user_skill.read_text(encoding="utf-8"), "USER SKILL",
+                             "user's own skill was clobbered")
+            # And the toolkit's skills landed alongside it.
+            self.assertTrue((target / "skills" / "skill-find").exists(),
+                            "toolkit skill missing after install")
+
+
+class GlobalScopeSafetyTests(unittest.TestCase):
+    """--global writes to ~/.<host>/ — a user's personal skills/scripts there
+    must survive the safe modes (fresh + --upgrade). HOME is redirected to a
+    temp dir so the test never touches the real home."""
+
+    def _install_global(self, home: Path, *extra: str) -> subprocess.CompletedProcess[str]:
+        env = dict(os.environ, HOME=str(home))
+        return subprocess.run(
+            ["bash", str(ROOT / "scripts" / "install.sh"), "--claude", "--global", *extra],
+            cwd=ROOT, text=True, capture_output=True, check=False, env=env,
+        )
+
+    def test_user_skill_and_script_survive_global_fresh_and_upgrade(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            user_skill = home / ".claude" / "skills" / "my-personal-skill" / "SKILL.md"
+            user_script = home / ".claude" / "scripts" / "my-helper.py"
+            for p, body in ((user_skill, "USER SKILL"), (user_script, "print('mine')")):
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(body, encoding="utf-8")
+            r1 = self._install_global(home)
+            self.assertEqual(r1.returncode, 0, r1.stdout + r1.stderr)
+            r2 = self._install_global(home, "--upgrade")
+            self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+            self.assertTrue(user_skill.exists(), "user's global skill deleted by install")
+            self.assertEqual(user_skill.read_text(encoding="utf-8"), "USER SKILL")
+            self.assertTrue(user_script.exists(), "user's global script deleted by install")
+            # Toolkit content landed too.
+            self.assertTrue((home / ".claude" / "skills" / "skill-find").exists())
 
 
 class PowerShellParityTests(unittest.TestCase):

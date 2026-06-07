@@ -27,8 +27,13 @@
 #   --upgrade      Clean upgrade — rsync --delete removes files no longer present in the
 #                  source (handles renamed/removed skills). Requires rsync. Marker-block
 #                  upsert behavior for user-owned files is unchanged.
-#   --force        Wipe managed dirs before copy (does NOT alter the marker-block contract
-#                  for user-owned root files — those are still upserted, not overwritten).
+#   --force        Wipe managed dirs (skills/ agents/ scripts/ references/ commands/)
+#                  before copy (does NOT alter the marker-block contract for user-owned
+#                  root files — those are still upserted, not overwritten).
+#                  ⚠ BLAST RADIUS: in --global scope the managed dirs are
+#                  ~/.{host}/skills, ~/.{host}/scripts, etc. — if you keep your OWN
+#                  skills/scripts there, --force deletes them. Use --upgrade (the
+#                  safe clean-up mode) unless you specifically want a wipe.
 
 set -euo pipefail
 
@@ -152,6 +157,8 @@ Install mode (optional):
                  (handles renamed/removed skills). Marker-block contract unchanged.
   --force        Wipe managed dirs before copy. Marker-block contract for user-owned
                  root files is unchanged (still upsert, not overwrite).
+                 ⚠ In --global scope this deletes ANY skills/scripts you keep in
+                 ~/.{host}/ — including your own. Prefer --upgrade unless you want a wipe.
   --dry-run      Resolve filters and target paths, print the install plan, then exit
                  without writing files.
 

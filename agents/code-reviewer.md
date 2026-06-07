@@ -295,13 +295,20 @@ if (amount > 99999) {
 
 ## When to escalate to other agents
 
-| Situation | Handoff to | Why |
+> **Roadmap — do NOT dispatch.** The agents below are NOT shipped in this toolkit
+> (that is why `handoffs:` in the frontmatter is empty — listing them caused
+> silent no-op dispatches in v1.7.x). Treat this table as a *human-facing*
+> recommendation: surface the suggestion in your report for the orchestrator/user
+> to act on, but never attempt a `Task` handoff to these names.
+
+| Situation | Suggest (roadmap, not shipped) | Why |
 |---|---|---|
 | BLOCKER count > 0 AND change involves untested logic | `test-generator` | Generate failing tests before fix lands |
 | Hierarchy.H3 (cross-feature import) flagged | `arch-reviewer` | Architectural impact needs domain owner |
-| Pattern detected across > 3 files | `pattern-extractor` (not in this toolkit) | Refactor opportunity |
+| Pattern detected across > 3 files | `pattern-extractor` | Refactor opportunity |
 
-Use the `handoffs:` field above to suggest these — the orchestrating skill decides whether to dispatch.
+When a shipped peer agent is added, declare it in the `handoffs:` field above
+before referencing it here — keep frontmatter and body in sync.
 
 ---
 

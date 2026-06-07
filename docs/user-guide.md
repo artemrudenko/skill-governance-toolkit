@@ -567,7 +567,9 @@ Jobs:
 
 A copy-ready template lives at `references/ci/gitlab-ci.yml`. Copy it to the
 root of the consuming marketplace repo as `.gitlab-ci.yml`. It audits only the
-skills/agents a merge request changes, using a tiered gate:
+skills/agents a merge request changes, using a tiered gate. For a guided,
+step-by-step rollout (env vars, pinned toolkit SHA, the masked `GITLAB_TOKEN`,
+and the exact test commands) see [`gitlab-onboarding.md`](gitlab-onboarding.md):
 
 ```mermaid
 flowchart TD

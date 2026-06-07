@@ -93,8 +93,9 @@ For a GitLab merge-request gate, copy `references/ci/gitlab-ci.yml` into the
 consuming repo as `.gitlab-ci.yml` — it runs `--changed-only` with a tiered
 block/advisory policy. Tune policy via the `config` block (template:
 `references/agent-audit-config.example.json`) and protect who can change the
-standards with the root `CODEOWNERS`. See the user guide and `docs/checks-reference.md`
-for details.
+standards with the root `CODEOWNERS`. **Step-by-step setup (env vars, pinned SHA,
+test commands): [`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).** See also
+the user guide and `docs/checks-reference.md` for details.
 
 For interactive AI clients, run the same engine as a stdio MCP server:
 
@@ -169,13 +170,18 @@ Then use a skill in any supported tool:
 
 The host's runtime sees `skill-find`'s description, activates it, returns ranked matches.
 
-**Manual copy alternative** (if you can't run a script):
+**Manual copy alternative** (only for a fresh, empty target):
 ```bash
 cp -r AGENTS.md CLAUDE.md GEMINI.md README.md CHANGELOG.md \
       install.sh install.ps1 .github skills agents references scripts commands \
       docs .claude-plugin .codex-plugin gemini-extension.json \
       /path/to/your/project/
 ```
+
+> ⚠ This blind `cp -r` **overwrites** any existing `AGENTS.md` / `CLAUDE.md` /
+> `GEMINI.md` / `docs/` in the target — it does **not** do the marker-block merge
+> or conflict-rename the installer uses. Use `./install.sh` (or `install.ps1`)
+> for any target that already has content; reserve the manual copy for an empty repo.
 
 ---
 
@@ -620,7 +626,7 @@ This is what `skill-find` uses for fast lookups. Without it, `skill-find` falls 
 "Audit my skills."
 ```
 
-The host activates `library-audit`, which runs all 5 phases and writes `out/library-audit/library-audit-{date}.md`.
+The host activates `library-audit`, which runs all phases (P0–P6, including P4.5 multi-tool compatibility and P5.5 metainfo coverage) and writes `out/library-audit/library-audit-{date}.md`.
 
 ### Add a new skill
 

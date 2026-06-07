@@ -90,7 +90,9 @@ This is a documentation-driven repository — there is no compile step. Validati
 # Inspect the corpus shape — categories, tiers, orphans (since 1.8.0)
 python3 scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories
 
-# Self-CI for the toolkit (runs 10 phases including P9 metainfo coverage matrix + P10 audit-engine behavior tests)
+# Self-CI for the toolkit (runs the full P0–P19 suite: index freshness, metainfo
+# coverage matrix, audit-engine behavior tests, doctor/quickstart/installer/CLI,
+# version sync, MR poster, audit config, CODEOWNERS, marker_block)
 bash scripts/audit.sh
 ```
 

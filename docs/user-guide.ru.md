@@ -729,9 +729,9 @@ User: /integration-init
 
 **Что доступно:**
 
-| Integration | Что добавляет | Verified метрика |
+| Integration | Что добавляет | Метрика |
 |---|---|---|
-| **code-review-graph** (CRG) | Tree-sitter + SQLite graph для blast-radius queries | 8.2× token reduction (verified на 6 OSS репах) |
+| **code-review-graph** (CRG) | Tree-sitter + SQLite graph для blast-radius queries | ~8.2× token reduction — **внешняя метрика upstream на 6 OSS репах, локально не воспроизведена** (см. `docs/benchmarks.md`) |
 | **repomix** | Один-shot packer (repo → один XML/markdown файл) | Orthogonal к CRG — для small repos / external review |
 | **serena** | LSP-bridge для semantic refactoring (rename, find-refs) | Orthogonal — semantic vs structural |
 

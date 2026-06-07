@@ -143,6 +143,8 @@ Each sub-check is detect-only; findings appear in the Phase 4 report.
 
 **Self-exclusion:** `skills/skill-evaluate/**` files exempt from Phase 3.5 + 3.6 scanning of their own bodies (they document the patterns; would trivially self-flag).
 
+**Phase 3.5 dependency:** the security pattern catalog lives in the `library-audit` bundle (`security-spec.md`), shared to avoid drift. Resolve it as `$SGT_ROOT/skills/library-audit/references/security-spec.md` (see `references/path-resolution.md` for `$SGT_ROOT`). If `skill-evaluate` was installed **without** `library-audit` (`--skill skill-evaluate` alone), the catalog is absent — install both together (`--skill skill-evaluate,library-audit`) or Phase 3.5 runs in reduced mode (flag only inline-obvious secrets) and logs the degradation. Never silently skip the scan.
+
 ---
 
 ## Phase 4 — Output report (4-part structured)
@@ -250,7 +252,7 @@ between expensive phases so it can resume.
 
 - Default `RESUME=auto` (read-mostly skill — never asks).
 - State location: `${CWD}/.skill-state/skill-evaluate/run-{utc-timestamp}.json`.
-- See `references/checkpointing.md` for the schema and the helper CLI.
+- See `$SGT_ROOT/references/checkpointing.md` for the schema and the helper CLI (this is a shared repo-root reference, not a skill-bundled one — resolve `$SGT_ROOT` per `references/path-resolution.md`).
 
 ## Hard rules
 

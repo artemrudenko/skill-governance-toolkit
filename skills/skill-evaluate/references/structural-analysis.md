@@ -122,7 +122,7 @@ Cross-checks aligned with `library-audit` Phase 4.5 (but for a single skill):
 
 ## 3.5 — Lexical security scan (THIS skill)
 
-**Load patterns from the canonical catalog:** read `skills/library-audit/references/security-spec.md` — the single source of truth shared with `library-audit` Phase 5. Apply all three pass-sets, **scoped to the one SKILL.md being evaluated**, NOT the whole library:
+**Load patterns from the canonical catalog:** read `$SGT_ROOT/skills/library-audit/references/security-spec.md` — the single source of truth shared with `library-audit` Phase 5 (resolve `$SGT_ROOT` per `references/path-resolution.md`). If `library-audit` was not installed alongside `skill-evaluate`, this catalog is absent — see the SKILL.md "Phase 3.5 dependency" note (install both, or run reduced mode and log it). Apply all three pass-sets, **scoped to the one SKILL.md being evaluated**, NOT the whole library:
 
 - **Pass 3.5.1 — Secret patterns** (rule IDs S1–S10). See security-spec §Pass 5.1 for the regex catalog.
 - **Pass 3.5.2 — Dangerous shell patterns** (rule IDs D1–D9). See security-spec §Pass 5.2 for the catalog.

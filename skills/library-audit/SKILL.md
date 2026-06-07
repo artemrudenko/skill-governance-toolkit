@@ -226,7 +226,7 @@ process timeouts). It saves a checkpoint after every phase so it can resume.
 
 - Default `RESUME=auto` (validator stays detect-only — never asks).
 - State location: `${CWD}/.skill-state/library-audit/run-{utc-timestamp}.json`.
-- See `references/checkpointing.md` for the schema and the helper CLI.
+- See `$SGT_ROOT/references/checkpointing.md` for the schema and the helper CLI (shared repo-root reference, not skill-bundled — resolve `$SGT_ROOT` per `references/path-resolution.md`).
 
 ## Hard rules
 

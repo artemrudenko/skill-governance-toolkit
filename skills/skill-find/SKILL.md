@@ -164,7 +164,7 @@ Sources searched:
   · Corporate ({label}):           {N} skills  [index: yes/no]
 ```
 
-If any source had no `INDEX.jsonl`: append «Tip: run `scripts/build_index.py` in {source} to create an index for faster searches.»
+If any source had no `INDEX.jsonl`: append «Tip: run the toolkit's `build_index.py` in {source} to create an index for faster searches.» (Resolve the script as `$SGT_ROOT/scripts/build_index.py` — see `references/path-resolution.md`; the runtime CWD is the user's project, not the install dir.)
 
 ---
 

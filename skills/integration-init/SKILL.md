@@ -26,7 +26,7 @@ metainfo:
 
 This skill is a **gateway** (clarification prompts permitted per library-audit Phase 1.3).
 
-**Runtime notes:** Interactive clarification in Phase 1/2 only. Use `AskUserQuestion` only on hosts that provide it; otherwise ask plainly in chat. For non-interactive use, `scripts/init.sh` is the bash fallback. Claude/Copilot/Cursor/Codex — full skill flow. Gemini — same skill flow but structured prompt fallback may differ.
+**Runtime notes:** Interactive clarification in Phase 1/2 only. Use `AskUserQuestion` only on hosts that provide it; otherwise ask plainly in chat. For non-interactive use, the bash fallback is `$SGT_ROOT/scripts/init.sh` (resolve `$SGT_ROOT` per `references/path-resolution.md` — under a plugin/global install the runtime CWD is the user's project, not the install dir). Claude/Copilot/Cursor/Codex — full skill flow. Gemini — same skill flow but structured prompt fallback may differ.
 
 ## When to use
 
@@ -150,7 +150,7 @@ Highest-risk skill for partial completion: a network failure mid-install can lea
 - ✅ Idempotent — re-running with no changes produces no diff.
 - ✅ Re-running with a tool deselected removes its blocks from both files.
 - ✅ Detection via `which {tool}` is authoritative — markers reflect reality, not user intent.
-- ✅ **Clarification policy:** permitted ONLY in Phase 1, Phase 2, and the resume prompt. Non-interactive runs must provide `WITH` and per-tool inputs or use `scripts/init.sh`.
+- ✅ **Clarification policy:** permitted ONLY in Phase 1, Phase 2, and the resume prompt. Non-interactive runs must provide `WITH` and per-tool inputs or use `$SGT_ROOT/scripts/init.sh` (resolve `$SGT_ROOT` per `references/path-resolution.md`).
 - ✅ Resumable — per-tool checkpoint in Phase 3 makes mid-install crashes recoverable without re-prompting the user.
 
 ---

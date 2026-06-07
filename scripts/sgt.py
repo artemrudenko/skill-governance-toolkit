@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ from doctor import print_text as print_doctor_text
 from doctor import run_doctor
 from quickstart import print_text as print_quickstart_text
 from quickstart import build_quickstart
+from marker_block import remove as remove_marker_block
 
 # Install root (where the toolkit's own scripts/references/templates live). Distinct
 # from `--root`, which is the user's project being operated on.
@@ -275,6 +277,199 @@ def command_ci_init(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── Uninstall — the precise inverse of install, never touching user files ──────
+# Host → its per-host install dir (relative to scope base).
+HOST_DIRS = {"claude": ".claude", "codex": ".codex", "gemini": ".gemini",
+             "cursor": ".cursor", "copilot": ".github"}
+# User-owned files the installer manages via a marker block (content preserved).
+MARKER_FILES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md", ".github/copilot-instructions.md")
+# Full-file copies the installer places; safe to remove only if byte-identical to
+# our source (so a user's edited copy is never deleted). dest-rel → source-rel.
+ROOT_OWNED_FILES = {
+    ".codex-plugin/plugin.json": ".codex-plugin/plugin.json",
+    ".claude-plugin/plugin.json": ".claude-plugin/plugin.json",
+    ".claude-plugin/marketplace.json": ".claude-plugin/marketplace.json",
+    "gemini-extension.json": "gemini-extension.json",
+}
+HOST_OWNED_FILES = {
+    "claude": {"CLAUDE.md": "CLAUDE.md", "AGENTS.md": "AGENTS.md"},
+    "codex": {"plugin.json": ".codex-plugin/plugin.json"},
+    "gemini": {"GEMINI.md": "GEMINI.md", "AGENTS.md": "AGENTS.md",
+               "extension.json": "gemini-extension.json"},
+    "cursor": {},
+    "copilot": {},
+}
+
+
+def _toolkit_skill_names() -> set[str]:
+    idx = SGT_ROOT / "skills" / "INDEX.jsonl"
+    names: set[str] = set()
+    if idx.exists():
+        for line in idx.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                try:
+                    names.add(json.loads(line)["name"])
+                except (ValueError, KeyError):
+                    pass
+    return names
+
+
+def _runtime_script_names() -> list[str]:
+    man = SGT_ROOT / "scripts" / "runtime-manifest.txt"
+    out: list[str] = []
+    if man.exists():
+        for raw in man.read_text(encoding="utf-8").splitlines():
+            name = raw.split("#", 1)[0].strip()
+            if name:
+                out.append(name)
+    return out
+
+
+def _owned_entries(d: Path) -> list[str]:
+    sidecar = d / ".sgt-owned"
+    if sidecar.exists():
+        return [ln for ln in sidecar.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    return []
+
+
+def _content_matches_source(dest: Path, src_rel: str) -> bool:
+    src = SGT_ROOT / src_rel
+    try:
+        return src.exists() and dest.read_bytes() == src.read_bytes()
+    except OSError:
+        return False
+
+
+def _plan_install_dir(base: Path, skill_names: set[str], script_names: list[str],
+                      host: str | None) -> tuple[list[Path], list[Path], list[Path]]:
+    """Plan removals inside one canonical install dir (project root or a .{host}/).
+
+    Returns (dirs_to_remove, files_to_remove, sidecars_to_remove). Only
+    toolkit-owned paths are listed; anything else is left untouched.
+    """
+    dirs: list[Path] = []
+    files: list[Path] = []
+    sidecars: list[Path] = []
+
+    for name in skill_names:
+        d = base / "skills" / name
+        if d.is_dir():
+            dirs.append(d)
+    idx = base / "skills" / "INDEX.jsonl"
+    if idx.exists():
+        files.append(idx)
+
+    for sub in ("agents", "references", "commands"):
+        owned = _owned_entries(base / sub)
+        for rel in owned:
+            p = base / sub / rel
+            if p.exists():
+                files.append(p)
+        if owned:
+            sidecars.append(base / sub / ".sgt-owned")
+
+    for name in script_names:
+        p = base / "scripts" / name
+        if p.exists():
+            files.append(p)
+
+    if host is not None:
+        for dest_rel, src_rel in HOST_OWNED_FILES.get(host, {}).items():
+            p = base / dest_rel
+            if p.exists() and _content_matches_source(p, src_rel):
+                files.append(p)
+
+    return dirs, files, sidecars
+
+
+def _prune_empty_dirs(roots: list[Path]) -> list[Path]:
+    pruned: list[Path] = []
+    for d in roots:
+        if d.is_dir() and not any(d.iterdir()):
+            d.rmdir()
+            pruned.append(d)
+    return pruned
+
+
+def command_uninstall(args: argparse.Namespace) -> int:
+    hosts = list(HOST_DIRS) if args.host == "all" else [args.host]
+    skill_names = _toolkit_skill_names()
+    script_names = _runtime_script_names()
+
+    all_dirs: list[Path] = []
+    all_files: list[Path] = []
+    all_sidecars: list[Path] = []
+    marker_targets: list[Path] = []
+
+    if args.scope == "project":
+        base = Path(args.target_project or args.root).expanduser().resolve()
+        d, f, s = _plan_install_dir(base, skill_names, script_names, host=None)
+        all_dirs += d; all_files += f; all_sidecars += s
+        for mf in MARKER_FILES:
+            p = base / mf
+            if p.exists() and "skill-governance-toolkit: BEGIN" in _safe_read(p):
+                marker_targets.append(p)
+        for dest_rel, src_rel in ROOT_OWNED_FILES.items():
+            p = base / dest_rel
+            if p.exists() and _content_matches_source(p, src_rel):
+                all_files.append(p)
+        for host in hosts:
+            hb = base / HOST_DIRS[host]
+            d, f, s = _plan_install_dir(hb, skill_names, script_names, host=host)
+            all_dirs += d; all_files += f; all_sidecars += s
+    else:  # global
+        for host in hosts:
+            hb = Path.home() / HOST_DIRS[host]
+            d, f, s = _plan_install_dir(hb, skill_names, script_names, host=host)
+            all_dirs += d; all_files += f; all_sidecars += s
+
+    total = len(all_dirs) + len(all_files) + len(marker_targets)
+    if total == 0:
+        print("sgt uninstall: nothing toolkit-owned found at the given scope — nothing to do.")
+        return 0
+
+    if args.dry_run:
+        print(f"── Uninstall dry-run ({args.scope}) — would remove {total} item(s); nothing written ──")
+        for p in marker_targets:
+            print(f"  · would remove managed block from {p} (user content preserved)")
+        for d in all_dirs:
+            print(f"  · would remove skill dir {d}")
+        for f in all_files:
+            print(f"  · would remove {f}")
+        print("  Note: docs/ copies and any user files are left untouched.")
+        return 0
+
+    if not args.yes and sys.stdin.isatty():
+        resp = input(f"Remove {total} toolkit-owned item(s)? This preserves your own files. [y/N] ")
+        if resp.strip().lower() not in ("y", "yes"):
+            print("Aborted.")
+            return 1
+
+    for p in marker_targets:
+        remove_marker_block(str(p), "skill-governance-toolkit")
+    for d in all_dirs:
+        shutil.rmtree(d, ignore_errors=True)
+    for f in all_files + all_sidecars:
+        try:
+            f.unlink()
+        except OSError:
+            pass
+    # Prune now-empty toolkit dirs (skills/agents/references/scripts/commands + host dirs).
+    candidate_parents = {f.parent for f in all_files} | {d.parent for d in all_dirs}
+    _prune_empty_dirs(sorted(candidate_parents, key=lambda p: len(p.parts), reverse=True))
+
+    print(f"✓ uninstalled {total} toolkit-owned item(s). Your own files were preserved.")
+    print("  (docs/ copies, if any, were left in place — remove them manually if unwanted.)")
+    return 0
+
+
+def _safe_read(p: Path) -> str:
+    try:
+        return p.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Skill Governance Toolkit command facade.")
     parser.add_argument("--root", type=Path, default=Path("."), help="Project root to operate on.")
@@ -313,6 +508,16 @@ def build_parser() -> argparse.ArgumentParser:
     ci_init.add_argument("--output", default="", help="Override the output path (relative to --root).")
     ci_init.add_argument("--force", action="store_true", help="Overwrite an existing file.")
     ci_init.set_defaults(func=command_ci_init)
+
+    uninstall = subcommands.add_parser(
+        "uninstall", help="Remove toolkit-owned files; never touches your own content.")
+    uninstall.add_argument("--scope", choices=["project", "global"], default="project")
+    uninstall.add_argument("--host", choices=[*HOST_DIRS, "all"], default="all")
+    uninstall.add_argument("--target-project", default="",
+                           help="Project to clean (project scope). Default: --root.")
+    uninstall.add_argument("--dry-run", action="store_true", help="Print the plan, remove nothing.")
+    uninstall.add_argument("--yes", action="store_true", help="Skip the confirmation prompt.")
+    uninstall.set_defaults(func=command_uninstall)
 
     return parser
 

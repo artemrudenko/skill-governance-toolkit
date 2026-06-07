@@ -108,6 +108,71 @@ class NewSkillTests(unittest.TestCase):
             self.assertEqual(forced.returncode, 0, forced.stderr)
 
 
+class UninstallTests(unittest.TestCase):
+    def run_sgt(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "sgt.py"), *args],
+            cwd=ROOT, text=True, capture_output=True, check=False,
+        )
+
+    def _install(self, target: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", str(ROOT / "scripts" / "install.sh"), "--claude", "--project",
+             f"--target-project={target}"],
+            cwd=ROOT, text=True, capture_output=True, check=False,
+        )
+
+    def _seed_user_content(self, target: Path) -> None:
+        (target / "AGENTS.md").write_text("# My project rules\nKEEP THIS LINE\n", encoding="utf-8")
+        (target / "references").mkdir(parents=True, exist_ok=True)
+        (target / "references" / "my-note.md").write_text("USER NOTE", encoding="utf-8")
+        (target / "skills" / "my-own-skill").mkdir(parents=True, exist_ok=True)
+        (target / "skills" / "my-own-skill" / "SKILL.md").write_text("USER SKILL", encoding="utf-8")
+
+    def test_uninstall_removes_toolkit_keeps_user(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self._seed_user_content(target)
+            self.assertEqual(self._install(target).returncode, 0)
+            # Sanity: toolkit content landed.
+            self.assertTrue((target / "skills" / "skill-find").exists())
+            self.assertTrue((target / "references" / "copilot-tools.md").exists())
+            self.assertIn("skill-governance-toolkit: BEGIN",
+                          (target / "AGENTS.md").read_text(encoding="utf-8"))
+
+            result = self.run_sgt("uninstall", "--scope", "project",
+                                  "--target-project", str(target), "--yes")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            # Toolkit content gone.
+            self.assertFalse((target / "skills" / "skill-find").exists(), "toolkit skill not removed")
+            self.assertFalse((target / "references" / "copilot-tools.md").exists(),
+                             "toolkit reference not removed")
+            # User content preserved.
+            self.assertTrue((target / "skills" / "my-own-skill" / "SKILL.md").exists(),
+                            "user skill deleted by uninstall")
+            self.assertTrue((target / "references" / "my-note.md").exists(),
+                            "user reference deleted by uninstall")
+            agents_md = (target / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn("KEEP THIS LINE", agents_md, "user content lost from AGENTS.md")
+            self.assertNotIn("skill-governance-toolkit: BEGIN", agents_md, "marker block not removed")
+
+    def test_dry_run_changes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            self._seed_user_content(target)
+            self.assertEqual(self._install(target).returncode, 0)
+            before = sorted(p.name for p in (target / "skills").iterdir())
+
+            result = self.run_sgt("uninstall", "--scope", "project",
+                                  "--target-project", str(target), "--dry-run")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertRegex(result.stdout, r"(?i)dry.run|would remove")
+            after = sorted(p.name for p in (target / "skills").iterdir())
+            self.assertEqual(before, after, "dry-run modified the filesystem")
+            self.assertTrue((target / "skills" / "skill-find").exists())
+
+
 class CiInitTests(unittest.TestCase):
     def run_sgt(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(

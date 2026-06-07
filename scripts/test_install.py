@@ -232,5 +232,76 @@ class UpgradeSafetyTests(unittest.TestCase):
                              "user's same-named file was clobbered on fresh install")
 
 
+class PowerShellParityTests(unittest.TestCase):
+    """install.ps1 (Windows-native path) must match bash install-safety guards.
+
+    These are static-source invariants because the $IsWindows branch cannot be
+    executed on CI/macOS (it delegates to bash there). They lock in the three
+    parity fixes:
+      H1 — a -TargetProject param so Windows users can install into their own repo
+      H2 — a self-install guard so project scope never pollutes the toolkit's own dir
+      H3 — skills/scripts are refreshed per-item, not by wiping the whole managed dir
+           (so a global upgrade cannot delete the user's own skills)
+    """
+
+    PS1 = ROOT / "install.ps1"
+
+    def setUp(self) -> None:
+        self.text = self.PS1.read_text(encoding="utf-8")
+
+    def _function_body(self, name: str) -> str:
+        """Return the source between `function <name> {` and its matching close.
+
+        Brace-counting is sufficient here — the installer functions don't embed
+        literal unbalanced braces in strings.
+        """
+        start = self.text.index(f"function {name}")
+        i = self.text.index("{", start)
+        depth, j = 0, i
+        while j < len(self.text):
+            if self.text[j] == "{":
+                depth += 1
+            elif self.text[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.text[i : j + 1]
+            j += 1
+        raise AssertionError(f"unbalanced braces in function {name}")
+
+    def test_h1_target_project_param_exists(self) -> None:
+        self.assertIn("$TargetProject", self.text,
+                      "install.ps1 must expose a -TargetProject param (H1)")
+        # And forward it to bash on the Unix delegation path.
+        self.assertIn("--target-project", self.text,
+                      "install.ps1 must forward --target-project to bash (H1)")
+
+    def test_h2_self_install_guard_exists(self) -> None:
+        self.assertIn("$selfInstall", self.text,
+                      "install.ps1 must compute a self-install guard (H2)")
+        # The marker-block upsert and per-host loop must both honour it.
+        self.assertRegex(
+            self.text, r"-not \$selfInstall",
+            "marker-block / per-host install must be guarded by -not $selfInstall (H2)",
+        )
+
+    def test_h3_skills_refresh_is_per_skill_not_wholesale(self) -> None:
+        body = self._function_body("Copy-FilteredSkills")
+        # The whole-destination wipe is the data-loss bug: it deletes a user's
+        # own sibling skills in a global ~/.<host>/skills on every auto-upgrade.
+        self.assertNotIn(
+            "Remove-Item -Recurse -Force $Dest", body,
+            "Copy-FilteredSkills must not wipe the whole skills dir — refresh per skill (H3)",
+        )
+
+    def test_h3_runtime_scripts_not_wiped_on_upgrade(self) -> None:
+        body = self._function_body("Copy-RuntimeScripts")
+        # Upgrade must overwrite whitelisted scripts in place, never wipe the
+        # whole scripts dir (which in global scope holds the user's own scripts).
+        self.assertNotRegex(
+            body, r"-in 'force','upgrade'.*\n\s*Remove-Item -Recurse -Force \$Dest",
+            "Copy-RuntimeScripts must wipe only on force, not upgrade (H3)",
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

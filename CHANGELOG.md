@@ -48,6 +48,22 @@ each before upgrading.
 - **Portability.** The GitLab CI template and onboarding doc no longer embed an
   org-internal GitLab hostname — they ship a `REPLACE-WITH-YOUR-GITLAB-HOST`
   placeholder (per the AGENTS.md "no org-specific domains" rule).
+- **🟠 Windows installer parity (`install.ps1`).** The native-Windows path now
+  matches bash where it previously diverged:
+  - **H1** — adds a `-TargetProject` parameter (and forwards `--target-project`
+    to bash). Project scope now defaults to the current working directory, not
+    the toolkit repo — so a Windows user can install into their own app, the
+    same as `cd ~/app; .../install.sh`. Previously native-Windows project scope
+    could only target the toolkit's own clone.
+  - **H2** — adds the `SOURCE == TARGET_PROJECT` self-install guard. Running
+    from inside the toolkit dir no longer upserts managed marker blocks into the
+    toolkit's own AGENTS.md/CLAUDE.md/GEMINI.md nor scatters `.{host}/` dupes
+    into the source — the same protection bash already had.
+  - **H3** — skills and runtime scripts are refreshed per item instead of by
+    wiping the whole managed dir. A global `upgrade` (auto-detected on re-run)
+    can no longer delete the user's own skills/scripts in `~/.<host>/`.
+  Static parity guards in `test_install.py` lock these in (the `$IsWindows`
+  branch can't run on Linux/macOS CI, which delegates to bash).
 
 ### Changed
 - `AGENTS.md` documents the script/reference path-resolution rule and points at

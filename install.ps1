@@ -59,7 +59,12 @@ param(
     [string]$Category = '',
     [string]$Tier    = '',
     [string]$Skill   = '',
-    [switch]$Interactive
+    [switch]$Interactive,
+    # Where YOUR project lives (project scope only). Mirrors bash
+    # --target-project=PATH. Default: current working directory — NOT the
+    # toolkit repo. Lets a Windows user install into their own app the same
+    # way `cd ~/app; .../install.ps1` works under bash (H1).
+    [string]$TargetProject = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,6 +84,7 @@ if (-not $IsWindows) {
     if (-not [string]::IsNullOrWhiteSpace($Tier))     { $bashArgs += @('--tier',     $Tier) }
     if (-not [string]::IsNullOrWhiteSpace($Skill))    { $bashArgs += @('--skill',    $Skill) }
     if ($Interactive)                            { $bashArgs += '--interactive' }
+    if (-not [string]::IsNullOrWhiteSpace($TargetProject)) { $bashArgs += "--target-project=$TargetProject" }
     & bash $bashInstaller @bashArgs
     exit $LASTEXITCODE
 }
@@ -131,10 +137,31 @@ $targets = if ($selected.Kind -eq 'all') {
     @($selected)
 }
 
+# Project root = where YOUR project lives. Mirrors bash TARGET_PROJECT:
+# -TargetProject if given, otherwise the current working directory (NOT the
+# toolkit repo). This is what makes `cd ~/app; .../install.ps1` install into
+# the app, exactly like bash (H1).
+$projectRoot = if (-not [string]::IsNullOrWhiteSpace($TargetProject)) {
+    (Resolve-Path $TargetProject).Path
+} else {
+    (Get-Location).Path
+}
+
 $scopePrefix = switch ($scopeChoice) {
     '1' { $HOME }
-    '2' { $RepoRoot }
+    '2' { $projectRoot }
     default { throw "Invalid scope choice: $scopeChoice" }
+}
+
+# Self-install guard: project scope whose target IS the toolkit repo itself.
+# Mirrors bash `[[ "$SOURCE" -ef "$TARGET_PROJECT" ]]`. When true, the installer
+# must NOT upsert marker blocks into the toolkit's own AGENTS.md/CLAUDE.md/… nor
+# create .{host}/ dupes inside the source tree (H2). Compare resolved paths.
+$selfInstall = ($scopeChoice -eq '2') -and `
+    ((Resolve-Path $projectRoot).Path.TrimEnd('\','/') -eq (Resolve-Path $RepoRoot).Path.TrimEnd('\','/'))
+if ($selfInstall) {
+    Write-Host "── Project target IS the toolkit's own dir — marker-block upsert and per-host dupes will be skipped (self-pollution guard) ──"
+    Write-Host "  · For a real install, pass -TargetProject C:\path\to\your\repo"
 }
 
 # ── Detect existing install ────────────────────────────────────────────────────
@@ -287,7 +314,8 @@ $fullCount = (& $pythonCmd (Join-Path $RepoRoot 'scripts\filter_skills.py') `
 $fullCount = $fullCount.Count
 
 # ── Ensure project root user-owned files (append-with-markers) ────────────────
-if ($scopePrefix -ne $HOME) {
+# Project scope only, and never when the target is the toolkit's own dir (H2).
+if ($scopeChoice -eq '2' -and -not $selfInstall) {
     Write-Host "── Ensuring user-owned files at project root (append-with-markers) ──"
     $agentsSrc = Resolve-AgentsSource -FullCount $fullCount -SelectedSkills $selectedSkills
     Upsert-MarkerBlock $agentsSrc                                       (Join-Path $scopePrefix 'AGENTS.md')
@@ -308,13 +336,19 @@ if ($scopePrefix -ne $HOME) {
 function Copy-FilteredSkills {
     param([string]$Dest, [string]$Mode)
 
-    if ($Mode -in 'force','upgrade' -and (Test-Path $Dest)) {
-        Remove-Item -Recurse -Force $Dest
-    }
+    # Refresh each selected toolkit skill by wiping ONLY its own subdir, never
+    # the whole skills/ dir. In global scope $Dest is ~/.<host>/skills which may
+    # also hold the user's personal skills — a wholesale wipe (esp. on the
+    # auto-detected `upgrade` mode) would silently delete them (H3). Per-skill
+    # refresh mirrors bash's rsync-per-skill-subdir semantics.
     New-Item -ItemType Directory -Force -Path $Dest | Out-Null
     foreach ($s in $selectedSkills) {
-        $srcSkill = Join-Path $RepoRoot ('skills\' + $s)
+        $srcSkill  = Join-Path $RepoRoot ('skills\' + $s)
+        $destSkill = Join-Path $Dest $s
         if (Test-Path $srcSkill) {
+            if ($Mode -in 'force','upgrade' -and (Test-Path $destSkill)) {
+                Remove-Item -Recurse -Force $destSkill
+            }
             Copy-Item -Recurse -Force -Path $srcSkill -Destination $Dest
         } else {
             Write-Warning "filter selected '$s' but skills\$s missing on disk — skipped"
@@ -352,7 +386,10 @@ function Copy-RuntimeScripts {
     if (-not (Test-Path $manifest)) {
         throw "scripts/runtime-manifest.txt not found — cannot resolve runtime script set."
     }
-    if ($Mode -in 'force','upgrade' -and (Test-Path $Dest)) {
+    # Wipe only on explicit force. In global scope $Dest is ~/.<host>/scripts,
+    # which may hold the user's own scripts; the auto-detected `upgrade` mode
+    # must overwrite whitelisted files in place, not nuke the whole dir (H3).
+    if ($Mode -eq 'force' -and (Test-Path $Dest)) {
         Remove-Item -Recurse -Force $Dest
     }
     New-Item -ItemType Directory -Force -Path $Dest | Out-Null
@@ -479,7 +516,7 @@ function Install-Host {
 # Mirror of ensure_project_root_canonical_dirs() in scripts/install.sh —
 # in project scope, place skills/, agents/, references/, scripts/, commands/
 # at TARGET_PROJECT root so Copilot/Cursor/Codex can auto-discover them.
-if ($scopePrefix -ne $HOME -and $scopePrefix -ne $RepoRoot) {
+if ($scopeChoice -eq '2' -and -not $selfInstall) {
     Write-Host "── Placing canonical dirs at project root (root-first layout) ──"
     Copy-FilteredSkills (Join-Path $scopePrefix 'skills') $mode
     Copy-OwnedTree (Join-Path $RepoRoot 'agents') (Join-Path $scopePrefix 'agents')
@@ -490,6 +527,13 @@ if ($scopePrefix -ne $HOME -and $scopePrefix -ne $RepoRoot) {
     Write-Host ""
 }
 
-foreach ($t in $targets) { Install-Host -Target $t -ScopePrefix $scopePrefix -Mode $mode }
+# Per-host install. Skipped entirely for a self-install (project scope whose
+# target is the toolkit dir) — otherwise it would scatter .{host}/ dupes inside
+# the source, the exact bug the bash guard prevents (H2).
+if ($selfInstall) {
+    Write-Host "── Self-install — skipping per-host install (would create .{host}/ dupes inside the toolkit dir) ──"
+} else {
+    foreach ($t in $targets) { Install-Host -Target $t -ScopePrefix $scopePrefix -Mode $mode }
+}
 
 Write-Host "`nDone."

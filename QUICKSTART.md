@@ -79,6 +79,11 @@ sgt ci-init --gitlab     # writes .gitlab-ci.yml
 The command prints the exact remaining setup (token scope, branch protection,
 CODEOWNERS). Full walkthrough: [`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).
 
+**CLI vs MCP vs Docker?** The audit engine is one engine in three forms: **CLI**
+for CI/local (default), **MCP** for an agent to audit while you edit, **Docker**
+for sandboxed/reproducible runs. Decision guide:
+[`docs/agent-governance-mcp.md` § Which one do I use?](docs/agent-governance-mcp.md#which-one-do-i-use-decision-guide).
+
 ## Lite adoption (small teams)
 
 You don't have to adopt everything. A minimal path:

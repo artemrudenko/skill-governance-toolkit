@@ -91,7 +91,14 @@ See `skills/integration-init/references/integrations.md` for full per-tool spec 
 
 ## Agent governance audit engine
 
-The toolkit also ships a deterministic read-only audit engine for agent assets:
+The toolkit also ships a deterministic read-only audit engine for agent assets —
+**same engine, three delivery modes:**
+
+- **CLI** (`agent_audit.py`) — a human or script runs it; best for CI gates and local checks. **Default choice.**
+- **MCP** (`agent_governance_mcp.py`) — an AI agent calls it as a tool, mid-edit, in your editor/chat client.
+- **Docker** — sandboxed, reproducible, no local Python (`--network none`, read-only mount).
+
+Not sure which? → [`docs/agent-governance-mcp.md` § Which one do I use?](docs/agent-governance-mcp.md#which-one-do-i-use-decision-guide)
 
 **Status:** the six skills are stable; the CLI/MCP/Docker audit engine is a
 preview distribution layer intended for CI and cross-client tool calls.

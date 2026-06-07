@@ -10,6 +10,33 @@ assets. It is intentionally split into three layers:
 | Docker runner | `Dockerfile` | Reproducible local/CI execution with a read-only project mount |
 | Rule catalog | `references/agent-audit-rules.json` | Shared rule metadata returned by CLI/MCP |
 
+## Which one do I use? (decision guide)
+
+Same engine, same rules, same findings — only the **delivery** differs. Pick by
+*who* triggers the audit and *where* it runs.
+
+| | **CLI** | **MCP** | **Docker** |
+|---|---|---|---|
+| Triggered by | a human or a script | an AI agent, mid-conversation | a human/CI, but sandboxed |
+| Runs where | your shell / CI runner | your editor or chat client | an isolated container |
+| Needs | Python 3.8+ on PATH | an MCP-capable client | Docker; no local Python |
+| Network | n/a | n/a | `--network none` (locked down) |
+| Best when | you want a yes/no gate or JSON in a pipeline | you want the agent to check a skill *while you edit it* | you can't/won't run the toolkit's Python locally, or need a pinned, reproducible image |
+
+**Concrete use cases → mode**
+
+- *"Block a PR/MR when a skill has a high-severity issue."* → **CLI** in CI (`audit-project . --changed-only --fail-on high`). This is what `sgt ci-init` generates.
+- *"Fail my local commit before I push."* → **CLI** in a pre-commit hook (`scripts/install-pre-commit-hook.sh`).
+- *"While I'm writing a skill in Cursor/Claude Desktop, have the agent audit it on demand."* → **MCP** (the agent calls `audit_skill` / `audit_project` as tools).
+- *"Score one skill and pipe the JSON into another tool."* → **CLI** (`audit-skill <path> --format json`).
+- *"Run it on a locked-down build box with no Python and no network, with a byte-for-byte reproducible engine."* → **Docker** (`--network none`, read-only mount).
+- *"Our CI images are minimal/Alpine and we don't want to manage Python deps."* → **Docker** (the image carries the stdlib-only engine).
+
+**Rule of thumb:** default to **CLI** (it covers local + CI, ~zero setup). Add
+**MCP** when you want an agent to audit interactively. Reach for **Docker** only
+for isolation/reproducibility or when local Python isn't an option. The three are
+complementary, not exclusive — most teams use CLI in CI *and* MCP in their editor.
+
 ## CLI
 
 ```bash

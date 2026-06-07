@@ -1119,7 +1119,7 @@ Workaround сейчас: если пишешь skill, который требу�
 - **D1–D9 rubrics в деталях** — `skills/skill-evaluate/references/rubrics.md`.
 - **Lexical security regex catalog** — `skills/library-audit/references/security-spec.md`.
 - **Per-runtime tool-name mapping** — `references/{claude,copilot,codex,gemini}-tools.md`.
-- **MCP/CLI/Docker audit engine internals** — `docs/agent-governance-mcp.md`.
+- **MCP/CLI/Docker audit engine internals** — `docs/agent-governance-engine.md`.
 - **English version of this guide** — `docs/user-guide.md`.
 
 ---

@@ -48,7 +48,7 @@ flowchart TB
     end
 
     subgraph "docs/"
-        MCPDOC["agent-governance-mcp.md"]
+        MCPDOC["agent-governance-engine.md"]
         STANDARD["skill-authoring-standard.md"]
     end
 
@@ -1060,7 +1060,7 @@ For now, any skill that needs an external MCP server should include a
 
 | Topic | Where to read |
 |---|---|
-| Audit engine internals and MCP config details | `docs/agent-governance-mcp.md` |
+| Audit engine internals and MCP config details | `docs/agent-governance-engine.md` |
 | Checkpoint schema and helper CLI | `references/checkpointing.md` |
 | Full naming rules | `skills/library-audit/references/naming-spec.md` |
 | D1-D9 scoring rubrics | `skills/skill-evaluate/references/rubrics.md` |

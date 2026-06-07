@@ -98,7 +98,7 @@ The toolkit also ships a deterministic read-only audit engine for agent assets �
 - **MCP** (`agent_governance_mcp.py`) — an AI agent calls it as a tool, mid-edit, in your editor/chat client.
 - **Docker** — sandboxed, reproducible, no local Python (`--network none`, read-only mount).
 
-Not sure which? → [`docs/agent-governance-mcp.md` § Which one do I use?](docs/agent-governance-mcp.md#which-one-do-i-use-decision-guide)
+Not sure which? → [`docs/agent-governance-engine.md` § Which one do I use?](docs/agent-governance-engine.md#which-one-do-i-use-decision-guide)
 
 **Status:** the six skills are stable; the CLI/MCP/Docker audit engine is a
 preview distribution layer intended for CI and cross-client tool calls.
@@ -143,7 +143,7 @@ docker build -t agent-governance-mcp:local .
 docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:local
 ```
 
-Details and MCP client config examples: [`docs/agent-governance-mcp.md`](docs/agent-governance-mcp.md).
+Details and MCP client config examples: [`docs/agent-governance-engine.md`](docs/agent-governance-engine.md).
 Rule metadata lives in [`references/agent-audit-rules.json`](references/agent-audit-rules.json);
 the Python engine contains the detector logic.
 
@@ -565,7 +565,7 @@ For the full architectural reasoning — including anti-patterns like `allowed-t
 ├── docs/                              ← documentation moved here for v1.7.0+
 │   ├── user-guide.md                  ← English user guide with workflows + examples
 │   ├── user-guide.ru.md               ← Russian user guide with workflows + mermaid diagrams
-│   ├── agent-governance-mcp.md        ← CLI/MCP/Docker audit engine guide
+│   ├── agent-governance-engine.md        ← CLI/MCP/Docker audit engine guide
 │   ├── checks-reference.md            ← every governance check + rationale (engine rules + LLM dims)
 │   ├── architecture.md                ← three-layer architecture, install contract, parallelization
 │   ├── skill-authoring-standard.md    ← canonical SKILL.md skeleton

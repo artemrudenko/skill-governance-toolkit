@@ -29,7 +29,14 @@ each before upgrading.
 - **Guard tests** (`scripts/test_install.py`) — the runtime manifest is asserted
   import-closed; every script referenced by a shipped skill/reference/agent/
   command or the Dockerfile must be whitelisted; no dev/test file may land in an
-  install; runtime CLI/MCP scripts must be present after install.
+  install; runtime CLI/MCP scripts must be present after install. Plus static
+  PowerShell parity guards and user-content-survival tests (global scope +
+  skills tree).
+- **GitHub consumer PR-gate template** — `references/ci/github-pr.yml` runs the
+  changed-only gate on `pull_request`, blocks on high-severity findings, and
+  surfaces every finding as an inline GitHub annotation on the PR diff (the
+  GitLab template already did the equivalent via MR comment). The toolkit's own
+  `.github/workflows/ci.yml` is now clearly marked self-CI, not a consumer gate.
 
 ### Fixed
 - **🟠 Data loss on `--upgrade`.** Previously `rsync --delete` removed a user's
@@ -64,6 +71,27 @@ each before upgrading.
     can no longer delete the user's own skills/scripts in `~/.<host>/`.
   Static parity guards in `test_install.py` lock these in (the `$IsWindows`
   branch can't run on Linux/macOS CI, which delegates to bash).
+- **CI gate fails closed on an empty `--changed-only` base.** `agent_audit.py`
+  now exits 2 with a clear message when `--base` is empty (e.g. unset
+  `CI_MERGE_REQUEST_DIFF_BASE_SHA`) instead of silently auditing the whole tree —
+  which could block unrelated MRs on legacy assets or pass green having checked
+  nothing meaningful.
+- **MR-comment poster hardening (`post_mr_comment.py`).** Surfaces the GitLab
+  error response body on HTTP failures (so a wrong-scope token is diagnosable),
+  and escapes Markdown table cells so finding text from an audited asset cannot
+  break the table or inject markup into the rendered MR note.
+- **Skill path resolution.** `skill-find`, `integration-init`, `library-audit`,
+  and `skill-evaluate` now point at `$SGT_ROOT/scripts/…` and
+  `$SGT_ROOT/references/…` (per the new contract) instead of bare relative paths
+  that break under plugin/global installs. `skill-evaluate` documents its
+  Phase 3.5 dependency on the `library-audit` bundle for selective installs.
+- **Doc accuracy.** Corrected stale phase counts (README library-audit "5
+  phases" → P0–P6; AGENTS.md audit.sh "10 phases" → P0–P19), aligned the RU
+  guide's CRG `8.2×` figure with the "external, not locally reproduced" stance,
+  linked the previously-orphaned `docs/gitlab-onboarding.md`, warned that the
+  manual `cp -r` install overwrites user-owned root files, and synced the
+  `code-reviewer` escalation table with its empty `handoffs:` (roadmap agents
+  are not dispatchable).
 
 ### Changed
 - `AGENTS.md` documents the script/reference path-resolution rule and points at

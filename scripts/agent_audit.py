@@ -82,6 +82,9 @@ ENGINE_RULE_IDS = {
     "SEC010",
     "SEC011",
     "SEC012",
+    "IGNORE001",
+    "IGNORE002",
+    "IGNORE003",
 }
 SECURITY_PROFILE_RULE_IDS = {
     "SKILL001",
@@ -805,6 +808,102 @@ def checks_for(asset_type_name: str):
     return default
 
 
+_INLINE_IGNORE_RE = re.compile(r"<!--\s*sgt-ignore:\s*([A-Z0-9]+)\b([^>]*)-->")
+_EXPIRES_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _norm_rel(p: str, root: str) -> str:
+    """Normalize a path to repo-relative posix for stable suppression matching."""
+    try:
+        rp = Path(p)
+        if rp.is_absolute():
+            rp = rp.relative_to(Path(root).resolve())
+        return as_posix(Path(os.path.normpath(str(rp))))
+    except (ValueError, OSError):
+        return as_posix(Path(os.path.normpath(p)))
+
+
+def _parse_inline_ignores(text: str, rel_path: str) -> dict[tuple[str, int], set[str]]:
+    """Map {(rel_path, line): {rule_ids}} from <!-- sgt-ignore: RULEID ... --> markers.
+    A marker applies to its own line and the line immediately below."""
+    out: dict[tuple[str, int], set[str]] = {}
+    for ln, line in enumerate(text.splitlines(), start=1):
+        for m in _INLINE_IGNORE_RE.finditer(line):
+            rid = m.group(1)
+            for target in (ln, ln + 1):
+                out.setdefault((rel_path, target), set()).add(rid)
+    return out
+
+
+def _load_ignore_doc(root: Path) -> dict[str, Any]:
+    """Load references/audit-ignore.json, tolerating absence/malformation.
+    A broken file fails safe: returns an empty ignore set (suppresses nothing)."""
+    path = root / "references" / "audit-ignore.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"ignores": []}
+    if isinstance(data, dict) and isinstance(data.get("ignores"), list):
+        return data
+    return {"ignores": []}
+
+
+def _apply_ignores(
+    findings: list[dict[str, Any]],
+    ignore_doc: dict[str, Any],
+    inline: dict[tuple[str, int], set[str]],
+    root: str = ".",
+) -> list[dict[str, Any]]:
+    """Drop findings matched by a valid suppression. Fail-safe:
+    - central entry missing non-empty reason -> NOT suppressed, append IGNORE002
+    - central entry expired (expires < today) -> NOT suppressed, append IGNORE001
+    - inline marker for a FLOOR rule -> NOT suppressed, append IGNORE003 (visibility)
+    Paths normalized repo-relative on both sides."""
+    floor = set(SEVERITY_FLOOR)
+    today = utc_now()[:10]
+    central: list[tuple[str, str, Any]] = []  # (rule_id, norm_path, line_or_None)
+    extra: list[dict[str, Any]] = []
+    for e in ignore_doc.get("ignores", []):
+        rid, path = e.get("rule_id"), e.get("path")
+        reason = str(e.get("reason", "")).strip()
+        if not rid or not path:
+            continue
+        np = _norm_rel(str(path), root)
+        if not reason:
+            extra.append({"rule_id": "IGNORE002", "severity": "medium", "file": np, "line": 1,
+                          "message": f"Suppression of {rid} has no reason — ignored.",
+                          "suggestion": "Add a non-empty reason to references/audit-ignore.json."})
+            continue
+        exp = str(e.get("expires", "")).strip()
+        if exp and (not _EXPIRES_RE.match(exp) or exp < today):
+            extra.append({"rule_id": "IGNORE001", "severity": "medium", "file": np, "line": 1,
+                          "message": f"Suppression of {rid} expired or has a bad date ({exp or 'n/a'}).",
+                          "suggestion": "Renew with a valid future YYYY-MM-DD expires, or remove it."})
+            continue
+        central.append((rid, np, e.get("line")))
+
+    kept: list[dict[str, Any]] = []
+    for f in findings:
+        fp = _norm_rel(str(f["file"]), root)
+        rid = f["rule_id"]
+        # central suppression (any rule)
+        if any(rid == c_rid and fp == c_path and (c_line is None or c_line == f.get("line"))
+               for c_rid, c_path, c_line in central):
+            continue
+        # inline suppression (advisory rules only)
+        inline_ids = inline.get((fp, f.get("line")), set())
+        if rid in inline_ids:
+            if rid in floor:
+                extra.append({"rule_id": "IGNORE003", "severity": "info", "file": fp, "line": f.get("line", 1),
+                              "message": f"Inline sgt-ignore for floor rule {rid} ignored — use the central audit-ignore.json.",
+                              "suggestion": "Floor-severity findings can only be suppressed via the CODEOWNERS-gated central file."})
+                kept.append(f)
+            # advisory rule: drop it (suppressed)
+            continue
+        kept.append(f)
+    return kept + extra
+
+
 def changed_files_from_git(base: str, root: str | Path = ".") -> set[str]:
     """Return repo-relative posix paths changed between `base` and HEAD.
 
@@ -837,6 +936,10 @@ def audit_project(
     discovery = discover_agent_assets(root_path)
     findings: list[Finding] = []
     skill_reports: list[dict[str, Any]] = []
+    # Inline sgt-ignore markers, keyed by normalized rel path + line, collected
+    # from every in-scope body we read below. Floor rules can never be silenced
+    # through these (attacker-controlled file); _apply_ignores enforces that.
+    inline: dict[tuple[str, int], set[str]] = {}
 
     instruction_assets = [a for a in discovery["assets"] if a["type"] == "instructions"]
     if len(instruction_assets) > 1:
@@ -874,6 +977,9 @@ def audit_project(
         report = audit_skill(asset["path"], profile=profile)
         skill_reports.append(report)
         findings.extend(Finding(**f) for f in report["findings"])
+        skill_text = safe_read_asset(Path(asset["path"]), root_path)
+        if skill_text is not None:
+            inline.update(_parse_inline_ignores(skill_text, _norm_rel(asset["path"], str(root_path))))
 
     for asset in discovery["assets"]:
         if asset["type"] == "skill":
@@ -883,8 +989,12 @@ def audit_project(
         text = safe_read_asset(Path(asset["path"]), root_path)
         if text is None:
             continue
+        inline.update(_parse_inline_ignores(text, _norm_rel(asset["path"], str(root_path))))
         for check in checks_for(asset["type"]):
             findings.extend(check(text, Path(asset["path"])))
+
+    ignore_doc = _load_ignore_doc(root_path)
+    findings_dicts = _apply_ignores([asdict(f) for f in findings], ignore_doc, inline, root=str(root_path))
 
     return {
         "kind": "project-audit",
@@ -894,16 +1004,17 @@ def audit_project(
         "rules_version": load_rule_catalog()["version"],
         "root": as_posix(root_path),
         "discovery": discovery,
-        "summary": summarize_findings(findings),
-        "findings": [asdict(f) for f in findings],
+        "summary": summarize_findings(findings_dicts),
+        "findings": findings_dicts,
         "skill_reports": skill_reports,
     }
 
 
-def summarize_findings(findings: list[Finding]) -> dict[str, Any]:
+def summarize_findings(findings: list[Finding] | list[dict[str, Any]]) -> dict[str, Any]:
     counts = {"high": 0, "medium": 0, "low": 0, "info": 0}
     for item in findings:
-        counts[item.severity] = counts.get(item.severity, 0) + 1
+        severity = item["severity"] if isinstance(item, dict) else item.severity
+        counts[severity] = counts.get(severity, 0) + 1
     return {
         "total": len(findings),
         "by_severity": counts,

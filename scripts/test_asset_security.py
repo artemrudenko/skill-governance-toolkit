@@ -37,5 +37,40 @@ class ConfigNamespaceTests(_CacheSafe):
             aa.load_config.cache_clear()
 
 
+class IgnoreListTests(_CacheSafe):
+    def test_central_with_reason_suppresses_any_rule(self):
+        doc = {"ignores": [{"rule_id": "SEC011", "path": ".mcp.json", "reason": "test fixture"}]}
+        f = [{"rule_id": "SEC011", "file": ".mcp.json", "line": 1, "severity": "high"}]
+        self.assertEqual(agent_audit._apply_ignores(f, doc, {}, root="."), [])
+
+    def test_missing_reason_is_failsafe(self):
+        doc = {"ignores": [{"rule_id": "SEC011", "path": ".mcp.json"}]}
+        f = [{"rule_id": "SEC011", "file": ".mcp.json", "line": 1, "severity": "high"}]
+        ids = {x["rule_id"] for x in agent_audit._apply_ignores(f, doc, {}, root=".")}
+        self.assertIn("SEC011", ids); self.assertIn("IGNORE002", ids)
+
+    def test_expired_central_does_not_suppress(self):
+        doc = {"ignores": [{"rule_id": "SEC003", "path": "x.md", "reason": "old", "expires": "2000-01-01"}]}
+        f = [{"rule_id": "SEC003", "file": "x.md", "line": 1, "severity": "medium"}]
+        ids = {x["rule_id"] for x in agent_audit._apply_ignores(f, doc, {}, root=".")}
+        self.assertIn("SEC003", ids); self.assertIn("IGNORE001", ids)
+
+    def test_inline_suppresses_advisory_but_not_floor(self):
+        inline = {(".mcp.json", 1): {"SEC003", "SEC011"}}
+        adv = [{"rule_id": "SEC003", "file": ".mcp.json", "line": 1, "severity": "medium"}]
+        flo = [{"rule_id": "SEC011", "file": ".mcp.json", "line": 1, "severity": "high"}]
+        self.assertEqual(agent_audit._apply_ignores(adv, {"ignores": []}, inline, root="."), [])
+        kept = agent_audit._apply_ignores(flo, {"ignores": []}, inline, root=".")
+        ids = {x["rule_id"] for x in kept}
+        self.assertIn("SEC011", ids)   # floor rule NOT silenced by inline marker
+        self.assertIn("IGNORE003", ids)  # the attempt is surfaced
+
+    def test_inline_marker_parsing(self):
+        text = "line one\n<!-- sgt-ignore: SEC003 reason=brand name -->\nproblem here\n"
+        idx = agent_audit._parse_inline_ignores(text, "x.md")
+        # marker covers its own line and the line below
+        self.assertIn("SEC003", idx.get(("x.md", 2), set()) | idx.get(("x.md", 3), set()))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

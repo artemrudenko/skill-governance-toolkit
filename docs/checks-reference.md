@@ -26,9 +26,10 @@ adds the *what it detects* and *why it matters* that the JSON omits.
 
 ## Deterministic engine rules
 
-25 rules across two families: `DISC*` (project-level discovery) and `SKILL*`
-(per-`SKILL.md`). Severity drives the CI gate: `--fail-on high` blocks a merge
-on `high`; `medium`/`low`/`info` are advisory.
+Rules span four families: `DISC*` (project-level discovery), `SKILL*`
+(per-`SKILL.md`), `SEC*` (non-skill asset content scans), and `IGNORE*`
+(suppression visibility). Severity drives the CI gate: `--fail-on high` blocks a
+merge on `high`; `medium`/`low`/`info` are advisory.
 
 ### Discovery rules (`DISC*`)
 
@@ -74,6 +75,26 @@ Content scans applied to non-skill assets (MCP configs, plugin manifests, agents
 | SEC010 | high | Dangerous instruction (destructive shell, approval bypass, unsafe git) in a non-skill asset | Configs and manifests must not carry destructive operations into the agent's behavior |
 | SEC011 | high | Inline secret value embedded in a non-skill asset | Tokens belong in environment variables, never inline in configs or manifests |
 | SEC012 | medium | Credential-file path (`.aws/credentials`, `.ssh/id_*`, `.kube/config`) referenced in a non-skill asset | Assets should reference credentials by documented config, not by inline credential-store paths |
+
+### Suppression-visibility rules (`IGNORE*`)
+
+The engine supports two finding-suppression mechanisms, both fail-safe — a broken
+suppression never hides a finding. These rules surface a suppression that did **not**
+apply, so a silent self-approval bypass is impossible.
+
+1. **Central file** `references/audit-ignore.json` (CODEOWNERS-gated) — can suppress
+   **any** rule; each entry requires a non-empty `reason` and an optional
+   `expires` (`YYYY-MM-DD`).
+2. **Inline markers** `<!-- sgt-ignore: RULEID reason=... -->` in an asset body —
+   may suppress **only** non-floor (advisory) rules. A marker for a floor-severity
+   rule (e.g. SEC011) is ignored because the marker lives in the attacker-controlled
+   file; the attempt becomes a visible IGNORE003 record.
+
+| Rule | Severity | Detects | Why it matters |
+|---|---|---|---|
+| IGNORE001 | medium | Central suppression with an expired or malformed `expires` date | Stale suppressions must not silently keep hiding findings; the finding stays and the suppression is flagged |
+| IGNORE002 | medium | Central suppression entry missing a non-empty `reason` | Suppressions require an audit-trail rationale; without one the finding is not suppressed |
+| IGNORE003 | info | Inline `sgt-ignore` marker targeting a floor-severity rule | A floor finding can only be suppressed via the CODEOWNERS-gated central file — an inline marker in the audited file cannot self-approve a high-severity finding |
 
 ### Profile scope
 

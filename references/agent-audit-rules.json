@@ -168,6 +168,24 @@
       "severity": "medium",
       "title": "Credential-file path referenced in non-skill asset",
       "description": "Non-skill assets should reference credential files by documented config, not by inline credential-store paths."
+    },
+    {
+      "rule_id": "IGNORE001",
+      "severity": "medium",
+      "title": "Expired or invalid suppression",
+      "description": "A central audit-ignore entry has expired or carries a malformed expires date, so its finding is not suppressed."
+    },
+    {
+      "rule_id": "IGNORE002",
+      "severity": "medium",
+      "title": "Suppression missing reason",
+      "description": "A central audit-ignore entry has no non-empty reason, so its finding is not suppressed."
+    },
+    {
+      "rule_id": "IGNORE003",
+      "severity": "info",
+      "title": "Inline marker cannot suppress floor rule",
+      "description": "An inline sgt-ignore marker targeted a floor-severity rule; floor findings can only be suppressed via the CODEOWNERS-gated central file."
     }
   ],
   "config": {

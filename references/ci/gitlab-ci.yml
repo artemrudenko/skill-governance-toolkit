@@ -5,11 +5,21 @@
 #
 # It runs the toolkit's deterministic audit engine (stdlib-only Python, no pip)
 # against ONLY the skills/agents changed in a merge request. Tiered gate:
-#   - block job    : fails the pipeline on high-severity findings  -> blocks merge
+#   - block job    : fails the pipeline on NEWLY introduced high findings -> blocks merge
 #   - advisory job : never fails, publishes findings as a JSON artifact
 #
 # Why `--changed-only`: an author is accountable for the entities their MR
 # touches, not for legacy assets already in the marketplace.
+#
+# Why `--fail-on-new high` (not `--fail-on high`): the gate blocks only on
+# high-severity findings the MR INTRODUCES versus the base commit. A
+# pre-existing high finding in a file the MR happens to touch will not block —
+# so adoption never stalls on legacy debt the author did not create.
+#
+# Kill-switch: set the org/project CI/CD variable SGT_FAIL_MODE=advisory to
+# downgrade the gate to non-blocking fleet-wide WITHOUT editing this pinned
+# template. The engine honors it automatically (exit 0 even on a blocking
+# finding). It is a CI/CD variable, so it is already in the job environment.
 
 stages:
   - validate
@@ -67,8 +77,12 @@ variables:
         - "**/plugin.json"
         - "references/agent-audit-rules.json"
 
-# Blocking gate: high-severity findings (secrets, dangerous shell, broken
-# frontmatter, allowed-tools) fail the pipeline and block the merge.
+# Blocking gate: NEWLY introduced high-severity findings (secrets, dangerous
+# shell, broken frontmatter, allowed-tools) fail the pipeline and block the
+# merge. Pre-existing high findings on touched legacy assets do not block.
+#
+# SGT_FAIL_MODE (CI/CD variable) is inherited from the job environment; set it
+# to "advisory" org-wide to downgrade this gate to non-blocking.
 skill-gate:block:
   extends: .sgt_base
   stage: validate
@@ -76,7 +90,7 @@ skill-gate:block:
     - >
       python3 "$SGT_DIR/scripts/agent_audit.py" audit-project .
       --changed-only --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
-      --profile release-ready --fail-on high --format text
+      --profile release-ready --fail-on-new high --format text
 
 # Advisory: every finding (medium/low/info included) as a JSON artifact, and
 # an idempotent MR comment. Never blocks the pipeline.

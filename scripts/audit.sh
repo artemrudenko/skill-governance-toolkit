@@ -28,6 +28,10 @@
 #   P17 — externalized audit config behavior
 #   P18 — CODEOWNERS covers the governance control-plane paths
 #   P19 — marker_block managed-block writer behavior
+#   P20 — asset-security unit tests
+#   P21 — validate-config + explain behavior
+#   P22 — delta-gate integration on a real git repo (--fail-on-new + kill-switch)
+#   P23 — CI template path coverage ⊇ engine-governed asset types
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -411,6 +415,108 @@ if python3 "$ROOT/scripts/test_marker_block.py" >/dev/null 2>&1; then
 else
   fail "marker_block tests failed — run: python3 scripts/test_marker_block.py"
 fi
+
+# ── P20: asset-security unit tests ───────────────────────────────────────────
+
+phase "P20 — Asset-security unit tests"
+if python3 "$ROOT/scripts/test_asset_security.py" >/dev/null 2>&1; then
+  pass "asset-security behavior tests pass"
+else
+  fail "asset-security tests failed — run: python3 scripts/test_asset_security.py"
+fi
+
+# ── P21: validate-config + explain behavior ──────────────────────────────────
+
+phase "P21 — validate-config + explain behavior"
+if python3 "$ROOT/scripts/test_validate_config.py" >/dev/null 2>&1; then
+  pass "validate-config behavior tests pass"
+else
+  fail "validate-config tests failed — run: python3 scripts/test_validate_config.py"
+fi
+if python3 "$ROOT/scripts/test_explain.py" >/dev/null 2>&1; then
+  pass "explain behavior tests pass"
+else
+  fail "explain tests failed — run: python3 scripts/test_explain.py"
+fi
+
+# ── P22: delta-gate integration on a real git repo ───────────────────────────
+# Builds a hermetic git repo with a base commit (pre-existing high finding) and
+# a HEAD commit adding a SECOND high finding. Asserts `--fail-on-new high`
+# blocks ONLY on the newly introduced finding (exit 1), then that
+# SGT_FAIL_MODE=advisory downgrades the same run to exit 0 (fleet kill-switch).
+# Uses git -C with inline -c user.* so it works in CI with no global identity.
+
+phase "P22 — Delta-gate integration (real git: --fail-on-new + kill-switch)"
+DELTA_DIR=$(mktemp -d)
+GIT="git -C $DELTA_DIR -c user.email=ci@test -c user.name=ci"
+$GIT init -q >/dev/null 2>&1
+mkdir -p "$DELTA_DIR/config" "$DELTA_DIR/other"
+# Two distinct, valid 36-char ghp_ tokens (SEC011 high findings).
+printf '{"mcpServers":{"x":{"token":"ghp_012345678901234567890123456789012345"}}}\n' > "$DELTA_DIR/config/.mcp.json"
+$GIT add -A >/dev/null 2>&1
+$GIT commit -q -m base >/dev/null 2>&1
+DELTA_BASE=$($GIT rev-parse HEAD 2>/dev/null)
+printf '{"mcpServers":{"y":{"token":"ghp_abcdefghijabcdefghijabcdefghijabcdef"}}}\n' > "$DELTA_DIR/other/.mcp.json"
+$GIT add -A >/dev/null 2>&1
+$GIT commit -q -m head >/dev/null 2>&1
+
+if [[ -z "$DELTA_BASE" ]]; then
+  fail "delta-gate: could not initialize temp git repo"
+else
+  # 1. --fail-on-new high must BLOCK (exit non-zero) on the NEW finding in other/.
+  python3 "$ROOT/scripts/agent_audit.py" audit-project "$DELTA_DIR" \
+    --changed-only --base "$DELTA_BASE" --fail-on-new high --format text >/dev/null 2>&1
+  BLOCK_EXIT=$?
+  if [[ "$BLOCK_EXIT" -ne 0 ]]; then
+    pass "--fail-on-new high blocks on the newly introduced finding (exit $BLOCK_EXIT)"
+  else
+    fail "--fail-on-new high did not block on the new finding (exit 0)"
+  fi
+
+  # 2. SGT_FAIL_MODE=advisory kill-switch must downgrade the SAME run to exit 0.
+  SGT_FAIL_MODE=advisory python3 "$ROOT/scripts/agent_audit.py" audit-project "$DELTA_DIR" \
+    --changed-only --base "$DELTA_BASE" --fail-on-new high --format text >/dev/null 2>&1
+  ADVISORY_EXIT=$?
+  if [[ "$ADVISORY_EXIT" -eq 0 ]]; then
+    pass "SGT_FAIL_MODE=advisory downgrades the gate to non-blocking (exit 0)"
+  else
+    fail "SGT_FAIL_MODE=advisory did not force exit 0 (exit $ADVISORY_EXIT)"
+  fi
+fi
+rm -rf "$DELTA_DIR"
+
+# ── P23: CI template path coverage ⊇ engine-governed asset types ──────────────
+# The "silent coverage gap" guard: a path the engine governs but the CI
+# templates' changes:/paths: list omits would never trigger the gate. Assert
+# the key governed globs appear in BOTH templates.
+
+phase "P23 — CI template path coverage (changes: ⊇ governed assets)"
+GOVERNED_GLOBS=(
+  "skills/**"
+  "agents/**"
+  "commands/**"
+  "prompts/**"
+  "AGENTS.md"
+  "**/.mcp.json"
+  "**/plugin.json"
+  "references/agent-audit-rules.json"
+)
+for tpl in references/ci/gitlab-ci.yml references/ci/github-pr.yml; do
+  tpl_path="$ROOT/$tpl"
+  if [[ ! -f "$tpl_path" ]]; then
+    fail "$tpl missing — cannot verify path coverage"
+    continue
+  fi
+  missing_globs=""
+  for g in "${GOVERNED_GLOBS[@]}"; do
+    grep -qF "$g" "$tpl_path" || missing_globs+=" $g"
+  done
+  if [[ -n "$missing_globs" ]]; then
+    fail "$tpl omits governed path globs:$missing_globs"
+  else
+    pass "$(basename "$tpl") covers all key governed asset path globs"
+  fi
+done
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 

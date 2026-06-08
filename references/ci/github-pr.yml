@@ -10,6 +10,15 @@
 # It mirrors the GitLab template (`references/ci/gitlab-ci.yml`): same engine,
 # same three-dot diff, same immutable-SHA pin. Results surface inline on the PR
 # diff as GitHub annotations, and the full JSON is uploaded as an artifact.
+#
+# The block step uses `--fail-on-new high`: it blocks only on high-severity
+# findings the PR INTRODUCES versus its base, never on pre-existing legacy debt
+# in a file the PR happens to touch — so adoption is not blocked by old findings.
+#
+# Kill-switch: set the org/repo Actions variable SGT_FAIL_MODE=advisory to
+# downgrade the gate to non-blocking fleet-wide WITHOUT editing this pinned
+# template. It is passed into the block step's env below; the engine honors it
+# automatically (exit 0 even on a blocking finding).
 
 name: skill-governance-gate
 
@@ -72,11 +81,15 @@ jobs:
           git fetch --no-tags origin \
             "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
 
-      - name: Block on high-severity findings (changed assets only)
+      - name: Block on newly introduced high-severity findings (changed assets only)
+        # SGT_FAIL_MODE=advisory (set as an org/repo Actions variable) downgrades
+        # this gate to non-blocking fleet-wide without editing the pinned template.
+        env:
+          SGT_FAIL_MODE: ${{ vars.SGT_FAIL_MODE }}
         run: |
           python3 "$SGT_DIR/scripts/agent_audit.py" audit-project . \
             --changed-only --base "origin/${GITHUB_BASE_REF}" \
-            --profile release-ready --fail-on high --format text
+            --profile release-ready --fail-on-new high --format text
 
       - name: Annotate every finding on the PR diff (advisory)
         if: always()

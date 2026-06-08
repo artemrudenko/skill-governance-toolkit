@@ -65,6 +65,16 @@ on `high`; `medium`/`low`/`info` are advisory.
 | SKILL022 | medium | User prompt language without clarification policy, or prompt language contradicting `never asks` | Interactive behavior must be bounded so non-interactive and CI flows do not hang or guess |
 | SKILL023 | high | Mutating skill missing preview, confirmation, verification, or exact write scope | Mutations need a visible safety contract before an agent edits files or external state |
 
+### Non-skill asset rules (`SEC*`)
+
+Content scans applied to non-skill assets (MCP configs, plugin manifests, agents, commands, prompts, runtime configs). Unlike `SKILL*` scans, these disable the prose `detect/scan/pattern` exemption, since config-style assets are not documentation.
+
+| Rule | Severity | Detects | Why it matters |
+|---|---|---|---|
+| SEC010 | high | Dangerous instruction (destructive shell, approval bypass, unsafe git) in a non-skill asset | Configs and manifests must not carry destructive operations into the agent's behavior |
+| SEC011 | high | Inline secret value embedded in a non-skill asset | Tokens belong in environment variables, never inline in configs or manifests |
+| SEC012 | medium | Credential-file path (`.aws/credentials`, `.ssh/id_*`, `.kube/config`) referenced in a non-skill asset | Assets should reference credentials by documented config, not by inline credential-store paths |
+
 ### Profile scope
 
 `--profile` filters which rules can fire. The severity gate (`--fail-on`)

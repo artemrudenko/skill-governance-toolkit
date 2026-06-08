@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import re
+import stat as _stat
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -46,9 +47,12 @@ SEVERITY_FLOOR = {
     "SKILL009": "high",
     "SKILL014": "high",
     "SKILL015": "high",
+    "SEC010": "high",
+    "SEC011": "high",
 }
 # Upper bound on an org-supplied regex length — a coarse ReDoS / footgun guard.
 MAX_PATTERN_LENGTH = 500
+MAX_READ_BYTES = 1_000_000  # per-file cap for referenced/asset reads
 ENGINE_RULE_IDS = {
     "DISC001",
     "DISC002",
@@ -75,6 +79,9 @@ ENGINE_RULE_IDS = {
     "SKILL021",
     "SKILL022",
     "SKILL023",
+    "SEC010",
+    "SEC011",
+    "SEC012",
 }
 SECURITY_PROFILE_RULE_IDS = {
     "SKILL001",
@@ -698,6 +705,67 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
     }
 
 
+def safe_read_asset(path: Path, root: Path) -> str | None:
+    """Read a file ONLY if it is a regular file inside root and under the size cap.
+    Returns None (skip) for symlink-escape, non-regular (FIFO/device), oversize."""
+    try:
+        resolved = path.resolve()
+        if not is_within_root(resolved, root):
+            return None
+        st = resolved.stat()
+        if not _stat.S_ISREG(st.st_mode) or st.st_size > MAX_READ_BYTES:
+            return None
+        return resolved.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _is_credential_path_label(label: str) -> bool:
+    """True when the matched SECRET_PATTERNS label is the credential-file-path one."""
+    return label == "credential path"
+
+
+def scan_hidden_chars(text: str, path: Path) -> list[Finding]:
+    """Stub filled in by a later task (A1). Returns no findings for now."""
+    return []
+
+
+def scan_security(text: str, path: Path, *, dangerous_id: str, secret_id: str, prose: bool = True) -> list[Finding]:
+    """Reusable secret + dangerous scan for any asset body. For non-prose assets
+    (mcp/plugin/hook/script) the is_detection_context exemption is disabled."""
+    cfg = load_config()
+    out: list[Finding] = []
+    for label, pattern, suggestion in cfg["dangerous_patterns"]:
+        for m in pattern.finditer(text):
+            if prose and is_detection_context(line_text_for_offset(text, m.start())):
+                continue
+            out.append(finding(dangerous_id, path, line_for_offset(text, m.start()),
+                               f"Potentially dangerous instruction detected: {label}.", suggestion))
+    for label, pattern in cfg["secret_patterns"]:
+        for m in pattern.finditer(text):
+            if prose and is_detection_context(line_text_for_offset(text, m.start())):
+                continue
+            # Split credential-PATH matches (medium SEC012) from inline-secret values (high SEC011).
+            rid = "SEC012" if (secret_id == "SEC011" and _is_credential_path_label(label)) else secret_id
+            sugg = ("Reference credential files by documented config, not inline."
+                    if rid == "SEC012" else
+                    "Remove inline secrets and refer to environment variable names only.")
+            out.append(finding(rid, path, line_for_offset(text, m.start()),
+                               f"Potential secret or credential reference detected: {label}.", sugg))
+    return out
+
+
+def checks_for(asset_type_name: str):
+    """Return [(text, path)->[Finding]] callables for an asset type. scan_hidden_chars
+    runs on EVERY non-skill type; the security scan runs on config/agent/hook/script."""
+    default = [lambda text, path: scan_hidden_chars(text, path)]
+    security_types = {"mcp-config", "plugin-config", "agent", "runtime-config", "command", "prompt"}
+    if asset_type_name in security_types:
+        return default + [lambda text, path: scan_security(text, path, dangerous_id="SEC010",
+                                                           secret_id="SEC011", prose=False)]
+    return default
+
+
 def changed_files_from_git(base: str, root: str | Path = ".") -> set[str]:
     """Return repo-relative posix paths changed between `base` and HEAD.
 
@@ -767,6 +835,17 @@ def audit_project(
         report = audit_skill(asset["path"], profile=profile)
         skill_reports.append(report)
         findings.extend(Finding(**f) for f in report["findings"])
+
+    for asset in discovery["assets"]:
+        if asset["type"] == "skill":
+            continue
+        if not _in_scope(asset["relative_path"], changed_paths):
+            continue
+        text = safe_read_asset(Path(asset["path"]), root_path)
+        if text is None:
+            continue
+        for check in checks_for(asset["type"]):
+            findings.extend(check(text, Path(asset["path"])))
 
     return {
         "kind": "project-audit",

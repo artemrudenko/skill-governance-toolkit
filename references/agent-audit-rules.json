@@ -150,6 +150,24 @@
       "severity": "high",
       "title": "Incomplete mutating skill safety contract",
       "description": "Mutating skills must document preview, confirmation, verification, and exact mutation scope."
+    },
+    {
+      "rule_id": "SEC010",
+      "severity": "high",
+      "title": "Dangerous instruction in non-skill asset",
+      "description": "MCP configs, plugin manifests, agents, and other non-skill assets must not carry destructive shell, approval bypasses, or unsafe operations."
+    },
+    {
+      "rule_id": "SEC011",
+      "severity": "high",
+      "title": "Inline secret value in non-skill asset",
+      "description": "Non-skill assets must not embed inline secret values; reference environment variable names instead."
+    },
+    {
+      "rule_id": "SEC012",
+      "severity": "medium",
+      "title": "Credential-file path referenced in non-skill asset",
+      "description": "Non-skill assets should reference credential files by documented config, not by inline credential-store paths."
     }
   ]
 }

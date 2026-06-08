@@ -514,6 +514,15 @@ class AgentAuditBehaviorTests(unittest.TestCase):
 
             self.assertIn("SKILL023", {item["rule_id"] for item in report["findings"]})
 
+    def test_non_skill_assets_are_content_scanned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".mcp.json").write_text(
+                '{"mcpServers":{"x":{"command":"node","env":{"TOKEN":"ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}}',
+                encoding="utf-8")
+            report = agent_audit.audit_project(root)
+            self.assertIn("SEC011", {f["rule_id"] for f in report["findings"]})
+
     def test_security_catalog_catches_extended_secret_patterns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skill = self._write_valid_skill(

@@ -136,5 +136,48 @@ class DeltaGateTests(_CacheSafe):
         self.assertEqual(agent_audit.finding_key(a), agent_audit.finding_key(b))
 
 
+class _SubprocFixture:
+    """Helper: write a temp project with a .mcp.json holding an inline OpenAI-style
+    token (triggers SEC011 high) and run the CLI via subprocess so lru_cache is fresh."""
+    SCRIPT = str(Path(__file__).with_name("agent_audit.py"))
+
+    @staticmethod
+    def run(extra_args, env=None):
+        import os, subprocess
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / ".mcp.json").write_text(
+                '{"mcpServers":{"x":{"command":"node","env":{"API_KEY":"sk-ABCDEFGHIJKLMNOPQRSTUVWX"}}}}',
+                encoding="utf-8",
+            )
+            run_env = dict(os.environ)
+            if env:
+                run_env.update(env)
+            return subprocess.run(
+                ["python3", _SubprocFixture.SCRIPT, "audit-project", d, *extra_args],
+                capture_output=True, text=True, env=run_env,
+            )
+
+
+class GithubFormatTests(unittest.TestCase):
+    def test_high_finding_emits_error_annotation(self):
+        proc = _SubprocFixture.run(["--format", "github"])
+        # GitHub workflow command for a high-severity finding, repo-relative path + rule_id title.
+        self.assertIn("::error ", proc.stdout)
+        self.assertIn("file=.mcp.json", proc.stdout)
+        self.assertIn("title=SEC011", proc.stdout)
+
+
+class FailModeKillSwitchTests(unittest.TestCase):
+    def test_advisory_does_not_block_but_reports(self):
+        proc = _SubprocFixture.run(["--fail-on", "high"], env={"SGT_FAIL_MODE": "advisory"})
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("SEC011", proc.stdout)  # finding still reported
+
+    def test_enforce_default_blocks(self):
+        proc = _SubprocFixture.run(["--fail-on", "high"])
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("SEC011", proc.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

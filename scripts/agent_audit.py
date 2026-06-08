@@ -1325,6 +1325,122 @@ def rule_catalog() -> dict[str, Any]:
     }
 
 
+# Per-pattern wall-clock budget for the ReDoS check. A regex that stays under the
+# 500-char length cap can still backtrack catastrophically; this caps any single
+# adversarial match before it hangs a CI gate.
+REDOS_BUDGET_SECONDS = 0.25
+
+# Adversarial corpus: strings engineered to trigger exponential backtracking in
+# nested-quantifier regexes ((a+)+, (a|a)*, etc.), plus a couple of benign controls.
+_REDOS_CORPUS = (
+    "a" * 64,
+    "a" * 64 + "!",
+    ("ab" * 40) + "!",
+    "x" * 64 + " ",
+    "normal benign input string",
+    "https://example.com/path?q=1",
+)
+
+
+def _time_one_match(pattern: Any, corpus_string: str) -> float:
+    """Run one `pattern.search(corpus_string)` and return its wall-clock seconds.
+
+    On Unix we ALSO arm a SIGALRM hard-timeout so a truly-hung regex is interrupted
+    rather than wedging the process; the perf_counter measure is the portable
+    primary signal and the only mechanism on non-Unix (no setitimer). A pattern that
+    hangs in pure Python cannot be interrupted without per-match signals — the length
+    cap (MAX_PATTERN_LENGTH) plus this post-hoc timing covers the realistic footgun."""
+    import signal
+    import time
+
+    have_alarm = hasattr(signal, "setitimer") and hasattr(signal, "SIGALRM")
+    old_handler = None
+    if have_alarm:
+        def _raise_timeout(signum: int, frame: Any) -> None:
+            raise TimeoutError("regex match exceeded the time budget")
+
+        try:
+            old_handler = signal.signal(signal.SIGALRM, _raise_timeout)
+            # Arm slightly past the budget so perf_counter, not SIGALRM, is the
+            # usual reporter; SIGALRM only fires on a genuine hang.
+            signal.setitimer(signal.ITIMER_REAL, REDOS_BUDGET_SECONDS * 4)
+        except (ValueError, OSError):
+            have_alarm = False  # not in main thread, or platform refused — fall back
+
+    start = time.perf_counter()
+    try:
+        pattern.search(corpus_string)
+    except TimeoutError:
+        return float("inf")
+    finally:
+        if have_alarm:
+            try:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                if old_handler is not None:
+                    signal.signal(signal.SIGALRM, old_handler)
+            except (ValueError, OSError):
+                pass
+    return time.perf_counter() - start
+
+
+def validate_config(config_path: str | None = None) -> dict[str, Any]:
+    """Validate org audit-config patterns BEFORE they reach a prod CI gate.
+
+    Compiles the merged config (plus an optional standalone `--config` file) and
+    runs every dangerous/secret/env-exfil/hook-deny pattern against an adversarial
+    corpus under a per-pattern wall-clock budget. Surfaces compile errors and
+    catastrophic-backtracking patterns. Returns {issues, checked} for the caller."""
+    issues: list[dict[str, str]] = []
+
+    try:
+        cfg = load_config()
+    except ValueError as exc:
+        # _compile_patterns raises ValueError on a bad regex / over-length pattern.
+        return {"kind": "validate-config", "issues": [{"kind": "compile", "label": "<merged-config>", "message": str(exc)}], "checked": 0}
+
+    pattern_groups = ("dangerous_patterns", "secret_patterns", "env_exfil_patterns", "hook_deny")
+    compiled: list[tuple[str, Any]] = []
+    for group in pattern_groups:
+        for entry in cfg.get(group) or []:
+            # Entries are (label, pattern) or (label, pattern, suggestion).
+            compiled.append((str(entry[0]), entry[1]))
+
+    if config_path:
+        # Validate the standalone file's patterns too — compile errors surface here.
+        try:
+            data = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            issues.append({"kind": "compile", "label": config_path, "message": f"could not read config file: {exc}"})
+            data = {}
+        block = data.get("config") if isinstance(data, dict) and isinstance(data.get("config"), dict) else data
+        patterns = (block or {}).get("patterns") or {} if isinstance(block, dict) else {}
+        for key, with_sugg in (("dangerous", True), ("secrets", False), ("env_exfil", True)):
+            try:
+                for entry in _compile_patterns(patterns.get(key), with_suggestion=with_sugg):
+                    compiled.append((str(entry[0]), entry[1]))
+            except ValueError as exc:
+                issues.append({"kind": "compile", "label": f"{config_path}:{key}", "message": str(exc)})
+
+    checked = 0
+    for label, pattern in compiled:
+        checked += 1
+        worst = 0.0
+        for corpus_string in _REDOS_CORPUS:
+            elapsed = _time_one_match(pattern, corpus_string)
+            worst = max(worst, elapsed)
+            if elapsed > REDOS_BUDGET_SECONDS:
+                break
+        if worst > REDOS_BUDGET_SECONDS:
+            budget_repr = "timeout" if worst == float("inf") else f"{worst:.3f}s"
+            issues.append({
+                "kind": "redos",
+                "label": label,
+                "message": f"Pattern '{label}' exceeded the {REDOS_BUDGET_SECONDS}s match budget ({budget_repr}) — catastrophic backtracking risk.",
+            })
+
+    return {"kind": "validate-config", "issues": issues, "checked": checked}
+
+
 def print_text_report(report: dict[str, Any]) -> None:
     summary = report.get("summary", {})
     print(f"{report.get('kind', 'audit')} ({report.get('profile', 'default')})")
@@ -1340,12 +1456,40 @@ def print_text_report(report: dict[str, Any]) -> None:
         print(f"  Suggestion: {item['suggestion']}")
 
 
+def print_github_annotations(report: dict[str, Any]) -> None:
+    """Emit GitHub Actions workflow commands — one annotation per finding.
+
+    `::error` for high severity; `::warning` for medium/low/info. Paths are
+    rendered repo-relative to the audit root so they resolve in the PR diff view."""
+    root = report.get("root") or report.get("target") or "."
+    for item in report.get("findings", []):
+        rel = _norm_rel(str(item.get("file", "")), str(root))
+        level = "error" if str(item.get("severity")) == "high" else "warning"
+        line = item.get("line", 1)
+        rule_id = item.get("rule_id", "")
+        # Strip newlines — a literal newline would terminate the workflow command early.
+        message = str(item.get("message", "")).replace("\n", " ")
+        print(f"::{level} file={rel},line={line},title={rule_id}::{message}")
+
+
 def emit(data: dict[str, Any], fmt: str) -> None:
     if fmt == "json":
         print(json.dumps(data, ensure_ascii=False, indent=2))
+    elif fmt == "github":
+        if data.get("kind") in {"project-audit", "skill-audit"}:
+            print_github_annotations(data)
+        else:
+            print_text_report(data) if data.get("kind") else print(json.dumps(data, ensure_ascii=False, indent=2))
     else:
         if data.get("kind") in {"project-audit", "skill-audit"}:
             print_text_report(data)
+        elif data.get("kind") == "validate-config":
+            issues = data.get("issues") or []
+            print(f"validate-config: checked {data.get('checked', 0)} pattern(s)")
+            if not issues:
+                print("  OK — all patterns compile and stay within the ReDoS budget.")
+            for issue in issues:
+                print(f"  [{issue['kind']}] {issue['label']}: {issue['message']}")
         elif "assets" in data:
             print(f"Discovered {len(data['assets'])} agent asset(s) under {data['root']}")
             for asset in data["assets"]:
@@ -1357,9 +1501,23 @@ def emit(data: dict[str, Any], fmt: str) -> None:
             print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def _gate_exit_code(blocked: bool) -> int:
+    """Map a gate-block decision to an exit code, honoring the SGT_FAIL_MODE kill-switch.
+
+    `SGT_FAIL_MODE=advisory` (a fleet-wide kill-switch) forces a non-blocking exit 0
+    even when findings meet the threshold — the audit still ran and reported. Default
+    (`enforce` or unset) keeps the blocking behavior."""
+    if not blocked:
+        return 0
+    if os.environ.get("SGT_FAIL_MODE", "enforce") == "advisory":
+        print("SGT_FAIL_MODE=advisory: not blocking despite findings at/above threshold.", file=sys.stderr)
+        return 0
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Discover and audit agent-governance assets.")
-    parser.add_argument("--format", choices=["text", "json"], default="text")
+    parser.add_argument("--format", choices=["text", "json", "github"], default="text")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_discover = sub.add_parser("discover", help="Discover agent assets in a project.")
@@ -1367,7 +1525,7 @@ def main(argv: list[str] | None = None) -> int:
     p_discover.add_argument("root", nargs="?", default=".")
 
     p_project = sub.add_parser("audit-project", help="Audit all discovered skills and instruction aliases.")
-    p_project.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
+    p_project.add_argument("--format", choices=["text", "json", "github"], default=argparse.SUPPRESS)
     p_project.add_argument("root", nargs="?", default=".")
     p_project.add_argument("--profile", choices=["security", "quality", "maintainability", "release-ready"], default="release-ready")
     p_project.add_argument("--fail-on", choices=["none", "high", "medium", "low", "info", "any"], default="none", help="Exit 1 when findings meet or exceed this severity (absolute, all findings).")
@@ -1376,7 +1534,7 @@ def main(argv: list[str] | None = None) -> int:
     p_project.add_argument("--base", default="origin/main", help="Git ref to diff against when --changed-only or --fail-on-new is set.")
 
     p_skill = sub.add_parser("audit-skill", help="Audit one SKILL.md file.")
-    p_skill.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
+    p_skill.add_argument("--format", choices=["text", "json", "github"], default=argparse.SUPPRESS)
     p_skill.add_argument("path")
     p_skill.add_argument("--profile", choices=["security", "quality", "maintainability", "release-ready"], default="release-ready")
     p_skill.add_argument("--fail-on", choices=["none", "high", "medium", "low", "info", "any"], default="none", help="Exit 1 when findings meet or exceed this severity.")
@@ -1387,6 +1545,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p_rules = sub.add_parser("rules", help="List rule catalog.")
     p_rules.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
+
+    p_validate = sub.add_parser("validate-config", help="Validate org audit-config patterns against a ReDoS time budget.")
+    p_validate.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
+    p_validate.add_argument("--config", default=None, help="Also validate this single config/overlay file standalone.")
 
     args = parser.parse_args(argv)
 
@@ -1435,21 +1597,26 @@ def main(argv: list[str] | None = None) -> int:
 
             emit(report, args.format)
 
+            blocked = False
             if delta_active:
                 introduced = [f for f in report.get("findings") or [] if f.get("introduced")]
-                if should_fail({"findings": introduced}, args.fail_on_new):
-                    return 1
-            if should_fail(report, args.fail_on):
-                return 1
+                blocked = should_fail({"findings": introduced}, args.fail_on_new)
+            if not blocked:
+                blocked = should_fail(report, args.fail_on)
+            return _gate_exit_code(blocked)
         elif args.command == "audit-skill":
             report = audit_skill(args.path, profile=args.profile)
             emit(report, args.format)
-            if should_fail(report, args.fail_on):
-                return 1
+            return _gate_exit_code(should_fail(report, args.fail_on))
         elif args.command == "explain-rule":
             emit(explain_rule(args.rule_id), args.format)
         elif args.command == "rules":
             emit(rule_catalog(), args.format)
+        elif args.command == "validate-config":
+            result = validate_config(args.config)
+            emit(result, args.format)
+            if result.get("issues"):
+                return 2
         else:
             parser.error(f"unknown command: {args.command}")
     except (FileNotFoundError, KeyError, OSError, UnicodeError, ValueError) as exc:

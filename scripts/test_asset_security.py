@@ -79,6 +79,29 @@ class IgnoreListTests(_CacheSafe):
         self.assertEqual(agent_audit._apply_ignores(f, doc, {}, root="."), [])
 
 
+class HiddenCharTests(_CacheSafe):
+    def _ids(self, text):
+        return {x.rule_id for x in agent_audit.scan_hidden_chars(text, Path("x.md"))}
+    def test_bidi_override_flagged(self):
+        self.assertIn("SEC001", self._ids("a‮b"))
+    def test_directional_mark_flagged(self):       # LRM/RLM, previously missed
+        self.assertIn("SEC001", self._ids("a‎b"))
+    def test_zero_width_flagged(self):
+        self.assertIn("SEC002", self._ids("a​b"))
+    def test_tag_char_smuggling_flagged(self):     # U+E0000 block
+        self.assertIn("SEC002", self._ids("a\U000e0041b"))
+    def test_soft_hyphen_flagged(self):            # U+00AD, category Cf
+        self.assertIn("SEC002", self._ids("a­b"))
+    def test_clean_ascii_no_findings(self):
+        self.assertEqual(agent_audit.scan_hidden_chars("clean ascii text", Path("x.md")), [])
+    def test_fullwidth_command_normalized_then_caught(self):
+        # NFKC turns fullwidth into ASCII so scan_security's dangerous-pattern scan fires.
+        text = "ｒｍ －ｒｆ /"   # fullwidth 'rm -rf /'
+        f = agent_audit.scan_security(agent_audit.nfkc(text), Path("x.md"),
+                                      dangerous_id="SEC010", secret_id="SEC011", prose=False)
+        self.assertIn("SEC010", {x.rule_id for x in f})
+
+
 class DeltaGateTests(_CacheSafe):
     def test_preexisting_finding_not_counted_as_introduced(self):
         base = [{"rule_id": "SEC010", "file": "a.md", "message": "Potentially dangerous instruction detected: rm -rf."}]

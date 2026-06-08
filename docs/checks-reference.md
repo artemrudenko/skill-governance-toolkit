@@ -66,6 +66,17 @@ merge on `high`; `medium`/`low`/`info` are advisory.
 | SKILL022 | medium | User prompt language without clarification policy, or prompt language contradicting `never asks` | Interactive behavior must be bounded so non-interactive and CI flows do not hang or guess |
 | SKILL023 | high | Mutating skill missing preview, confirmation, verification, or exact write scope | Mutations need a visible safety contract before an agent edits files or external state |
 
+### Hidden-character rules (`SEC001`–`SEC002`)
+
+Cross-asset scan applied to **every** asset (skills and non-skill assets alike). It targets imported or copy-pasted content carrying invisible/obfuscation characters used to hide injected instructions from human reviewers. Detection is category-based (`unicodedata` general category `Cf`) plus explicit bidi/tag/variation-selector ranges, so it catches the whole class — not a fixed codepoint list.
+
+| Rule | Severity | Detects | Why it matters |
+|---|---|---|---|
+| SEC001 | high | Bidirectional embedding/override/isolate control or directional mark (LRM/RLM/ALM) | These controls can reorder or hide visible text so a reviewer sees different content than the runtime parses |
+| SEC002 | high | Invisible/format character — zero-width space, soft hyphen, Unicode tag char (U+E0000 block), variation selector | Invisible characters can smuggle hidden instructions into otherwise innocent-looking content |
+
+The dangerous/secret scans additionally NFKC-normalize text before matching, so fullwidth/compatibility lookalikes (e.g. fullwidth `ｒｍ －ｒｆ /`) cannot bypass `SEC010`/`SKILL014`.
+
 ### Non-skill asset rules (`SEC*`)
 
 Content scans applied to non-skill assets (MCP configs, plugin manifests, agents, commands, prompts, runtime configs). Unlike `SKILL*` scans, these disable the prose `detect/scan/pattern` exemption, since config-style assets are not documentation.

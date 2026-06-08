@@ -152,6 +152,18 @@
       "description": "Mutating skills must document preview, confirmation, verification, and exact mutation scope."
     },
     {
+      "rule_id": "SEC001",
+      "severity": "high",
+      "title": "Bidirectional control / direction-mark character",
+      "description": "A bidirectional embedding/override/isolate control or a directional mark (LRM/RLM/ALM) can hide or reorder text from human reviewers while the runtime sees different content."
+    },
+    {
+      "rule_id": "SEC002",
+      "severity": "high",
+      "title": "Invisible / format / tag / variation-selector character",
+      "description": "An invisible format character (zero-width space, soft hyphen, Unicode tag char, variation selector) can smuggle hidden instructions into imported or copy-pasted content."
+    },
+    {
       "rule_id": "SEC010",
       "severity": "high",
       "title": "Dangerous instruction in non-skill asset",

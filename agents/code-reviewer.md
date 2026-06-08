@@ -203,9 +203,9 @@ Use `Grep` for pattern-based detection. Use `Read` for context when a rule requi
 - **Hierarchy:** {X violations}
 - **Quality:** {X violations}
 
-{If BLOCKERs > 0:} ❌ Do not merge until BLOCKERs resolved.
-{If MAJOR > 5:} ⚠️ Recommend deferred merge — high MAJOR count.
-{Else:} ✅ No blockers. {N} MAJOR findings — recommend fixing before merge.
+{If BLOCKERs > 0:} BLOCKED: Do not merge until BLOCKERs resolved.
+{If MAJOR > 5:} DEFER: Recommend deferred merge — high MAJOR count.
+{Else:} PASS: No blockers. {N} MAJOR findings — recommend fixing before merge.
 ```
 
 ---

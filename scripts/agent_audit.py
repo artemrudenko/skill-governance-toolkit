@@ -16,6 +16,7 @@ import stat as _stat
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -48,6 +49,8 @@ SEVERITY_FLOOR = {
     "SKILL009": "high",
     "SKILL014": "high",
     "SKILL015": "high",
+    "SEC001": "high",
+    "SEC002": "high",
     "SEC010": "high",
     "SEC011": "high",
 }
@@ -80,6 +83,8 @@ ENGINE_RULE_IDS = {
     "SKILL021",
     "SKILL022",
     "SKILL023",
+    "SEC001",
+    "SEC002",
     "SEC010",
     "SEC011",
     "SEC012",
@@ -729,6 +734,10 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
             finding("SKILL020", skill_path, 1, "No predecessor/successor workflow contract detected.", "Consider documenting adjacent skills or handoff points.")
         )
 
+    # Hidden-char scan (SEC001/SEC002) — skills can be imported/copy-pasted too,
+    # so they get the same cross-asset hidden-character detection as non-skill assets.
+    findings.extend(scan_hidden_chars(text, skill_path))
+
     if profile == "security":
         kept = [f for f in findings if f.rule_id in cfg["security_profile"]]
     elif profile == "quality":
@@ -768,33 +777,91 @@ def _is_credential_path_label(label: str) -> bool:
     return label == "credential path"
 
 
+# Bidi embeddings/overrides/isolates + the three directional marks (LRM/RLM/ALM).
+BIDI_CONTROLS = {0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+                 0x2066, 0x2067, 0x2068, 0x2069,
+                 0x200E, 0x200F, 0x061C}
+
+
+def _is_tag_or_variation(cp: int) -> bool:
+    return (0xE0000 <= cp <= 0xE007F          # Unicode tag chars (invisible smuggling)
+            or 0xFE00 <= cp <= 0xFE0F          # variation selectors
+            or 0xE0100 <= cp <= 0xE01EF)       # variation selectors supplement
+
+
+def nfkc(text: str) -> str:
+    """NFKC normalization — folds fullwidth/compatibility lookalikes to ASCII so the
+    dangerous/secret regexes cannot be bypassed with e.g. fullwidth 'rm -rf /'."""
+    return unicodedata.normalize("NFKC", text)
+
+
 def scan_hidden_chars(text: str, path: Path) -> list[Finding]:
-    """Stub filled in by a later task (A1). Returns no findings for now."""
-    return []
+    """Flag bidi controls (SEC001) and invisible/format/tag/variation chars (SEC002).
+    Category-based (unicodedata 'Cf') so it catches the whole class, not a fixed list."""
+    out: list[Finding] = []
+    for off, ch in enumerate(text):
+        cp = ord(ch)
+        # BIDI controls are themselves category Cf — this branch MUST come first so
+        # they report as SEC001 (reorder threat), not the generic SEC002.
+        if cp in BIDI_CONTROLS:
+            out.append(finding("SEC001", path, line_for_offset(text, off),
+                               f"Bidirectional/direction control U+{cp:04X} detected.",
+                               "Remove the directional control character; it can hide or reorder text from reviewers."))
+        elif unicodedata.category(ch) == "Cf" or _is_tag_or_variation(cp):
+            out.append(finding("SEC002", path, line_for_offset(text, off),
+                               f"Invisible/format character U+{cp:04X} detected.",
+                               "Remove invisible characters; they can hide injected instructions."))
+    return out
 
 
 def scan_security(text: str, path: Path, *, dangerous_id: str, secret_id: str, prose: bool = True) -> list[Finding]:
     """Reusable secret + dangerous scan for any asset body. For non-prose assets
-    (mcp/plugin/hook/script) the is_detection_context exemption is disabled."""
+    (mcp/plugin/hook/script) the is_detection_context exemption is disabled.
+
+    NFKC strategy: the raw text is scanned first (accurate line numbers, existing
+    behavior). Then an NFKC-normalized copy is scanned as an ADDITIONAL pass to
+    catch fullwidth/compatibility lookalikes (e.g. fullwidth 'rm -rf /') that only
+    become matchable after folding. NFKC can change string length, so its offsets
+    do not map back to the raw text — these bypass-only findings are reported at
+    line 1. A (rule_id, matched-substring) seen-set deduplicates, so a pattern that
+    already matched in the raw pass is never double-reported by the NFKC pass."""
     cfg = load_config()
     out: list[Finding] = []
-    for label, pattern, suggestion in cfg["dangerous_patterns"]:
-        for m in pattern.finditer(text):
-            if prose and is_detection_context(line_text_for_offset(text, m.start())):
-                continue
-            out.append(finding(dangerous_id, path, line_for_offset(text, m.start()),
-                               f"Potentially dangerous instruction detected: {label}.", suggestion))
-    for label, pattern in cfg["secret_patterns"]:
-        for m in pattern.finditer(text):
-            if prose and is_detection_context(line_text_for_offset(text, m.start())):
-                continue
-            # Split credential-PATH matches (medium SEC012) from inline-secret values (high SEC011).
-            rid = "SEC012" if (secret_id == "SEC011" and _is_credential_path_label(label)) else secret_id
-            sugg = ("Reference credential files by documented config, not inline."
-                    if rid == "SEC012" else
-                    "Remove inline secrets and refer to environment variable names only.")
-            out.append(finding(rid, path, line_for_offset(text, m.start()),
-                               f"Potential secret or credential reference detected: {label}.", sugg))
+    normalized = nfkc(text)
+
+    def _scan(src: str, *, normalized_pass: bool, seen: set[tuple[str, str]]) -> None:
+        for label, pattern, suggestion in cfg["dangerous_patterns"]:
+            for m in pattern.finditer(src):
+                if prose and is_detection_context(line_text_for_offset(src, m.start())):
+                    continue
+                key = (dangerous_id, m.group(0))
+                if key in seen:
+                    continue
+                seen.add(key)
+                line = 1 if normalized_pass else line_for_offset(src, m.start())
+                out.append(finding(dangerous_id, path, line,
+                                   f"Potentially dangerous instruction detected: {label}.", suggestion))
+        for label, pattern in cfg["secret_patterns"]:
+            for m in pattern.finditer(src):
+                if prose and is_detection_context(line_text_for_offset(src, m.start())):
+                    continue
+                # Split credential-PATH matches (medium SEC012) from inline-secret values (high SEC011).
+                rid = "SEC012" if (secret_id == "SEC011" and _is_credential_path_label(label)) else secret_id
+                key = (rid, m.group(0))
+                if key in seen:
+                    continue
+                seen.add(key)
+                sugg = ("Reference credential files by documented config, not inline."
+                        if rid == "SEC012" else
+                        "Remove inline secrets and refer to environment variable names only.")
+                line = 1 if normalized_pass else line_for_offset(src, m.start())
+                out.append(finding(rid, path, line,
+                                   f"Potential secret or credential reference detected: {label}.", sugg))
+
+    seen: set[tuple[str, str]] = set()
+    _scan(text, normalized_pass=False, seen=seen)
+    if normalized != text:
+        _scan(normalized, normalized_pass=True, seen=seen)
     return out
 
 

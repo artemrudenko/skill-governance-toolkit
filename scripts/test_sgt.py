@@ -266,6 +266,70 @@ class CiInitTests(unittest.TestCase):
             none = self.run_sgt("--root", tmp, "ci-init")
             self.assertNotEqual(none.returncode, 0)
 
+    def test_scaffolds_control_plane_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("--root", tmp, "ci-init", "--gitlab")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            ignore = Path(tmp) / "references" / "audit-ignore.json"
+            codeowners = Path(tmp) / "CODEOWNERS"
+            self.assertTrue(ignore.exists(), "audit-ignore.json not scaffolded")
+            self.assertTrue(codeowners.exists(), "CODEOWNERS not scaffolded")
+            self.assertIn("audit-ignore.json", codeowners.read_text(encoding="utf-8"))
+            # Starter ignore file is an empty, valid suppression list.
+            data = json.loads(ignore.read_text(encoding="utf-8"))
+            self.assertEqual(data.get("ignores"), [])
+
+    def test_does_not_clobber_existing_control_plane_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "references").mkdir(parents=True, exist_ok=True)
+            ignore = Path(tmp) / "references" / "audit-ignore.json"
+            ignore.write_text('{"version":"1.0","ignores":["KEEP"]}', encoding="utf-8")
+            codeowners = Path(tmp) / "CODEOWNERS"
+            codeowners.write_text("# my own owners\n", encoding="utf-8")
+            result = self.run_sgt("--root", tmp, "ci-init", "--github", "--ref", "c" * 40)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            # Neither pre-existing file is overwritten.
+            self.assertIn("KEEP", ignore.read_text(encoding="utf-8"))
+            self.assertEqual(codeowners.read_text(encoding="utf-8"), "# my own owners\n")
+
+
+class GateTests(unittest.TestCase):
+    def run_sgt(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "sgt.py"), *args],
+            cwd=str(cwd or ROOT), text=True, capture_output=True, check=False,
+        )
+
+    def test_help_lists_base_and_check_setup(self) -> None:
+        result = self.run_sgt("gate", "--help")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("--base", result.stdout)
+        self.assertIn("--check-setup", result.stdout)
+
+    def test_check_setup_fails_without_codeowners(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("--root", tmp, "gate", "--check-setup")
+            self.assertNotEqual(result.returncode, 0)
+            combined = result.stdout + result.stderr
+            self.assertIn("CODEOWNERS", combined)
+            self.assertIn("audit-ignore.json", combined)
+
+    def test_check_setup_passes_when_wired(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            (target / "references").mkdir(parents=True, exist_ok=True)
+            (target / "references" / "audit-ignore.json").write_text(
+                '{"version":"1.0","ignores":[]}', encoding="utf-8")
+            (target / "CODEOWNERS").write_text(
+                "/references/audit-ignore.json   @sec\n", encoding="utf-8")
+            result = self.run_sgt("--root", tmp, "gate", "--check-setup")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_check_setup_passes_on_toolkit_repo(self) -> None:
+        # The toolkit itself is properly wired (has CODEOWNERS + audit-ignore.json).
+        result = self.run_sgt("--root", str(ROOT), "gate", "--check-setup")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -260,21 +260,84 @@ def command_ci_init(args: argparse.Namespace) -> int:
 
     rel = dest.relative_to(args.root.expanduser().resolve()) if str(dest).startswith(
         str(args.root.expanduser().resolve())) else dest
+
+    # ── Scaffold the rest of the control plane (F3/F4/F5) ──────────────────────
+    # A correctly-gated repo also needs the suppression list and a CODEOWNERS
+    # stub so the gate can't weaken itself. Scaffold both if absent; never clobber.
+    target_root = args.root.expanduser().resolve()
+    written: list[str] = [str(rel)]
+    notes: list[str] = []
+
+    ignore_path = target_root / "references" / "audit-ignore.json"
+    if ignore_path.exists():
+        notes.append("references/audit-ignore.json already present — left untouched.")
+    else:
+        ignore_path.parent.mkdir(parents=True, exist_ok=True)
+        ignore_path.write_text(
+            json.dumps({"version": "1.0", "ignores": []}, indent=2) + "\n", encoding="utf-8")
+        written.append("references/audit-ignore.json")
+
+    codeowners_path = target_root / "CODEOWNERS"
+    ci_gate_rel = str(rel).replace("\\", "/")
+    if codeowners_path.exists():
+        notes.append("CODEOWNERS already present — left untouched; ensure it covers "
+                     "references/audit-ignore.json, references/agent-audit-rules.json, "
+                     f"references/audit-config.*.json, and {ci_gate_rel}.")
+    else:
+        codeowners_path.write_text(_codeowners_stub(ci_gate_rel), encoding="utf-8")
+        written.append("CODEOWNERS")
+
+    # ── Post-init summary ──────────────────────────────────────────────────────
     print(f"✓ wrote {platform} gate to {rel}")
     print(f"  · toolkit pinned to SGT_REF = {ref}")
     if not repo:
         print("  ! SGT_REPO left as a placeholder — set it to your toolkit mirror URL.")
+    print("  Files written:")
+    for w in written:
+        print(f"    · {w}")
+    for note in notes:
+        print(f"  ! {note}")
     print("  Required setup:")
+    print("    1. Replace the @security-group placeholder in CODEOWNERS with your real")
+    print("       GitLab/GitHub group so suppression edits need a governance reviewer.")
     if args.gitlab:
-        print("    1. Add a MASKED CI/CD variable GITLAB_TOKEN — a project/group access")
+        print("    2. Add a MASKED CI/CD variable GITLAB_TOKEN — a project/group access")
         print("       token with `api` scope (enables the idempotent MR comment).")
+        print("    3. Enable \"Require approval from Code Owners\" + \"Pipelines must")
+        print("       succeed\" on the protected default branch.")
     else:
-        print("    1. No secret needed for the gate; GITHUB_TOKEN is read-only on fork PRs")
+        print("    2. No secret needed for the gate; GITHUB_TOKEN is read-only on fork PRs")
         print("       (annotations still render). Add a token only if you later post comments.")
-    print("    2. Enable branch protection requiring this check to pass before merge.")
-    print("    3. Protect the standards: add the gate file + rules to CODEOWNERS so policy")
-    print("       changes need a governance reviewer.")
+        print("    3. Enable branch protection: require this check + \"Require review from")
+        print("       Code Owners\" on the default branch.")
+    print("    4. Verify the wiring:  sgt gate --check-setup")
     return 0
+
+
+def _codeowners_stub(ci_gate_rel: str) -> str:
+    """A starter CODEOWNERS covering the governance control plane.
+
+    The author who edits a skill must not be able to also silence its own
+    finding — so the suppression list, the rule catalog, the audit-config glob,
+    and the CI gate are all owned by a separate security group.
+    """
+    return f"""# CODEOWNERS — separation of duties for the governance control plane.
+#
+# TODO: set your @security-group below. Changes to the suppression list, the
+# rule catalog, the audit config, and the CI gate must be reviewed by this
+# group — not by the same author who edits a skill in the same change. Enforced
+# only when branch protection requires code-owner approval.
+
+# --- Suppression list (who can SILENCE a finding) ---
+/references/audit-ignore.json        @security-group
+
+# --- Audit policy + config the engine trusts ---
+/references/agent-audit-rules.json   @security-group
+/references/audit-config.*.json      @security-group
+
+# --- CI gate (who can change enforcement) ---
+/{ci_gate_rel}                        @security-group
+"""
 
 
 # ── Uninstall — the precise inverse of install, never touching user files ──────
@@ -389,6 +452,75 @@ def _prune_empty_dirs(roots: list[Path]) -> list[Path]:
             d.rmdir()
             pruned.append(d)
     return pruned
+
+
+# ── Gate — reproduce the CI block verdict locally ─────────────────────────────
+# Where a consuming repo may keep its CODEOWNERS (matches the toolkit's P18 guard
+# and the GitHub/GitLab/docs conventions).
+CODEOWNERS_LOCATIONS = ("CODEOWNERS", ".gitlab/CODEOWNERS",
+                        ".github/CODEOWNERS", "docs/CODEOWNERS")
+
+
+def _find_codeowners(root: Path) -> Path | None:
+    for rel in CODEOWNERS_LOCATIONS:
+        p = root / rel
+        if p.exists():
+            return p
+    return None
+
+
+def _gate_check_setup(root: Path) -> int:
+    """Consuming-repo counterpart to the toolkit's P18 self-CI guard.
+
+    Verify the repo is wired so the gate cannot weaken itself: a CODEOWNERS file
+    exists and covers references/audit-ignore.json (when that file is present).
+    """
+    codeowners = _find_codeowners(root)
+    if codeowners is None:
+        print("✗ gate not wired: no CODEOWNERS found "
+              f"(looked in {', '.join(CODEOWNERS_LOCATIONS)}).", file=sys.stderr)
+        print("  Add a CODEOWNERS rule covering references/audit-ignore.json so an MR",
+              file=sys.stderr)
+        print("  author can't self-approve silencing their own finding. Run: sgt ci-init.",
+              file=sys.stderr)
+        return 1
+
+    ignore_present = (root / "references" / "audit-ignore.json").exists()
+    if not ignore_present:
+        print(f"✓ CODEOWNERS found at {codeowners.relative_to(root)} — but no "
+              "references/audit-ignore.json yet.")
+        print("  ! Warning: when you add a suppression list, gate it in CODEOWNERS.")
+        return 0
+
+    if "audit-ignore.json" not in _safe_read(codeowners):
+        print(f"✗ {codeowners.relative_to(root)} does not cover "
+              "references/audit-ignore.json.", file=sys.stderr)
+        print("  Add a rule (e.g. `/references/audit-ignore.json  @security-group`) so the",
+              file=sys.stderr)
+        print("  suppression list needs a governance reviewer.", file=sys.stderr)
+        return 1
+
+    print(f"✓ gate wired: {codeowners.relative_to(root)} covers "
+          "references/audit-ignore.json.")
+    return 0
+
+
+def command_gate(args: argparse.Namespace) -> int:
+    root = args.root.expanduser().resolve()
+    if args.check_setup:
+        return _gate_check_setup(root)
+
+    engine = SGT_ROOT / "scripts" / "agent_audit.py"
+    if not engine.exists():
+        print(f"sgt gate: engine not found at {engine}", file=sys.stderr)
+        return 1
+
+    # Exactly the CI block job: changed-only delta gate against --base, blocking
+    # only on newly INTRODUCED high findings. Propagate the engine's exit code.
+    cmd = [sys.executable, str(engine), "audit-project", str(root),
+           "--changed-only", "--base", args.base, "--fail-on-new", "high",
+           "--format", "text"]
+    return subprocess.run(cmd, cwd=root, check=False).returncode
 
 
 def command_uninstall(args: argparse.Namespace) -> int:
@@ -582,6 +714,15 @@ def build_parser() -> argparse.ArgumentParser:
     ci_init.add_argument("--output", default="", help="Override the output path (relative to --root).")
     ci_init.add_argument("--force", action="store_true", help="Overwrite an existing file.")
     ci_init.set_defaults(func=command_ci_init)
+
+    gate = subcommands.add_parser(
+        "gate", help="Reproduce the CI block verdict locally (changed-only delta gate).")
+    gate.add_argument("--base", default="main",
+                      help="Git ref to diff against for the delta gate (default: main).")
+    gate.add_argument("--check-setup", action="store_true",
+                      help="Verify this repo is wired for the gate (CODEOWNERS covers "
+                           "the suppression list); audit nothing.")
+    gate.set_defaults(func=command_gate)
 
     uninstall = subcommands.add_parser(
         "uninstall", help="Remove toolkit-owned files; never touches your own content.")

@@ -636,6 +636,67 @@ API. Только stdlib: HTTP через `urllib`, без SDK.
 
 ---
 
+## Use case 4.5 — Проверки безопасности артефактов и delta-gate (с 1.12.0)
+
+Помимо структуры скила, движок сканирует **каждый** управляемый артефакт на
+проблемы безопасности контента:
+
+| Правило | Severity | Что детектит |
+|---|---|---|
+| `SEC001` / `SEC002` | high | Bidi/direction-mark и невидимые/format/tag символы, которыми прячут инъекции текста |
+| `SEC003` | medium | Homoglyph-тайпсквоттинг — латинское слово/URL-хост, прячущее кириллический/греческий look-alike |
+| `SEC010` | high | Опасная инструкция (деструктивный shell, небезопасный git) в не-скил артефакте |
+| `SEC011` | high | Inline-секрет в не-скил артефакте |
+| `SEC012` | medium | Путь к файлу учётных данных в не-скил артефакте |
+
+Полный каталог с примерами срабатывания и чистыми фиксами:
+[`checks-reference.md`](checks-reference.md).
+
+### Delta-gate — блокирует только то, что вносит MR
+
+Блокирующая job в CI и локальный `sgt gate` используют `--fail-on-new`, а не
+абсолютный `--fail-on`. Блокируются только findings, которые MR **внёс** относительно
+базовой ветки; уже существующие остаются advisory. Это позволяет включить набор
+правил поверх легаси-библиотеки без лавины ошибок — см.
+[`security-rollout-guide.md`](security-rollout-guide.md).
+
+```bash
+# Воспроизвести точный вердикт блокирующей CI-job локально (changed-only delta-gate)
+sgt gate --base main
+
+# Эквивалент на сыром движке
+python3 scripts/agent_audit.py audit-project . --changed-only --base main --fail-on-new high
+```
+
+### Подавление findings
+
+| Механизм | Подавляет | Как |
+|---|---|---|
+| Inline-маркер | только advisory-правила | `<!-- sgt-ignore: RULEID reason=... -->` на строке или над ней |
+| Центральный файл | любое правило (gated через CODEOWNERS) | запись в `references/audit-ignore.json` с `reason` + рекомендуемым `expires` |
+
+Сломанное/просроченное/без reason подавление fail-safe — finding остаётся, а
+запись `IGNORE001/002/003` всплывает. Полная процедура, SLA и break-glass:
+[`security-suppression-runbook.md`](security-suppression-runbook.md).
+
+### Инструменты оператора
+
+```bash
+# Проверить org config/overlay паттерны на ReDoS-бюджет до запуска в CI
+python3 scripts/agent_audit.py validate-config
+
+# Напечатать как фиксить правило + правильный путь подавления
+python3 scripts/agent_audit.py explain-finding SEC011
+
+# GitHub workflow annotations (inline на diff в PR)
+python3 scripts/agent_audit.py audit-project . --fail-on high --format github
+
+# Fleet kill-switch — форсирует non-blocking exit 0 во всех pipeline
+SGT_FAIL_MODE=advisory python3 scripts/agent_audit.py audit-project . --fail-on high
+```
+
+---
+
 ## Use case 5 — Сделать скил портабельным
 
 Сценарий: есть Claude-Code-only скил с `allowed-tools:`, `paths:`, org-specific путями. Хочешь чтобы работал везде.

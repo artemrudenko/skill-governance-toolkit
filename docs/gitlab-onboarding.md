@@ -133,13 +133,22 @@ and engine can be changed by the same author who edits a skill in the same MR.
 ## Verify locally before pushing
 
 ```bash
-# Run the audit exactly as CI does (any branch vs main)
+# Reproduce the exact CI block verdict (changed-only delta gate vs main).
+# This is what the block job runs — only NEWLY introduced high findings fail.
+sgt gate --base main
+
+# Equivalent raw engine call (what `sgt gate` wraps):
 python3 scripts/agent_audit.py audit-project . \
-  --changed-only --base main --profile release-ready --fail-on high --format text
+  --changed-only --base main --fail-on-new high --format text
 
 # Preview the rendered MR comment without calling the API
 python3 scripts/post_mr_comment.py skill-audit.json --dry-run
 ```
+
+> The block job now uses **`--fail-on-new`** (the finding-delta gate), not absolute
+> `--fail-on high`. Pre-existing findings stay advisory; only findings an MR
+> *introduces* vs its base block the merge — so enabling the gate over a legacy
+> repo doesn't avalanche. See [security-rollout-guide.md](security-rollout-guide.md).
 
 ## MR comment poster — config reference
 

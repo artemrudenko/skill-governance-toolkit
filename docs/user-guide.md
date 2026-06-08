@@ -629,6 +629,67 @@ API call. Stdlib-only: HTTP uses `urllib`, no SDK.
 
 ---
 
+## Use Case 4.5 - Asset security checks and the delta gate (since 1.12.0)
+
+Beyond per-skill structure, the engine scans **every** governed asset for content
+security issues:
+
+| Rule | Severity | Detects |
+|---|---|---|
+| `SEC001` / `SEC002` | high | Bidi/direction-mark and invisible/format/tag characters used to hide injected text |
+| `SEC003` | medium | Homoglyph typosquat — a Latin word/URL host hiding a Cyrillic/Greek look-alike |
+| `SEC010` | high | Dangerous instruction (destructive shell, unsafe git) in a non-skill asset |
+| `SEC011` | high | Inline secret value in a non-skill asset |
+| `SEC012` | medium | Credential-file path referenced in a non-skill asset |
+
+Full catalog with triggering examples and clean fixes:
+[`checks-reference.md`](checks-reference.md).
+
+### The delta gate — block only what an MR introduces
+
+The CI block job and the local `sgt gate` use `--fail-on-new`, not absolute
+`--fail-on`. They block only on findings the MR **introduced** versus its base ref;
+pre-existing findings stay advisory. This lets a team enable the suite over a
+legacy library without an avalanche — see
+[`security-rollout-guide.md`](security-rollout-guide.md).
+
+```bash
+# Reproduce the exact CI block verdict locally (changed-only delta gate)
+sgt gate --base main
+
+# Raw engine equivalent
+python3 scripts/agent_audit.py audit-project . --changed-only --base main --fail-on-new high
+```
+
+### Suppression
+
+| Mechanism | Suppresses | How |
+|---|---|---|
+| Inline marker | advisory rules only | `<!-- sgt-ignore: RULEID reason=... -->` on/above the line |
+| Central file | any rule (CODEOWNER-gated) | an entry in `references/audit-ignore.json` with `reason` + recommended `expires` |
+
+A broken/expired/missing-reason suppression fails safe — the finding stays and an
+`IGNORE001/002/003` record surfaces. Full procedure, SLA, and break-glass:
+[`security-suppression-runbook.md`](security-suppression-runbook.md).
+
+### Operator tooling
+
+```bash
+# Validate org config/overlay patterns against a ReDoS budget before CI
+python3 scripts/agent_audit.py validate-config
+
+# Print how to fix a rule + the correct suppression path
+python3 scripts/agent_audit.py explain-finding SEC011
+
+# GitHub workflow annotations (inline on the PR diff)
+python3 scripts/agent_audit.py audit-project . --fail-on high --format github
+
+# Fleet kill-switch — forces non-blocking exit 0 across every pipeline
+SGT_FAIL_MODE=advisory python3 scripts/agent_audit.py audit-project . --fail-on high
+```
+
+---
+
 ## Use Case 5 - Make a Skill Portable
 
 Use `skill-build-portable` when a skill is tied to one host or organization.

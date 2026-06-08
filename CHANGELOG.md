@@ -10,6 +10,65 @@ each before upgrading.
 
 ---
 
+## [1.12.0] — 2026-06-09 — asset-security suite
+
+Extends the deterministic engine from skill-structure checks to a **content
+security** scan over every governed asset, plus a **finding-delta gate** so the
+new rules can be enabled over a legacy library without an avalanche of failures.
+Rules catalog bumped `0.1.0 → 0.2.0`.
+
+### Added
+- **Per-asset content security pipeline.** Non-skill assets (MCP configs, plugin
+  manifests, agents, commands, prompts, runtime configs) are now scanned for
+  dangerous instructions (`SEC010`), inline secret values (`SEC011`), and
+  credential-file paths (`SEC012`). The asset-type → checks routing lives in
+  `agent_audit.py` `checks_for`.
+- **Hidden-character scan (`SEC001`/`SEC002`) on every asset.** Catches bidi
+  controls / direction marks (`SEC001`) and invisible/format/tag/variation
+  characters (`SEC002`) used to smuggle instructions past a human reviewer. The
+  dangerous/secret scans **NFKC-normalize** first, so fullwidth lookalikes cannot
+  bypass `SEC010`/`SKILL014`.
+- **Homoglyph confusable scan (`SEC003`).** Flags a Latin-majority word or URL
+  host hiding a Cyrillic/Greek look-alike. Language-safe: pure foreign words,
+  diacritics, and a `metainfo.language` declaration never trip it; URL/host
+  tokens are flagged regardless of declared language.
+- **Finding-delta gate (`--fail-on-new`).** Blocks only on findings **introduced**
+  vs `--base` (the key excludes line, so a moved-but-identical finding stays
+  pre-existing). Pre-existing findings are advisory. This is what lets a team
+  enable the suite over an existing repo. See `docs/security-rollout-guide.md`.
+- **Ignore-list (central + inline).** `references/audit-ignore.json` (CODEOWNERS-
+  gated) can suppress **any** rule with a required `reason` + optional `expires`;
+  inline `<!-- sgt-ignore: RULEID reason=... -->` markers suppress **advisory**
+  rules only. Fail-safe visibility rules surface a suppression that did not apply:
+  `IGNORE001` (expired/bad date), `IGNORE002` (missing reason), `IGNORE003`
+  (inline marker on a floor rule).
+- **Namespaced config + overlay.** The catalog `config` block tunes thresholds,
+  vocabularies, profiles, dangerous/secret pattern packs, and allowlists; sibling
+  `references/audit-config.*.json` overlays deep-merge on top.
+- **`validate-config`** subcommand — compiles org config/overlay patterns against
+  a ReDoS time budget before they reach CI.
+- **`--format github`** — emits `::error` / `::warning` workflow annotations so
+  findings surface inline on a GitHub PR diff.
+- **`SGT_FAIL_MODE=advisory` fleet kill-switch.** A single org/project CI variable
+  forces a non-blocking exit 0 across every pipeline — the 5-minute mitigation
+  when the gate misbehaves, with no template edit or CODEOWNERS bottleneck. See
+  `docs/security-incident-runbook.md`.
+- **`sgt gate [--base main]`** — reproduces the exact CI block verdict locally
+  (changed-only delta gate, `--fail-on-new high`). `sgt gate --check-setup`
+  verifies CODEOWNERS wiring.
+- **`sgt ci-init` scaffolding hardening.** Also scaffolds the suppression list and
+  a `CODEOWNERS` stub so the gate cannot weaken itself.
+- **New docs:** `docs/security-suppression-runbook.md` (false-positive handling +
+  OPS5 SLA/break-glass), `docs/security-rollout-guide.md` (enable over a legacy
+  library), `docs/security-incident-runbook.md` (OPS2: gate blocking everything),
+  `docs/gate-for-authors.md` (OPS9: one-page author entry point linked from the MR
+  comment footer). Engine + checks docs gained per-asset pipeline, finding-delta,
+  config-resolution, and ignore-decision Mermaid diagrams plus a coverage matrix.
+
+### Changed
+- The block job and `sgt gate` now use `--fail-on-new` (delta) instead of
+  absolute `--fail-on high` — pre-existing findings no longer block unrelated MRs.
+
 ## [1.11.1] — 2026-06-08 — GitLab gate hardening from real-world adoption
 
 Two fixes surfaced by a team running the GitLab CI gate in production.

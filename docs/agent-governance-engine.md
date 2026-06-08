@@ -90,6 +90,90 @@ Every `audit-skill`/`audit-project` report carries `engine_version` (from the
 root `VERSION`) and `rules_version` (from the catalog) so a verdict is traceable
 to the engine and policy that produced it.
 
+## Per-asset pipeline
+
+Every audit walks the same pipeline per discovered asset. Discovery classifies
+each path into an asset type (`asset_type`), the type selects which checks run
+(`checks_for` for non-skills, `audit_skill` for skills), suppressions are
+applied, and — when a base ref is supplied — only newly introduced findings
+reach the fail set.
+
+```mermaid
+flowchart TD
+    A[discover_agent_assets] --> B{asset_type}
+    B -->|SKILL.md| C[audit_skill<br/>SKILL001–023 + SEC001/002/003]
+    B -->|mcp/plugin/runtime config,<br/>agent, command, prompt| D[checks_for]
+    B -->|instructions / runtime-alias| E[DISC* project checks]
+    D --> D1[scan_hidden_chars<br/>SEC001 / SEC002]
+    D --> D2[scan_homoglyphs<br/>SEC003]
+    D --> D3[scan_security<br/>SEC010 / SEC011 / SEC012]
+    C --> F[raw findings]
+    D1 --> F
+    D2 --> F
+    D3 --> F
+    E --> F
+    F --> G[ignore filter<br/>_apply_ignores: central + inline]
+    G --> H{--fail-on-new<br/>and --base set?}
+    H -->|yes| I[finding-delta<br/>introduced-only]
+    H -->|no| J[all kept findings]
+    I --> K[summary + exit code]
+    J --> K[summary + exit code]
+```
+
+The security scan (`SEC010`/`SEC011`/`SEC012`) runs **only** on non-skill asset
+types (`checks_for` `security_types` set). Hidden-char and homoglyph scans run on
+**every** asset, skills included, because a skill body can be copy-pasted or
+imported just like a config.
+
+## Finding-delta gate
+
+`--fail-on-new` (and `sgt gate`) computes findings the merge request **introduced**
+rather than every finding present. The engine audits the asset at `--base`
+(`git show base:path`) and at HEAD, then diffs the two finding sets by a stable
+key. The key is `(rule_id, file, message)` — it **excludes line number**, so a
+finding that merely shifted down when surrounding text changed counts as
+pre-existing, not introduced.
+
+```mermaid
+flowchart LR
+    A[base ref<br/>git show base:path] --> B[audit base content]
+    C[HEAD working tree] --> D[audit HEAD content]
+    B --> E[base finding keys<br/>rule_id + file + message]
+    D --> F[HEAD findings]
+    E --> G{key in base set?}
+    F --> G
+    G -->|yes| H[pre-existing<br/>advisory, never blocks]
+    G -->|no| I[INTRODUCED<br/>counts toward --fail-on-new]
+    I --> J{>= threshold severity?}
+    J -->|yes| K[exit 1 — block]
+    J -->|no| L[exit 0]
+```
+
+A path that is new on HEAD (no base content) has **all** its findings treated as
+introduced — there is nothing to grandfather. This is the model that lets a team
+enable the suite over a legacy library without an avalanche; see
+[`security-rollout-guide.md`](security-rollout-guide.md).
+
+## Asset-type × checks coverage matrix
+
+Which checks run on which asset type, derived from `checks_for` (non-skills) and
+`audit_skill` (skills). `✓` = runs; blank = does not run.
+
+| Asset type | Hidden-char<br/>SEC001/002 | Homoglyph<br/>SEC003 | Security<br/>SEC010/011/012 | Skill structure<br/>SKILL/D1–D9 |
+|---|---|---|---|---|
+| `skill` (`SKILL.md`) | ✓ | ✓ | | ✓ (SKILL001–023; LLM D1–D9 via `skill-evaluate`) |
+| `agent` (`agents/*.md`) | ✓ | ✓ | ✓ | |
+| `mcp-config` (`.mcp.json`) | ✓ | ✓ | ✓ | |
+| `plugin-config` (`*-plugin/plugin.json`) | ✓ | ✓ | ✓ | |
+| `runtime-config` (`gemini-extension.json`) | ✓ | ✓ | ✓ | |
+| `command` (`commands/*.md`) | ✓ | ✓ | ✓ | |
+| `prompt` (`prompts/*`) | ✓ | ✓ | ✓ | |
+
+> Skills run the **skill-only** secret/dangerous detectors (`SKILL014`/`SKILL015`)
+> with the prose exemption enabled, not the non-skill `SEC010`/`SEC011`. Non-skill
+> assets disable that prose exemption — a config is not documentation. The D1–D9
+> dimensions are LLM-scored by `skill-evaluate`, not by the deterministic engine.
+
 ## MCP server
 
 The MCP server exposes these read-only tools:

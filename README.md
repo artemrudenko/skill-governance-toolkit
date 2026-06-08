@@ -147,6 +147,16 @@ Details and MCP client config examples: [`docs/agent-governance-engine.md`](docs
 Rule metadata lives in [`references/agent-audit-rules.json`](references/agent-audit-rules.json);
 the Python engine contains the detector logic.
 
+**Asset-security suite (since 1.12.0)** — the gate also scans non-skill assets for
+dangerous instructions / secrets (`SEC010`–`SEC012`), hidden/bidi characters
+(`SEC001`/`SEC002`), and homoglyph typosquats (`SEC003`), and blocks only on
+findings an MR *introduces* (`--fail-on-new`). Author and operator docs:
+
+- [`docs/gate-for-authors.md`](docs/gate-for-authors.md) — one-page author entry point (linked from every MR comment).
+- [`docs/security-suppression-runbook.md`](docs/security-suppression-runbook.md) — false positives, inline vs central suppression, SLA + break-glass.
+- [`docs/security-rollout-guide.md`](docs/security-rollout-guide.md) — enable the suite over an existing library without an avalanche.
+- [`docs/security-incident-runbook.md`](docs/security-incident-runbook.md) — `SGT_FAIL_MODE=advisory` kill-switch when the gate blocks everything.
+
 ### Health check
 
 Before installing, publishing, or debugging a checkout, run the quick doctor:
@@ -396,8 +406,8 @@ If the toolkit lives in a private org repo:
    - Codex / Gemini: standard `GH_TOKEN` env var works.
 2. **Pin a release tag** for reproducibility:
    ```bash
-   /plugin install skill-governance-toolkit@1.11.1    # Claude
-   gemini extensions install ...@1.11.1                # Gemini
+   /plugin install skill-governance-toolkit@1.12.0    # Claude
+   gemini extensions install ...@1.12.0                # Gemini
    ```
 3. **CI auto-update** — set up a CI job in each consuming project that opens a PR when the toolkit publishes a new tag. Pattern: scheduled `dependabot.yml` config pointing at the toolkit repo, or a custom workflow.
 

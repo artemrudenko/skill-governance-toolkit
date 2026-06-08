@@ -47,7 +47,7 @@ In `.gitlab-ci.yml`, `variables:` block:
 | Variable | Set to |
 |---|---|
 | `SGT_REPO` | URL of the toolkit repo on **your** GitLab host. Template placeholder: `https://REPLACE-WITH-YOUR-GITLAB-HOST/your-group/skill-governance-toolkit.git` — set this to where your org mirrors the toolkit. |
-| `SGT_REF` | An **immutable 40-char commit SHA**, not a tag. Template placeholder: `REPLACE-WITH-40-CHAR-COMMIT-SHA`. For toolkit **v1.9.0** use: `de2ae756489b2d42d393562440a1e97d20f4697b` |
+| `SGT_REF` | An **immutable 40-char commit SHA**, not a tag. Template placeholder: `REPLACE-WITH-40-CHAR-COMMIT-SHA`. For toolkit **v1.9.0** use: `22615b38be4acde461ed45ea99e1badd79ee6a45` |
 
 Why a SHA, not a tag: a re-tagged release could silently change gate behaviour.
 Pin a commit your org has reviewed and approved. Bump the SHA deliberately when

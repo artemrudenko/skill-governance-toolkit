@@ -15,6 +15,7 @@ import re
 import stat as _stat
 import subprocess
 import sys
+import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -924,6 +925,95 @@ def changed_files_from_git(base: str, root: str | Path = ".") -> set[str]:
     return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
 
 
+def finding_key(f: dict) -> tuple:
+    """Stable identity for delta comparison. Line is excluded — it shifts when
+    surrounding text changes — so a moved-but-identical finding is 'pre-existing'."""
+    return (f.get("rule_id"), f.get("file"), f.get("message"))
+
+
+def introduced_findings(base: list[dict], head: list[dict]) -> list[dict]:
+    """HEAD findings whose key is absent from the base set."""
+    base_keys = {finding_key(f) for f in base}
+    return [f for f in head if finding_key(f) not in base_keys]
+
+
+def _git_show(base: str, rel_path: str, root: Path) -> str | None:
+    """Return the content of `rel_path` at ref `base`, or None if it cannot be
+    read (path new on HEAD, deleted on base, or git error). Caller treats None
+    as 'no base content' → the path's HEAD findings are all INTRODUCED."""
+    proc = subprocess.run(
+        ["git", "-C", str(root), "show", f"{base}:{rel_path}"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
+
+
+def base_findings(
+    base: str,
+    root: Path,
+    head_findings: list[dict[str, Any]],
+    profile: str = "release-ready",
+) -> list[dict[str, Any]]:
+    """Reconstruct the base revision of every file that carries a HEAD finding,
+    audit that base tree, and return its findings.
+
+    Approach: for each distinct file path among `head_findings`, read its base
+    blob via `git show <base>:<relpath>` into a temp tree mirroring the repo
+    layout, then run audit_project over that tree. This is the simplest faithful
+    reconstruction — the same engine, same rules, same paths.
+
+    Fail-safe: a path whose base blob cannot be read (new file, git error) is
+    simply absent from the temp tree, so it produces no base findings and its
+    HEAD findings stay INTRODUCED (block). We never skip a finding on error.
+    """
+    import shutil
+
+    rel_paths = sorted({str(f.get("file")) for f in head_findings if f.get("file")})
+    if not rel_paths:
+        return []
+
+    tmp_root = Path(tempfile.mkdtemp(prefix="sgt-base-"))
+    try:
+        recovered: set[str] = set()
+        for rel in rel_paths:
+            # rel is repo-relative posix already (finding.file uses as_posix on a
+            # path under root); normalize and guard against escaping the temp root.
+            norm = _norm_rel(rel, str(root))
+            dest = tmp_root / norm
+            if not is_within_root(dest, tmp_root):
+                continue
+            content = _git_show(base, norm, root)
+            if content is None:
+                continue  # fail-safe: no base content → HEAD findings stay introduced
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(content, encoding="utf-8")
+            recovered.add(norm)
+        if not recovered:
+            return []
+        report = audit_project(tmp_root, profile=profile, changed_paths=recovered)
+        base = report.get("findings") or []
+        # Re-base each finding's file to repo-relative posix so its key lines up
+        # with HEAD findings (which live under the real root, not the temp tree).
+        for f in base:
+            f["file"] = _norm_rel(str(f.get("file")), str(tmp_root))
+        return base
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+
+
+def tag_introduced(head_findings: list[dict[str, Any]], base: list[dict[str, Any]], root: Path) -> None:
+    """Mutate `head_findings` in place, setting each `introduced` boolean by
+    comparing repo-relative finding keys against the base set."""
+    base_keys = {finding_key({**f, "file": _norm_rel(str(f.get("file")), str(root))}) for f in base}
+    for f in head_findings:
+        key = finding_key({**f, "file": _norm_rel(str(f.get("file")), str(root))})
+        f["introduced"] = key not in base_keys
+
+
 def _in_scope(relative_path: str, changed_paths: set[str] | None) -> bool:
     """Whole-repo audit when changed_paths is None; otherwise scope to the set."""
     return changed_paths is None or relative_path in changed_paths
@@ -1098,9 +1188,10 @@ def main(argv: list[str] | None = None) -> int:
     p_project.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
     p_project.add_argument("root", nargs="?", default=".")
     p_project.add_argument("--profile", choices=["security", "quality", "maintainability", "release-ready"], default="release-ready")
-    p_project.add_argument("--fail-on", choices=["none", "high", "medium", "low", "info", "any"], default="none", help="Exit 1 when findings meet or exceed this severity.")
+    p_project.add_argument("--fail-on", choices=["none", "high", "medium", "low", "info", "any"], default="none", help="Exit 1 when findings meet or exceed this severity (absolute, all findings).")
+    p_project.add_argument("--fail-on-new", choices=["none", "high", "medium", "low", "info", "any"], default="none", help="Exit 1 only when findings INTRODUCED vs --base meet or exceed this severity. Requires --base.")
     p_project.add_argument("--changed-only", action="store_true", help="Audit only assets changed against --base (merge request scope).")
-    p_project.add_argument("--base", default="origin/main", help="Git ref to diff against when --changed-only is set.")
+    p_project.add_argument("--base", default="origin/main", help="Git ref to diff against when --changed-only or --fail-on-new is set.")
 
     p_skill = sub.add_parser("audit-skill", help="Audit one SKILL.md file.")
     p_skill.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
@@ -1142,7 +1233,30 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     return 2
             report = audit_project(args.root, profile=args.profile, changed_paths=changed_paths)
+
+            # Delta gate: tag each HEAD finding `introduced` and gate only on the
+            # introduced subset. --fail-on-new limits WHICH findings block;
+            # --changed-only limits WHICH files are audited. They compose freely.
+            delta_active = args.fail_on_new != "none"
+            if delta_active:
+                if not (args.base and args.base.strip()):
+                    print(
+                        "agent_audit: --fail-on-new requires a non-empty --base to compute the\n"
+                        "  delta against (the merge-request target / base revision). Refusing to\n"
+                        "  treat every finding as introduced. Supply --base or drop --fail-on-new.",
+                        file=sys.stderr,
+                    )
+                    return 2
+                root_path = Path(args.root).expanduser().resolve()
+                base = base_findings(args.base, root_path, report.get("findings") or [], profile=args.profile)
+                tag_introduced(report["findings"], base, root_path)
+
             emit(report, args.format)
+
+            if delta_active:
+                introduced = [f for f in report.get("findings") or [] if f.get("introduced")]
+                if should_fail({"findings": introduced}, args.fail_on_new):
+                    return 1
             if should_fail(report, args.fail_on):
                 return 1
         elif args.command == "audit-skill":

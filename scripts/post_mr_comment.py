@@ -42,8 +42,43 @@ def _md_cell(value: Any) -> str:
     return text.strip()
 
 
+# Per-severity visible cap inside a delta-mode group; the rest collapse to a
+# "+N more — see artifact" line so a noisy severity can't blow up the note.
+PER_SEVERITY_CAP = 20
+
+
+def _severity_tables(findings: list[dict[str, Any]], lines: list[str]) -> None:
+    """Append per-severity Markdown tables for `findings` to `lines`, capping each
+    severity group at PER_SEVERITY_CAP rows with a "+N more" overflow line."""
+    for sev in SEVERITY_ORDER:
+        group = [f for f in findings if f.get("severity") == sev]
+        if not group:
+            continue
+        visible = group[:PER_SEVERITY_CAP]
+        lines.append(f"### {SEVERITY_LABEL[sev]}")
+        lines.append("")
+        lines.append("| Rule | Location | Finding | Suggestion |")
+        lines.append("|---|---|---|---|")
+        for item in visible:
+            location = f"`{_md_cell(item.get('file'))}:{_md_cell(item.get('line'))}`"
+            lines.append(
+                f"| {_md_cell(item.get('rule_id'))} | {location} "
+                f"| {_md_cell(item.get('message'))} | {_md_cell(item.get('suggestion'))} |"
+            )
+        overflow = len(group) - len(visible)
+        if overflow > 0:
+            lines.append("")
+            lines.append(f"_…and {overflow} more {sev} finding(s) — see the `skill-audit.json` artifact._")
+        lines.append("")
+
+
 def render_comment(report: dict[str, Any], max_findings: int = 50) -> str:
-    """Render a markdown comment body for a project-audit report."""
+    """Render a markdown comment body for a project-audit report.
+
+    Delta mode (any finding carries an `introduced` flag): INTRODUCED findings —
+    the ones that block — render first in full; pre-existing findings collapse
+    into a <details> block. Non-delta mode keeps the flat per-severity layout.
+    """
     findings = report.get("findings") or []
     summary = report.get("summary") or {}
     lines = [MARKER, "## Skill governance gate", ""]
@@ -60,6 +95,28 @@ def render_comment(report: dict[str, Any], max_findings: int = 50) -> str:
     )
     lines.append(f"Found **{len(findings)}** finding(s) — {counts}.")
     lines.append("")
+
+    delta_mode = any("introduced" in f for f in findings)
+    if delta_mode:
+        introduced = [f for f in findings if f.get("introduced")]
+        preexisting = [f for f in findings if not f.get("introduced")]
+
+        if introduced:
+            lines.append(f"### 🚩 {len(introduced)} introduced by this MR (blocking)")
+            lines.append("")
+            _severity_tables(introduced, lines)
+        else:
+            lines.append("✅ No newly introduced findings — nothing blocks this MR.")
+            lines.append("")
+
+        if preexisting:
+            lines.append("<details>")
+            lines.append(f"<summary>{len(preexisting)} pre-existing (not introduced by this MR)</summary>")
+            lines.append("")
+            _severity_tables(preexisting, lines)
+            lines.append("</details>")
+
+        return "\n".join(lines).rstrip() + "\n"
 
     shown = findings[:max_findings]
     for sev in SEVERITY_ORDER:

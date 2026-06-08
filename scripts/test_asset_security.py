@@ -79,5 +79,19 @@ class IgnoreListTests(_CacheSafe):
         self.assertEqual(agent_audit._apply_ignores(f, doc, {}, root="."), [])
 
 
+class DeltaGateTests(_CacheSafe):
+    def test_preexisting_finding_not_counted_as_introduced(self):
+        base = [{"rule_id": "SEC010", "file": "a.md", "message": "Potentially dangerous instruction detected: rm -rf."}]
+        head = [dict(base[0]),
+                {"rule_id": "SEC010", "file": "b.md", "message": "Potentially dangerous instruction detected: curl|sh."}]
+        introduced = agent_audit.introduced_findings(base, head)
+        self.assertEqual([f["file"] for f in introduced], ["b.md"])
+
+    def test_finding_key_ignores_line(self):
+        a = {"rule_id": "SEC010", "file": "a.md", "line": 5, "message": "m"}
+        b = {"rule_id": "SEC010", "file": "a.md", "line": 99, "message": "m"}
+        self.assertEqual(agent_audit.finding_key(a), agent_audit.finding_key(b))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

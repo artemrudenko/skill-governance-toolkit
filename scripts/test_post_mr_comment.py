@@ -114,6 +114,17 @@ class PostMrCommentTests(unittest.TestCase):
         self.assertNotIn("urllib", user_agent.lower())
         self.assertEqual(request.get_header("Accept"), "application/json")
 
+    def test_introduced_renders_before_preexisting(self) -> None:
+        report = {"kind": "project-audit", "summary": {"total": 2, "by_severity": {"high": 2},
+                  "passed": False},
+                  "findings": [
+                    {"rule_id": "SEC010", "severity": "high", "file": "old.md", "line": 1,
+                     "message": "old", "suggestion": "x", "introduced": False},
+                    {"rule_id": "SEC011", "severity": "high", "file": "new.md", "line": 1,
+                     "message": "new", "suggestion": "y", "introduced": True}]}
+        body = post_mr_comment.render_comment(report)
+        self.assertLess(body.index("new.md"), body.index("old.md"))  # introduced first
+
     def test_cli_dry_run_prints_body_without_token(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             audit_path = Path(tmp) / "skill-audit.json"

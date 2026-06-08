@@ -125,6 +125,35 @@ class PostMrCommentTests(unittest.TestCase):
         body = post_mr_comment.render_comment(report)
         self.assertLess(body.index("new.md"), body.index("old.md"))  # introduced first
 
+    def test_floor_finding_shows_central_suppress_hint_not_inline_marker(self) -> None:
+        # SEC011 is a severity-floor rule. The author-facing suppression hint must
+        # point at the CODEOWNER-gated central file — an inline marker can NEVER
+        # suppress a floor rule (F3 invariant), so it must not appear for SEC011.
+        report = _report([
+            {"rule_id": "SEC011", "severity": "high", "file": "x.md", "line": 1,
+             "message": "inline secret", "suggestion": "Use an env var name."},
+        ])
+        body = post_mr_comment.render_comment(report)
+        self.assertIn("references/audit-ignore.json", body)
+        self.assertIn("CODEOWNER", body)
+        self.assertNotIn("sgt-ignore: SEC011", body)
+
+    def test_advisory_finding_shows_inline_marker(self) -> None:
+        report = _report([
+            {"rule_id": "SEC003", "severity": "medium", "file": "y.md", "line": 2,
+             "message": "homoglyph", "suggestion": "Replace the confusable char."},
+        ])
+        body = post_mr_comment.render_comment(report)
+        self.assertIn("<!-- sgt-ignore: SEC003", body)
+
+    def test_comment_footer_links_author_guide(self) -> None:
+        report = _report([
+            {"rule_id": "SEC003", "severity": "medium", "file": "y.md", "line": 2,
+             "message": "homoglyph", "suggestion": "fix it."},
+        ])
+        body = post_mr_comment.render_comment(report)
+        self.assertIn("docs/gate-for-authors.md", body)
+
     def test_cli_dry_run_prints_body_without_token(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             audit_path = Path(tmp) / "skill-audit.json"

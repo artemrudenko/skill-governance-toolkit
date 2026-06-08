@@ -28,6 +28,41 @@ MARKER = "<!-- skill-governance-gate -->"
 SEVERITY_ORDER = ("high", "medium", "low", "info")
 SEVERITY_LABEL = {"high": "🔴 High", "medium": "🟠 Medium", "low": "🟡 Low", "info": "🔵 Info"}
 
+# Author guide referenced from the comment footer. Created by a later docs task;
+# the path is stable so we link it now.
+AUTHOR_GUIDE = "docs/gate-for-authors.md"
+
+# Severity-floor rule ids — these can ONLY be suppressed via the CODEOWNER-gated
+# references/audit-ignore.json (the F3 invariant: an inline marker must never
+# suppress a floor rule). This is a hardcoded copy of the engine's SEVERITY_FLOOR
+# (agent_audit.py) so the poster stays standalone (no engine import). KEEP IN SYNC
+# with agent_audit.SEVERITY_FLOOR — the engine is the source of truth.
+FLOOR_RULES = frozenset(
+    {"SEC001", "SEC002", "SEC010", "SEC011", "SKILL001", "SKILL002", "SKILL009", "SKILL014", "SKILL015"}
+)
+
+
+def _suppress_hint(rule_id: Any) -> str:
+    """Return the CORRECT suppression hint for a finding's rule.
+
+    Floor rule → central CODEOWNER-gated file only (inline cannot suppress it).
+    Advisory rule → inline marker at the finding site.
+    """
+    rid = "" if rule_id is None else str(rule_id)
+    if rid in FLOOR_RULES:
+        return "add to references/audit-ignore.json (needs CODEOWNER approval)"
+    return f"<!-- sgt-ignore: {rid} reason=... -->"
+
+
+def _suggestion_cell(item: dict[str, Any]) -> str:
+    """Compose the table's Suggestion cell: the finding's own suggestion plus a
+    copy-paste suppression hint, both markdown-cell-safe."""
+    suggestion = _md_cell(item.get("suggestion"))
+    suppress = _md_cell(_suppress_hint(item.get("rule_id")))
+    if suggestion:
+        return f"{suggestion} · Suppress: {suppress}"
+    return f"Suppress: {suppress}"
+
 
 def _md_cell(value: Any) -> str:
     """Make an arbitrary finding value safe inside a Markdown table cell.
@@ -63,7 +98,7 @@ def _severity_tables(findings: list[dict[str, Any]], lines: list[str]) -> None:
             location = f"`{_md_cell(item.get('file'))}:{_md_cell(item.get('line'))}`"
             lines.append(
                 f"| {_md_cell(item.get('rule_id'))} | {location} "
-                f"| {_md_cell(item.get('message'))} | {_md_cell(item.get('suggestion'))} |"
+                f"| {_md_cell(item.get('message'))} | {_suggestion_cell(item)} |"
             )
         overflow = len(group) - len(visible)
         if overflow > 0:
@@ -116,6 +151,7 @@ def render_comment(report: dict[str, Any], max_findings: int = 50) -> str:
             _severity_tables(preexisting, lines)
             lines.append("</details>")
 
+        _append_footer(lines)
         return "\n".join(lines).rstrip() + "\n"
 
     shown = findings[:max_findings]
@@ -131,7 +167,7 @@ def render_comment(report: dict[str, Any], max_findings: int = 50) -> str:
             location = f"`{_md_cell(item.get('file'))}:{_md_cell(item.get('line'))}`"
             lines.append(
                 f"| {_md_cell(item.get('rule_id'))} | {location} "
-                f"| {_md_cell(item.get('message'))} | {_md_cell(item.get('suggestion'))} |"
+                f"| {_md_cell(item.get('message'))} | {_suggestion_cell(item)} |"
             )
         lines.append("")
 
@@ -139,7 +175,20 @@ def render_comment(report: dict[str, Any], max_findings: int = 50) -> str:
     if dropped > 0:
         lines.append(f"_…and {dropped} more finding(s) not shown. See the `skill-audit.json` artifact._")
 
+    _append_footer(lines)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _append_footer(lines: list[str]) -> None:
+    """Append the shared footer: how the Suggestion column's suppress hint works
+    and a link to the full author guide."""
+    lines.append("")
+    lines.append(
+        "_The Suggestion column carries a copy-paste suppression hint. "
+        "Floor rules suppress only via the CODEOWNER-gated `references/audit-ignore.json`; "
+        "advisory rules accept the inline `sgt-ignore` marker._"
+    )
+    lines.append(f"_Full guide: {AUTHOR_GUIDE}_")
 
 
 def find_marker_note(notes: list[dict[str, Any]], marker: str) -> int | None:

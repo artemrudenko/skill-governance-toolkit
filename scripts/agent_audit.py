@@ -1314,6 +1314,66 @@ def explain_rule(rule_id: str) -> dict[str, Any]:
     return dict(rule)
 
 
+def explain_finding(rule_id: str) -> dict[str, Any]:
+    """Build an author-facing, actionable explanation for one rule.
+
+    Used by `explain-finding` so an MR author can act on a blocking finding from
+    the comment alone — title/severity, how to fix, and the CORRECT suppression
+    path. The suppression path branches on floor-ness: a severity-floor rule can
+    ONLY be suppressed via the CODEOWNER-gated central file (the F3 invariant —
+    inline markers must never suppress a floor rule), while an advisory rule
+    accepts the inline marker.
+    """
+    rule = explain_rule(rule_id)  # raises KeyError on unknown id → handled by main
+    is_floor = rule_id in SEVERITY_FLOOR
+    if is_floor:
+        suppression = {
+            "kind": "central",
+            "instructions": (
+                f"Floor rule — inline markers cannot suppress it. Add a "
+                f"CODEOWNER-approved entry to references/audit-ignore.json:"
+            ),
+            "example": (
+                'add to "ignores": [ { "rule_id": "' + rule_id + '", '
+                '"path": "<file>", "reason": "<why acceptable>", '
+                '"expires": "YYYY-MM-DD" } ]'
+            ),
+        }
+    else:
+        suppression = {
+            "kind": "inline",
+            "instructions": "Advisory rule — suppress inline at the finding site:",
+            "example": f"<!-- sgt-ignore: {rule_id} reason=... -->",
+        }
+    return {
+        "kind": "explain-finding",
+        "rule_id": rule_id,
+        "title": rule.get("title", ""),
+        "severity": rule.get("severity", ""),
+        "how_to_fix": rule.get("description", "").strip()
+        or "See the rule catalog (agent_audit.py explain-rule) for detail.",
+        "is_floor": is_floor,
+        "suppression": suppression,
+    }
+
+
+def render_explain_finding(data: dict[str, Any]) -> str:
+    """Render an explain-finding dict as a short, copy-paste-friendly text block."""
+    supp = data["suppression"]
+    return "\n".join(
+        [
+            f"{data['rule_id']} — {data['title']} [{data['severity']}]",
+            "",
+            "How to fix:",
+            f"  {data['how_to_fix']}",
+            "",
+            "How to suppress:",
+            f"  {supp['instructions']}",
+            f"    {supp['example']}",
+        ]
+    )
+
+
 def rule_catalog() -> dict[str, Any]:
     catalog = load_rule_catalog()
     load_config()  # surface a malformed `config` block here, not only on the audit path
@@ -1483,6 +1543,8 @@ def emit(data: dict[str, Any], fmt: str) -> None:
     else:
         if data.get("kind") in {"project-audit", "skill-audit"}:
             print_text_report(data)
+        elif data.get("kind") == "explain-finding":
+            print(render_explain_finding(data))
         elif data.get("kind") == "validate-config":
             issues = data.get("issues") or []
             print(f"validate-config: checked {data.get('checked', 0)} pattern(s)")
@@ -1542,6 +1604,13 @@ def main(argv: list[str] | None = None) -> int:
     p_rule = sub.add_parser("explain-rule", help="Explain one rule.")
     p_rule.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
     p_rule.add_argument("rule_id")
+
+    p_finding = sub.add_parser(
+        "explain-finding",
+        help="Author-facing fix + correct suppression path for a rule (floor vs advisory).",
+    )
+    p_finding.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
+    p_finding.add_argument("rule_id")
 
     p_rules = sub.add_parser("rules", help="List rule catalog.")
     p_rules.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
@@ -1610,6 +1679,8 @@ def main(argv: list[str] | None = None) -> int:
             return _gate_exit_code(should_fail(report, args.fail_on))
         elif args.command == "explain-rule":
             emit(explain_rule(args.rule_id), args.format)
+        elif args.command == "explain-finding":
+            emit(explain_finding(args.rule_id), args.format)
         elif args.command == "rules":
             emit(rule_catalog(), args.format)
         elif args.command == "validate-config":

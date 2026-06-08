@@ -176,6 +176,27 @@ class InstallContentTests(unittest.TestCase):
             for needed in RUNTIME_SMOKE:
                 self.assertTrue(list(target.rglob(needed)), f"runtime script {needed} missing from install")
 
+    def test_security_data_files_ship_into_install(self) -> None:
+        """references/*.json data files must land in an install.
+
+        The loaders tolerate absence (graceful degradation), so a silent
+        non-ship would disable suppression/confusables/rules unnoticed. This
+        guards the packaging contract for the control-plane data files.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            r = self._install_all(target)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            for data_file in (
+                "audit-ignore.json",
+                "unicode-confusables.json",
+                "agent-audit-rules.json",
+            ):
+                self.assertTrue(
+                    list(target.rglob(data_file)),
+                    f"security data file references/{data_file} missing from install",
+                )
+
 
 class UpgradeSafetyTests(unittest.TestCase):
     """--upgrade must never delete or clobber a user's own files."""

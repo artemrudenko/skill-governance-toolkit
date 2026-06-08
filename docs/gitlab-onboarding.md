@@ -95,6 +95,25 @@ passes. Every MR therefore has at least one green pipeline, while the real gate
 jobs still run only on the MRs that touch governed assets. Do not add a
 `changes:` filter to `noop` — that reintroduces the deadlock.
 
+## Separation of duties (CODEOWNERS)
+
+The repo ships a root `CODEOWNERS` (GitLab reads `CODEOWNERS`, `.gitlab/CODEOWNERS`,
+or `docs/CODEOWNERS` — the root file covers both GitLab and GitHub). It gates the
+control-plane paths — the rule catalog, the engine, the CI template, and the
+suppression list (`references/audit-ignore.json`) — so an MR author can't
+self-approve silencing their own security finding. Replace `@skill-governance-owners`
+with your real group.
+
+**This guarantee is advisory until you enforce it.** CODEOWNERS only *blocks* a
+merge when the protected branch requires code-owner approval:
+
+> **Settings → Repository → Protected branches** → on the default branch, enable
+> **"Require approval from Code Owners"**.
+
+(On GitHub the equivalent is **Settings → Branches → Branch protection rules** →
+**"Require review from Code Owners"**.) Without this setting, the suppression list
+and engine can be changed by the same author who edits a skill in the same MR.
+
 ## Troubleshooting
 
 - **MR comment fails with `RemoteDisconnected: Remote end closed connection

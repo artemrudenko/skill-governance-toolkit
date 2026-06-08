@@ -391,10 +391,15 @@ else
   for critical in "references/agent-audit-rules.json" "scripts/agent_audit.py" "references/ci/gitlab-ci.yml"; do
     grep -qF "$critical" "$ROOT/CODEOWNERS" || missing_owners+=" $critical"
   done
+  # The suppression list MUST be code-owner-gated when it exists, so an MR
+  # author can't self-approve silencing their own security finding.
+  if [[ -f "$ROOT/references/audit-ignore.json" ]]; then
+    grep -qF "audit-ignore.json" "$ROOT/CODEOWNERS" || missing_owners+=" references/audit-ignore.json"
+  fi
   if [[ -n "$missing_owners" ]]; then
     fail "CODEOWNERS does not cover critical paths:$missing_owners"
   else
-    pass "CODEOWNERS covers policy, engine, and CI gate"
+    pass "CODEOWNERS covers policy, engine, CI gate, and the suppression list"
   fi
 fi
 

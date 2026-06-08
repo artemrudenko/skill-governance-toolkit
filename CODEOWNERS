@@ -18,6 +18,14 @@
 /references/agent-audit-rules.json          @skill-governance-owners
 /references/agent-audit-config.example.json  @skill-governance-owners
 
+# --- Suppression list + security data (who can SILENCE a finding) ---
+# audit-ignore.json suppresses findings; gating it prevents an MR author from
+# self-approving the silencing of their own security finding. The confusables
+# table and audit-config glob are control-plane data the engine trusts.
+/references/audit-ignore.json               @skill-governance-owners
+/references/unicode-confusables.json        @skill-governance-owners
+/references/audit-config.*.json             @skill-governance-owners
+
 # --- Deterministic engine + read-only MCP wrapper ---
 /scripts/agent_audit.py                     @skill-governance-owners
 /scripts/agent_governance_mcp.py            @skill-governance-owners

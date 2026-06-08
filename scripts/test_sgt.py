@@ -229,6 +229,29 @@ class CiInitTests(unittest.TestCase):
             self.assertNotIn("REPLACE-WITH-40-CHAR-COMMIT-SHA", body)
             self.assertRegex(body, r'SGT_REF:\s*"[0-9a-f]{40}"')
 
+    def test_gitlab_pipeline_has_always_green_noop_job(self) -> None:
+        # With "Pipelines must succeed" enabled, an MR touching no governed asset
+        # produces no pipeline at all and blocks the merge forever. An
+        # unconditional placeholder job (gated only on merge_request_event, with no
+        # `changes:` filter) guarantees every MR has a passing pipeline.
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt("--root", tmp, "ci-init", "--gitlab")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            body = (Path(tmp) / ".gitlab-ci.yml").read_text(encoding="utf-8")
+            self.assertIn("noop:", body)
+            # Isolate just the noop job block: from "noop:" to the next top-level
+            # (column-0) key. The noop job must NOT carry a changes: filter —
+            # otherwise it would be skipped on the exact MRs it exists to cover.
+            after = body.split("\nnoop:", 1)[1].splitlines()
+            noop_lines: list[str] = []
+            for line in after:
+                if line and not line[0].isspace() and not line.startswith("#"):
+                    break
+                noop_lines.append(line)
+            noop_block = "\n".join(noop_lines)
+            self.assertIn("merge_request_event", noop_block)
+            self.assertNotIn("changes:", noop_block)
+
     def test_refuses_overwrite_without_force(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             first = self.run_sgt("--root", tmp, "ci-init", "--github", "--ref", "b" * 40)

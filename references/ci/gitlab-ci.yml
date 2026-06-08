@@ -14,6 +14,20 @@
 stages:
   - validate
 
+# Always-green placeholder so every MR has a pipeline. The gate jobs below run
+# only when an MR touches a governed asset (see `.sgt_base` rules:changes). With
+# "Pipelines must succeed" enabled in GitLab, an MR that touches no governed
+# asset would otherwise produce no pipeline at all — and the merge blocks forever
+# waiting for a pipeline that never runs. This job is gated only on
+# merge_request_event (no `changes:` filter), so it always runs and always passes.
+noop:
+  image: alpine:3.20
+  stage: validate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  script:
+    - echo "Pipeline present for this MR."
+
 variables:
   # Full history so the merge-request base commit is reachable for the diff.
   GIT_DEPTH: "0"

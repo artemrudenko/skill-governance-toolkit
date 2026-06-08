@@ -587,10 +587,17 @@ flowchart TD
 |---|---|---|
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on high` | High-severity findings fail the pipeline and block the merge |
 | `skill-gate:advisory` | same with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` and an idempotent MR comment |
+| `noop` | `echo` on `alpine` | Always-green placeholder; guarantees every MR has a pipeline |
 
 `--changed-only` diffs the working tree against `--base` (a git ref) using a
 three-dot diff, so an author is accountable only for the entities their MR
 touches. The template sets `GIT_DEPTH: 0` so the merge-base commit is reachable.
+
+The gate jobs run only on MRs that touch a governed asset (`rules:changes`). If
+you enable GitLab's **"Pipelines must succeed"**, an MR that touches no governed
+asset would have no pipeline and block forever — the `noop` job (gated only on
+`merge_request_event`, no `changes:` filter) always runs and always passes so
+every MR has a green pipeline. Do not add a `changes:` filter to it.
 
 Base-ref handling:
 - **Empty `--base`** (e.g. a missing `CI_MERGE_REQUEST_DIFF_BASE_SHA`) falls back

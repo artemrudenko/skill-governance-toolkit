@@ -97,6 +97,12 @@ def _api_request(url: str, token: str, method: str = "GET", payload: dict[str, A
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(url, data=data, method=method)
     request.add_header("PRIVATE-TOKEN", token)
+    # Some WAFs / load balancers reset connections whose User-Agent is the
+    # default "Python-urllib/x.y" (RemoteDisconnected: "Remote end closed
+    # connection without response"), while letting curl through. Send an
+    # explicit, non-default User-Agent and Accept so the API call survives.
+    request.add_header("User-Agent", "skill-governance-gate")
+    request.add_header("Accept", "application/json")
     if data is not None:
         request.add_header("Content-Type", "application/json")
     with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 (trusted CI host)

@@ -10,6 +10,28 @@ each before upgrading.
 
 ---
 
+## [1.11.1] — 2026-06-08 — GitLab gate hardening from real-world adoption
+
+Two fixes surfaced by a team running the GitLab CI gate in production.
+
+### Fixed
+- **MR comment poster survives WAF / load balancers.** `post_mr_comment.py` now
+  sends an explicit `User-Agent: skill-governance-gate` and `Accept:
+  application/json`. Some appliances reset connections whose User-Agent is the
+  default `Python-urllib/x.y` (`RemoteDisconnected: Remote end closed connection
+  without response`) while letting curl through — the non-default header gets the
+  API call past them.
+- **Every MR gets a pipeline under "Pipelines must succeed".** The GitLab
+  template (`references/ci/gitlab-ci.yml`, also emitted by `sgt ci-init --gitlab`)
+  now ships an always-green `noop` job gated only on `merge_request_event`. The
+  gate jobs run only when an MR touches a governed asset; without the placeholder,
+  an MR touching no governed asset produced no pipeline at all and — with branch
+  protection's "Pipelines must succeed" enabled — blocked the merge forever.
+
+### Added
+- GitLab onboarding doc: "Branch protection" and "Troubleshooting" sections
+  documenting the `noop` job and the WAF reset behaviour.
+
 ## [1.11.0] — 2026-06-07 — developer experience: `sgt init / uninstall / new-skill / ci-init`
 
 Adoption-friction fixes from a real-user UX review. The `sgt` facade is now the

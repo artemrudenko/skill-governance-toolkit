@@ -590,10 +590,17 @@ flowchart TD
 |---|---|---|
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on high` | High-severity findings роняют pipeline и блокируют merge |
 | `skill-gate:advisory` | то же с `--fail-on none --format json` + `post_mr_comment.py` | Не блокирует; публикует `skill-audit.json` и идемпотентный коммент в MR |
+| `noop` | `echo` на `alpine` | Всегда-зелёная заглушка; гарантирует pipeline для каждого MR |
 
 `--changed-only` сравнивает рабочее дерево с `--base` (git ref) через three-dot
 diff — автор отвечает только за изменённые в его MR сущности. Шаблон ставит
 `GIT_DEPTH: 0`, чтобы базовый коммит был доступен.
+
+Gate-джобы запускаются только на MR, затрагивающих governed-ассет
+(`rules:changes`). Если включить в GitLab **«Pipelines must succeed»**, MR без
+governed-ассетов не создаст pipeline и заблокируется навсегда — джоба `noop`
+(только на `merge_request_event`, без фильтра `changes:`) всегда запускается и
+проходит, поэтому у каждого MR есть зелёный pipeline. Не добавляй к ней `changes:`.
 
 Обработка base-ref:
 - **Пустой `--base`** (например, отсутствует `CI_MERGE_REQUEST_DIFF_BASE_SHA`) ⟶

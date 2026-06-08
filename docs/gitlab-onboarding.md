@@ -13,6 +13,7 @@ MCP/plugin manifests, …) is audited by the toolkit's deterministic engine
 |---|---|---|
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --profile release-ready --fail-on high` | High-severity findings (secrets, dangerous shell, broken frontmatter, `allowed-tools`) **fail the pipeline → block the merge** |
 | `skill-gate:advisory` | same with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` artifact + an idempotent MR comment |
+| `noop` | `echo` on `alpine` | Always-green placeholder so every MR has a pipeline (see "Branch protection" below) |
 
 `--changed-only` diffs the working tree against the MR base with a three-dot
 diff, so an author is accountable only for the assets their MR touches — not for
@@ -79,6 +80,29 @@ GitLab auto-provides the rest: `CI_API_V4_URL`, `CI_PROJECT_ID`,
   `**/mcp.json`, `**/plugin.json`, `references/agent-audit-rules.json`.
 - **`GIT_DEPTH: 0`** is required so the MR merge-base commit is reachable for
   the diff. Do not lower it.
+
+## Branch protection ("Pipelines must succeed")
+
+If you enable **Settings → Merge requests → "Pipelines must succeed"**, every MR
+must have a passing pipeline before it can merge. But the gate jobs run **only**
+when the MR touches a governed asset (`rules:changes`). An MR that touches no
+governed asset produces **no pipeline at all** — and the merge blocks forever
+waiting for a pipeline that never runs.
+
+The template ships a `noop` job to close this gap: it is gated only on
+`merge_request_event` (no `changes:` filter), so it always runs and always
+passes. Every MR therefore has at least one green pipeline, while the real gate
+jobs still run only on the MRs that touch governed assets. Do not add a
+`changes:` filter to `noop` — that reintroduces the deadlock.
+
+## Troubleshooting
+
+- **MR comment fails with `RemoteDisconnected: Remote end closed connection
+  without response`** — a WAF or load balancer in front of your GitLab host is
+  resetting connections whose User-Agent is the default `Python-urllib/x.y`.
+  `post_mr_comment.py` sends an explicit `User-Agent: skill-governance-gate` and
+  `Accept: application/json` to survive these hops; if your appliance is stricter,
+  allowlist that User-Agent.
 
 ## Base-ref behaviour (edge cases)
 

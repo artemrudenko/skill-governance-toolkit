@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
 import post_mr_comment
@@ -83,6 +84,35 @@ class PostMrCommentTests(unittest.TestCase):
 
         self.assertEqual(post_mr_comment.find_marker_note(notes, post_mr_comment.MARKER), 11)
         self.assertIsNone(post_mr_comment.find_marker_note(notes[:1], post_mr_comment.MARKER))
+
+    def test_api_request_sends_non_default_user_agent(self) -> None:
+        # Some WAFs / load balancers reset connections whose User-Agent is the
+        # default "Python-urllib/x.y". The poster must send an explicit, non-default
+        # User-Agent (and an Accept) so the GitLab API call survives those hops.
+        captured: dict[str, object] = {}
+
+        @contextmanager
+        def fake_urlopen(request: object, timeout: int = 0):  # noqa: ANN001
+            captured["request"] = request
+
+            class _Resp:
+                def read(self) -> bytes:
+                    return b"[]"
+
+            yield _Resp()
+
+        original = post_mr_comment.urllib.request.urlopen
+        post_mr_comment.urllib.request.urlopen = fake_urlopen
+        try:
+            post_mr_comment._api_request("https://gitlab.example/api/v4/x", "tok")
+        finally:
+            post_mr_comment.urllib.request.urlopen = original
+
+        request = captured["request"]
+        user_agent = request.get_header("User-agent")
+        self.assertTrue(user_agent, "User-Agent header must be set")
+        self.assertNotIn("urllib", user_agent.lower())
+        self.assertEqual(request.get_header("Accept"), "application/json")
 
     def test_cli_dry_run_prints_body_without_token(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

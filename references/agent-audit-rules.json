@@ -169,5 +169,18 @@
       "title": "Credential-file path referenced in non-skill asset",
       "description": "Non-skill assets should reference credential files by documented config, not by inline credential-store paths."
     }
-  ]
+  ],
+  "config": {
+    "allowlists": {
+      "domains": [],
+      "unicode_scripts": [],
+      "mcp_servers": []
+    },
+    "hooks": {
+      "deny": []
+    },
+    "scripts": {
+      "manifest": "scripts/runtime-manifest.txt"
+    }
+  }
 }

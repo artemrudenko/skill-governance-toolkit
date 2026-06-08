@@ -219,8 +219,27 @@ def load_rule_catalog() -> dict[str, Any]:
     }
 
 
+def _deep_merge_config(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge `overlay` into `base`. Dicts merge key-by-key; lists union
+    (base + overlay-only items, order-preserving); every other value overrides."""
+    merged = dict(base)
+    for key, value in overlay.items():
+        existing = merged.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_config(existing, value)
+        elif isinstance(existing, list) and isinstance(value, list):
+            merged[key] = existing + [item for item in value if item not in existing]
+        else:
+            merged[key] = value
+    return merged
+
+
 def _catalog_config_block() -> dict[str, Any]:
-    """Read the optional `config` block from the catalog, tolerating absence."""
+    """Read the optional `config` block from the catalog, tolerating absence.
+
+    Sibling `references/audit-config.*.json` overlay files (sorted by name) are
+    deep-merged in order: later files override scalars/dicts and union lists.
+    """
     path = default_rules_path()
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -229,7 +248,17 @@ def _catalog_config_block() -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid audit rule catalog JSON: {exc}") from exc
     config = payload.get("config")
-    return config if isinstance(config, dict) else {}
+    config = config if isinstance(config, dict) else {}
+
+    for overlay_path in sorted(path.parent.glob("audit-config.*.json")):
+        try:
+            data = json.loads(overlay_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid audit config overlay JSON in {overlay_path.name}: {exc}") from exc
+        if isinstance(data, dict):
+            overlay = data.get("config") if isinstance(data.get("config"), dict) else data
+            config = _deep_merge_config(config, overlay)
+    return config
 
 
 def _compile_patterns(entries: Any, *, with_suggestion: bool) -> list[tuple[Any, ...]]:
@@ -294,6 +323,10 @@ def load_config() -> dict[str, Any]:
     dangerous = list(DANGEROUS_PATTERNS) + _compile_patterns(patterns.get("dangerous"), with_suggestion=True)
     secrets = list(SECRET_PATTERNS) + _compile_patterns(patterns.get("secrets"), with_suggestion=False)
 
+    DEFAULT_UNICODE_SCRIPTS = {"Latin", "Common"}
+    allow = raw.get("allowlists") or {}
+    hooks_cfg = raw.get("hooks") or {}
+
     return {
         "thresholds": thresholds,
         "categories": categories,
@@ -302,6 +335,12 @@ def load_config() -> dict[str, Any]:
         "quality_exclude": quality_exclude,
         "dangerous_patterns": dangerous,
         "secret_patterns": secrets,
+        "allow_domains": {str(d).lower() for d in (allow.get("domains") or [])},
+        "allow_unicode_scripts": DEFAULT_UNICODE_SCRIPTS | {str(s) for s in (allow.get("unicode_scripts") or [])},
+        "allow_mcp_servers": {str(s) for s in (allow.get("mcp_servers") or [])},
+        "env_exfil_patterns": _compile_patterns(patterns.get("env_exfil"), with_suggestion=True),
+        "hook_deny": _compile_patterns(hooks_cfg.get("deny"), with_suggestion=True),
+        "scripts_manifest": str((raw.get("scripts") or {}).get("manifest", "scripts/runtime-manifest.txt")),
     }
 
 

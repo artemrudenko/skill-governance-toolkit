@@ -201,7 +201,21 @@ data. Every key is optional; absent keys fall back to the shipped defaults.
       ],
       "secrets": [
         {"label": "Example org token", "regex": "ARK-[A-Za-z0-9]{20,}"}
+      ],
+      "env_exfil": [
+        {"label": "env to curl", "regex": "printenv[^\\n|]{0,80}\\|\\s*curl", "suggestion": "Do not pipe environment to the network."}
       ]
+    },
+    "allowlists": {
+      "domains": [],
+      "unicode_scripts": [],
+      "mcp_servers": []
+    },
+    "hooks": {
+      "deny": []
+    },
+    "scripts": {
+      "manifest": "scripts/runtime-manifest.txt"
     }
   }
 }
@@ -213,7 +227,18 @@ data. Every key is optional; absent keys fall back to the shipped defaults.
 | `vocabularies.categories` / `.tiers` | **extend** (union with defaults) | Add org categories/tiers without losing the closed vocab — SKILL008 |
 | `profiles.security` | **override** the set | Define which rules the `security` profile keeps |
 | `profiles.quality_exclude` | **override** the set | Define which rules the `quality` profile drops |
-| `patterns.dangerous` / `.secrets` | **extend** (append to defaults) | Add org-specific SKILL014/015 detections without losing the baseline |
+| `patterns.dangerous` / `.secrets` / `.env_exfil` | **extend** (append to defaults) | Add org-specific SKILL014/015 + env-exfiltration detections without losing the baseline |
+| `allowlists.domains` / `.unicode_scripts` / `.mcp_servers` | **extend** (union with defaults) | Permit known-safe network domains, Unicode scripts (always includes `Latin`/`Common`), and MCP servers |
+| `hooks.deny` | **extend** (append) | Add deny-patterns scanned against hook configs in non-skill assets |
+| `scripts.manifest` | **override** | Path to the runtime-script allowlist manifest (default `scripts/runtime-manifest.txt`) |
+
+### Overlay files
+
+Beyond the embedded `config` block, the engine deep-merges any sibling
+`references/audit-config.*.json` overlay files (sorted by name) into the config:
+later files override scalars and dicts, and union list values. Each overlay may be
+a bare config object or a `{"config": {…}}` wrapper. Absent overlays leave behavior
+unchanged; a malformed overlay is rejected at load with a clear error.
 
 A ready-to-copy, validated example lives at
 [`references/agent-audit-config.example.json`](../references/agent-audit-config.example.json).

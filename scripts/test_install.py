@@ -148,6 +148,15 @@ class RuntimeManifestTests(unittest.TestCase):
         for m in _SCRIPT_REF_RE.finditer(text):
             self.assertIn(m.group(1), names, f"Dockerfile copies non-whitelisted {m.group(1)}")
 
+    def test_dockerfile_ships_engine_data_files(self) -> None:
+        # The engine loads these JSON data files at runtime; the loaders tolerate
+        # absence, so a missing COPY silently disables features (e.g. no
+        # unicode-confusables.json -> SEC003 homoglyph detection dies) with no error.
+        text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        for data_file in ("agent-audit-rules.json", "unicode-confusables.json", "audit-ignore.json"):
+            self.assertIn(data_file, text,
+                          f"Dockerfile must COPY references/{data_file} or its feature degrades silently in the image")
+
 
 class InstallContentTests(unittest.TestCase):
     """A real install must carry runtime helpers but no dev/test/release tooling."""

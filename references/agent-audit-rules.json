@@ -164,6 +164,12 @@
       "description": "An invisible format character (zero-width space, soft hyphen, Unicode tag char, variation selector) can smuggle hidden instructions into imported or copy-pasted content."
     },
     {
+      "rule_id": "SEC003",
+      "severity": "medium",
+      "title": "Homoglyph confusable in Latin context",
+      "description": "A Latin-majority word or URL host hides a confusable character from another script (e.g. Cyrillic U+0430 mimicking Latin 'a'), a common typosquat/phishing vector. Pure foreign-language words and legitimate diacritics do not trigger."
+    },
+    {
       "rule_id": "SEC010",
       "severity": "high",
       "title": "Dangerous instruction in non-skill asset",

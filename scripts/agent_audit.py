@@ -85,6 +85,7 @@ ENGINE_RULE_IDS = {
     "SKILL023",
     "SEC001",
     "SEC002",
+    "SEC003",
     "SEC010",
     "SEC011",
     "SEC012",
@@ -738,6 +739,15 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
     # so they get the same cross-asset hidden-character detection as non-skill assets.
     findings.extend(scan_hidden_chars(text, skill_path))
 
+    # Homoglyph scan (SEC003) — a skill declaring metainfo.language extends its allowed
+    # scripts so legitimate same-script prose never trips. URL/host tokens are flagged
+    # regardless (host_aware=True), since metainfo.language can't whitelist a typosquat host.
+    allow_scripts = set(cfg["allow_unicode_scripts"])
+    fm_lang = metainfo.get("language") if isinstance(metainfo, dict) else None
+    if isinstance(fm_lang, str) and fm_lang.lower() in LANG_TO_SCRIPT:
+        allow_scripts.add(LANG_TO_SCRIPT[fm_lang.lower()])
+    findings.extend(scan_homoglyphs(text, skill_path, allow_scripts=allow_scripts, host_aware=True))
+
     if profile == "security":
         kept = [f for f in findings if f.rule_id in cfg["security_profile"]]
     elif profile == "quality":
@@ -865,10 +875,115 @@ def scan_security(text: str, path: Path, *, dangerous_id: str, secret_id: str, p
     return out
 
 
+@lru_cache(maxsize=1)
+def load_confusables() -> dict[str, str]:
+    """Load the confusables map (single-char key -> Latin look-alike). Tolerate absence."""
+    path = default_rules_path().parent / "unicode-confusables.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {chr(int(k, 16)): v for k, v in (data.get("confusables") or {}).items()}
+    except (OSError, ValueError):
+        return {}
+
+
+# Language-code -> coarse script name. Lets a skill declaring metainfo.language
+# extend its allow_scripts so legitimate same-script prose never trips SEC003.
+LANG_TO_SCRIPT = {
+    "ru": "Cyrillic", "uk": "Cyrillic", "be": "Cyrillic", "bg": "Cyrillic",
+    "sr": "Cyrillic", "mk": "Cyrillic", "kk": "Cyrillic",
+    "el": "Greek",
+    "zh": "Han", "ja": "Han", "ko": "Hangul",
+    "ar": "Arabic", "fa": "Arabic", "ur": "Arabic",
+    "he": "Hebrew",
+}
+
+_SCRIPT_PREFIXES = ("LATIN", "CYRILLIC", "GREEK", "CJK", "HAN", "HIRAGANA",
+                    "KATAKANA", "HANGUL", "ARABIC", "HEBREW")
+
+
+def _char_script(ch: str) -> str:
+    """Coarse script of a character via unicodedata.name (Latin/Cyrillic/Greek/Han/...)."""
+    if not ch.isalpha():
+        return "Common"
+    try:
+        name = unicodedata.name(ch)
+    except ValueError:
+        return "Common"
+    for script in _SCRIPT_PREFIXES:
+        if name.startswith(script):
+            return "Han" if script in ("CJK", "HAN") else script.capitalize()
+    return "Other"
+
+
+# A "word" for homoglyph analysis is a maximal run of letters (Unicode \w minus digits/_).
+# This splits markdown/code glue (meta-навыков, хочу<br/>сделать, A[Что-то) into clean
+# single-script runs, so only a genuine intra-letter homoglyph (pаypal) stays one token.
+WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+URL_RE = re.compile(r"https?://[^\s)>\]]+", re.I)
+
+
+def scan_homoglyphs(text: str, path: Path, allow_scripts: set[str], host_aware: bool = False) -> list[Finding]:
+    """SEC003 (medium): a Latin-majority word hiding a confusable non-Latin char.
+
+    Pure non-Latin words never trigger (legit foreign language). URL/host tokens are
+    checked regardless of allow_scripts (an attacker cannot whitelist a typosquat host
+    via metainfo.language)."""
+    confusables = load_confusables()
+    out: list[Finding] = []
+    url_spans: list[tuple[int, int]] = []
+    # 1) URL/host tokens: any confusable char in a URL is suspicious regardless of language.
+    if host_aware:
+        for m in URL_RE.finditer(text):
+            url_spans.append((m.start(), m.end()))
+            bad = [ch for ch in m.group(0) if ch in confusables]
+            if bad:
+                out.append(finding("SEC003", path, line_for_offset(text, m.start()),
+                                   f"URL/host contains confusable character(s) {''.join(bad)!r} that mimic Latin letters.",
+                                   "Verify the hostname is not a homoglyph/typosquat of a trusted domain."))
+    # 2) Prose words: flag a Latin-DOMINANT word that hides a minority confusable non-Latin
+    #    char (the typosquat signature). A genuine foreign-language word is non-Latin-dominant
+    #    and never trips — even when markdown/code punctuation glues Latin tokens to it.
+    for m in WORD_RE.finditer(text):
+        if any(s <= m.start() < e for s, e in url_spans):
+            continue  # part of a URL — handled above
+        word = m.group(0)
+        scripts = {_char_script(ch) for ch in word if ch.isalpha()}
+        scripts.discard("Common")
+        if not scripts or scripts <= allow_scripts:
+            continue  # pure allowed-script word (incl. pure foreign-language) — not a homoglyph
+        # Work on the alphabetic core only (drop digits/punctuation that markdown or
+        # case-suffixes glue on). Classify each letter L (Latin) / N (non-Latin).
+        core = [(ch, _char_script(ch)) for ch in word if ch.isalpha()]
+        latin = sum(1 for _, s in core if s == "Latin")
+        nonlatin = len(core) - latin
+        if latin == 0 or nonlatin == 0:
+            continue  # single-script alphabetic core — never a homoglyph
+        confusable_hits = [ch for ch, _ in core if ch in confusables]
+        if not confusable_hits:
+            continue  # mixed scripts but no look-alike char — not a typosquat vector
+        # Attack signature: the non-Latin letters are INTERLEAVED with Latin or sit at the
+        # WORD START. The one benign bilingual pattern is a Latin loanword stem with a
+        # foreign inflectional SUFFIX (toolkit+а, manifest+ах) — a single contiguous
+        # TRAILING non-Latin run on a Latin-majority stem. Everything else (p·а·ypal,
+        # g·оо·gle interleaved; а·pple leading) is a homoglyph and flags.
+        nl_positions = [i for i, (_, s) in enumerate(core) if s != "Latin"]
+        contiguous = nl_positions == list(range(nl_positions[0], nl_positions[-1] + 1))
+        trailing_suffix = contiguous and nl_positions[-1] == len(core) - 1 and nl_positions[0] > 0
+        if trailing_suffix and latin >= nonlatin:
+            continue  # benign loanword + trailing foreign inflection
+        out.append(finding("SEC003", path, line_for_offset(text, m.start()),
+                           f"Word '{word}' mixes Latin with confusable character(s) {''.join(confusable_hits)!r}.",
+                           "Use a single script; confusable characters are a common phishing/typosquat vector."))
+    return out
+
+
 def checks_for(asset_type_name: str):
     """Return [(text, path)->[Finding]] callables for an asset type. scan_hidden_chars
     runs on EVERY non-skill type; the security scan runs on config/agent/hook/script."""
-    default = [lambda text, path: scan_hidden_chars(text, path)]
+    cfg = load_config()
+    allow = cfg["allow_unicode_scripts"]
+    default = [lambda text, path: scan_hidden_chars(text, path),
+               lambda text, path: scan_homoglyphs(text, path, allow_scripts=allow, host_aware=True)]
     security_types = {"mcp-config", "plugin-config", "agent", "runtime-config", "command", "prompt"}
     if asset_type_name in security_types:
         return default + [lambda text, path: scan_security(text, path, dangerous_id="SEC010",

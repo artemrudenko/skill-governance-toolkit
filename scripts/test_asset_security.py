@@ -102,6 +102,26 @@ class HiddenCharTests(_CacheSafe):
         self.assertIn("SEC010", {x.rule_id for x in f})
 
 
+class HomoglyphTests(_CacheSafe):
+    def test_cyrillic_in_latin_word_flagged(self):    # 'pаypal' — 'а' is U+0430
+        f = agent_audit.scan_homoglyphs("connect to pаypal", Path("x.md"), allow_scripts={"Latin", "Common"})
+        self.assertIn("SEC003", {x.rule_id for x in f})
+    def test_pure_nonlatin_word_not_flagged(self):    # legitimate Russian word, mixed into English prose
+        self.assertEqual(agent_audit.scan_homoglyphs("deploy to сервер cluster", Path("x.md"),
+                          allow_scripts={"Latin", "Common"}), [])
+    def test_pure_cjk_not_flagged(self):
+        self.assertEqual(agent_audit.scan_homoglyphs("city 北京 here", Path("x.md"),
+                          allow_scripts={"Latin", "Common"}), [])
+    def test_url_homoglyph_flagged_regardless_of_language(self):
+        # An all-Cyrillic-lookalike host is flagged even if the skill declares language: ru.
+        f = agent_audit.scan_homoglyphs("see https://pаypal.com/login", Path("x.md"),
+                          allow_scripts={"Latin", "Common", "Cyrillic"}, host_aware=True)
+        self.assertIn("SEC003", {x.rule_id for x in f})
+    def test_plain_ascii_clean(self):
+        self.assertEqual(agent_audit.scan_homoglyphs("normal english text and a url https://example.com",
+                          Path("x.md"), allow_scripts={"Latin", "Common"}), [])
+
+
 class DeltaGateTests(_CacheSafe):
     def test_preexisting_finding_not_counted_as_introduced(self):
         base = [{"rule_id": "SEC010", "file": "a.md", "message": "Potentially dangerous instruction detected: rm -rf."}]

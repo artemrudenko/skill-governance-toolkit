@@ -77,6 +77,18 @@ Cross-asset scan applied to **every** asset (skills and non-skill assets alike).
 
 The dangerous/secret scans additionally NFKC-normalize text before matching, so fullwidth/compatibility lookalikes (e.g. fullwidth `ｒｍ －ｒｆ /`) cannot bypass `SEC010`/`SKILL014`.
 
+### Homoglyph confusable (`SEC003`)
+
+Cross-asset scan applied to **every** asset. It catches typosquat/phishing where a Latin-looking token hides a confusable character from another script — e.g. `pаypal` where `а` is Cyrillic U+0430, or `gооgle`. The map of confusable codepoints lives in [`references/unicode-confusables.json`](../references/unicode-confusables.json) (Cyrillic + Greek Latin look-alikes).
+
+This check is **language-safe**: it never flags pure foreign-language words (`привет`, `北京`), legitimate diacritics (`café`, `naïve`), or a Latin loanword stem with a trailing foreign inflection (`toolkitа`, `manifestах` — the bilingual Russian-technical pattern). It analyzes maximal letter-runs (markdown/code punctuation splits tokens) and only flags a confusable char **interleaved inside** a Latin-majority run or sitting at the word start. A skill declaring `metainfo.language` extends its allowed scripts, so same-script prose stays clean. **URL/host tokens are flagged regardless of the declared language** — an attacker cannot whitelist a typosquat host via `metainfo.language`.
+
+| Rule | Severity | Detects | Why it matters |
+|---|---|---|---|
+| SEC003 | medium | A Latin-majority word or URL host hiding a confusable non-Latin character (Cyrillic/Greek look-alike) | Homoglyph typosquats (`pаypal.com`) read as a trusted brand to a human but resolve elsewhere — a classic phishing/supply-chain vector |
+
+SEC003 is advisory (medium) and inline-suppressible via `<!-- sgt-ignore: SEC003 reason=... -->` for the rare legitimate case.
+
 ### Non-skill asset rules (`SEC*`)
 
 Content scans applied to non-skill assets (MCP configs, plugin manifests, agents, commands, prompts, runtime configs). Unlike `SKILL*` scans, these disable the prose `detect/scan/pattern` exemption, since config-style assets are not documentation.

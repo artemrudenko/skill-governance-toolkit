@@ -864,6 +864,8 @@ def _apply_ignores(
     central: list[tuple[str, str, Any]] = []  # (rule_id, norm_path, line_or_None)
     extra: list[dict[str, Any]] = []
     for e in ignore_doc.get("ignores", []):
+        if not isinstance(e, dict):
+            continue  # fail-safe: a malformed (non-object) entry never suppresses or crashes
         rid, path = e.get("rule_id"), e.get("path")
         reason = str(e.get("reason", "")).strip()
         if not rid or not path:

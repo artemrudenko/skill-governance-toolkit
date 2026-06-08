@@ -71,6 +71,13 @@ class IgnoreListTests(_CacheSafe):
         # marker covers its own line and the line below
         self.assertIn("SEC003", idx.get(("x.md", 2), set()) | idx.get(("x.md", 3), set()))
 
+    def test_non_dict_entry_is_failsafe_not_crash(self):
+        # A malformed (non-object) entry must be skipped, never crash the audit,
+        # while valid sibling entries still apply.
+        doc = {"ignores": ["evil-string", {"rule_id": "SEC003", "path": "x.md", "reason": "ok"}]}
+        f = [{"rule_id": "SEC003", "file": "x.md", "line": 1, "severity": "medium"}]
+        self.assertEqual(agent_audit._apply_ignores(f, doc, {}, root="."), [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

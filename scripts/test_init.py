@@ -6,6 +6,7 @@ Previously only `bash -n` (P1) + an argv-grep (P5) ran against it."""
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -64,6 +65,30 @@ class InitShTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual((repo / "AGENTS.md").read_text(encoding="utf-8"), before,
                          "advise-only must not modify AGENTS.md")
+
+    def test_advise_only_lists_all_integrations_without_prereqs(self) -> None:
+        # --advise-only must print the full plan for EVERY selected integration
+        # even when its prerequisite (pipx/npm) is absent: the prereq guard must
+        # be advise/dry-aware (as install_crg already is), else repomix/serena are
+        # silently dropped from the plan. Force pipx/npm absent via a minimal PATH.
+        repo = self._skeleton()
+        bindir = repo / "_minbin"
+        bindir.mkdir()
+        for tool in ("bash", "env", "cat", "head", "tr", "dirname", "basename",
+                     "python3", "sed", "grep", "mkdir", "rm", "mktemp", "sort", "printf"):
+            src = shutil.which(tool)
+            if src:
+                os.symlink(src, bindir / tool)
+        # Guard the guard: pipx/npm must be unreachable under this PATH.
+        self.assertIsNone(shutil.which("pipx", path=str(bindir)))
+        self.assertIsNone(shutil.which("npm", path=str(bindir)))
+        env = dict(os.environ)
+        env["PATH"] = str(bindir)
+        result = self._run(repo, "--advise-only", "--all", env=env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        out = result.stdout
+        self.assertIn("[would run] npm install -g repomix", out)
+        self.assertIn("[would run] pipx install serena-mcp", out)
 
     def test_invalid_tool_fails_fast(self) -> None:
         repo = self._skeleton()

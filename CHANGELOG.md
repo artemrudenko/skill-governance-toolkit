@@ -128,6 +128,11 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
   default descending page-1 window, `find_marker_note` missed it, and a duplicate note was POSTed.
   The list GET now requests `per_page=100&order_by=created_at&sort=asc`, finding the early note
   deterministically; covered by a new `test_post_mr_comment` case.
+- **`init.sh --advise-only`/`--dry-run` now lists every selected integration.** `install_repomix`
+  and `install_serena` ran their `npm`/`pipx` prereq guard unconditionally (unlike `install_crg`),
+  so on a host lacking those tools the plan silently dropped repomix/serena — defeating the point
+  of advise/dry-run (print the full plan regardless of installed prereqs). Both guards are now
+  advise/dry-aware; a new `test_init` case asserts all three plans print under a pipx/npm-free PATH.
 
 ---
 

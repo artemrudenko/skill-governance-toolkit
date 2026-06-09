@@ -240,7 +240,10 @@ install_crg() {
 install_repomix() {
   say ""
   say "── Installing repomix ──"
-  if ! has npm; then
+  # Skip the prereq guard in --advise-only / --dry-run (like install_crg) so the
+  # full plan still prints when npm is absent — `run` won't invoke npm in those
+  # modes anyway. Without this the integration is silently dropped from the plan.
+  if ! $ADVISE_ONLY && ! $DRY_RUN && ! has npm; then
     say "  ✗ npm not found — install Node.js first, then re-run."
     return 1
   fi
@@ -253,7 +256,8 @@ install_repomix() {
 install_serena() {
   say ""
   say "── Installing serena ──"
-  if ! has pipx; then
+  # Advise/dry-aware prereq guard — see install_repomix.
+  if ! $ADVISE_ONLY && ! $DRY_RUN && ! has pipx; then
     say "  ✗ pipx not found — install pipx first (e.g. \`brew install pipx\` or \`python3 -m pip install --user pipx\`), then re-run."
     return 1
   fi

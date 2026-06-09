@@ -115,12 +115,56 @@ You rarely delete; you **scope** or **suppress**:
 | Silence one finding, one place | inline `<!-- sgt-ignore: RULE reason=… -->` (advisory rules only) | A |
 | Silence a floor finding | central `references/audit-ignore.json`, CODEOWNER-gated, with `expires` | A |
 | Turn the whole gate advisory (incident) | `SGT_FAIL_MODE=advisory` kill-switch | A |
+| Ship a B check without enforcing (R&D) | give it `info` severity — runs, records, never caps (see [Info / experimental lane](#info--experimental-lane)) | B |
 | Drop a dimension / sub-check | delete its rubric / phase entry | B |
 | Retire a rule permanently | deprecation policy (BREAKING CHANGELOG + upgrade notes) | A |
 
 Suppression is not removal — an expired or CODEOWNER-gated suppression keeps an
 audit trail. See [security-suppression-runbook.md](security-suppression-runbook.md)
 and [checks-reference.md § Rule lifecycle](checks-reference.md#rule-lifecycle--deprecation-policy).
+
+## Info / experimental lane
+
+A new LLM-scored check (Surface B) is rarely ready to **enforce** on day one — you
+need evidence of how often it fires across real skills before it caps a score.
+Shipping it as enforcing on a hypothesis fails skills on a guess; deleting it
+loses the signal entirely. The middle lane is **`info` severity**.
+
+**Contract (non-negotiable):** an `info` finding is recorded (report «Info (no
+action required)» section + an `info_flags` JSONL field) but has **zero** effect
+on the Score, tier, dimension caps, or any gate. Not «usually advisory» — *never*.
+This is what lets it ship into a stable skill without risk: by definition it
+cannot change a verdict.
+
+**Why not just disable it.** A check that never runs produces no data, so you can
+never tell whether its effect is real — and it bit-rots unseen. `info` keeps a
+faint signal flowing (collapsed to a one-line count by default, so it adds no
+noise) while you watch the aggregate. You cannot feel the effect of a check that
+never fires.
+
+**Info is a stage, not a graveyard.** Every `info` check needs an exit:
+
+```text
+info  →  advisory / capping        (promote: evidence shows it catches real defects)
+info  →  retire                     (demote: it fires on noise, never actionable)
+```
+
+Promotion = raise the check's output severity (info → a dimension cap), add the
+cap-wiring in `references/structural-analysis.md`, and move its JSONL field out of
+`info_flags`. Without a planned exit the «Info» section grows and stops being
+read — which defeats its own purpose («look here if you hit problems»).
+
+**Worked precedent:** `3.8` negative-rule placement (skill-evaluate) is the first
+`info` resident — it surfaces passive prose prohibitions buried in a body that
+would be more reliable in the `description` (activation) or `AGENTS.md`
+(execution), without ever capping a dimension. Copy its shape for the next
+R&D-stage check.
+
+| Severity | Effect on score / gate | Suppressible | Home |
+|---|---|---|---|
+| floor / capping | blocks or caps a dimension | CODEOWNER-gated only | promoted checks |
+| advisory | visible, no block | inline ignore | mature non-gating checks |
+| **info** | **none, ever** | n/a (already zero-impact) | **R&D-stage checks accruing evidence** |
 
 ## See also
 

@@ -162,6 +162,56 @@ description: "Use when reviewing TypeScript PRs for bugs and style."
 
 The Skip bounds languages the description never claimed (TS only). No finding.
 
+### Negative-rule placement (info, 3.8)
+
+`info`-tier — **never caps** any dimension. Surfaces passive prose prohibitions
+buried in the body that would be more reliable in a layer loaded at the moment
+their decision is made. These examples are the executable spec for the check.
+
+**Triggering — activation prohibition as prose (info, relocate to `description`):**
+
+```text
+## When to use
+...
+## Notes
+Do not use this skill for single-file lint checks — it is meant for full PRs.
+```
+
+The «do not use … for single-file lint» rule routes activation, but it lives in
+the body, which loads only **after** the skill was already chosen. Emit info:
+*"move the negative scope into `description` as an anti-trigger — a body rule
+cannot prevent the wrong activation it is reacting to."* `info_flags.negative_rule_placement: 1`.
+
+**Triggering — safety prohibition as prose (info, hoist to `AGENTS.md`):**
+
+```text
+## Phase 3 — Push
+Never push to a corporate read-only mirror without explicit confirmation.
+```
+
+A safety «never» buried mid-body is the first thing lost when the body is
+summarized on a long run. Emit info: *"hoist to `AGENTS.md` (always-on, loaded
+every turn)."*
+
+**Near-miss — executable Phase-0 gate (NO finding):**
+
+```text
+## Phase 0 — Scope
+If `SCOPE_WINDOW` is unset, STOP and report: "scope parameter required." Do not proceed.
+```
+
+This is a gate, not passive prose: it *checks* a condition and *fails fast with
+a message* at the moment of decision. It cannot be skipped. No finding.
+
+**Near-miss — negative boundary already in `description` (NO finding, ideal):**
+
+```text
+description: "Review full PRs for bugs and style. Not for single-file lint — use the linter."
+```
+
+The negative scope is in the routing layer already. No finding — this is the
+shape the triggering examples should be relocated *to*.
+
 ## D9 — Safety / Risk Awareness
 
 Does the skill identify and document mitigations for safety-critical concerns? This dimension evaluates **behavioral design**, not lexical content (lexical secret/dangerous-pattern scanning lives in `library-audit` Phase 5).

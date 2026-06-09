@@ -167,6 +167,14 @@ Mark as «clean» if 0 findings. If any findings cap D9 — name the cap.]
 
 ### Agent pattern note — only if pattern detected or different one suggested
 [Detected pattern + recommendation if mismatched.]
+
+### Info (no action required) — findings from Phase 3.8
+[Collapsed by default — emit only the one-line count:
+  🔵 {N} info findings — review only if the skill misbehaves on long runs.
+In `detailed` mode, expand each: line number, the buried prohibition quoted,
+and the recommended layer (description anti-trigger / AGENTS.md / Phase-0 gate).
+Info NEVER affects Score, tier, or the safety gate. Omit the section entirely
+when N = 0.]
 ```
 
 ---
@@ -174,8 +182,8 @@ Mark as «clean» if 0 findings. If any findings cap D9 — name the cap.]
 ## Mode contracts
 
 - **`terse`** — Layer 1 (summary table) + Layer 3's Verdict + Top 3 +
-  Lexical security only. Skip Layer 2 (per-dim blocks) and most
-  supplementary sections.
+  Lexical security + Info count line only. Skip Layer 2 (per-dim blocks)
+  and most supplementary sections.
 - **`standard`** — previous v1.4 format (Layer 1 expanded to 4-column
   table with rubric anchor + evidence column; no separate Layer 2
   blocks); full Layer 3.

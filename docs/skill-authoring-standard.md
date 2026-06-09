@@ -78,6 +78,27 @@ metainfo:
 - `assets/{template}.md` — output templates
 ```
 
+## Where prohibitions go — two kinds of «don't»
+
+A prohibition is the most fragile instruction exactly where it matters most. A
+positive rule has a trigger — the task re-summons it. A negative rule has none:
+the thing it forbids never announces itself, so nothing re-activates the rule. On
+long runs, a low-weight «do not…» buried mid-body is lost once the body is
+summarized. The fix is **location, not weight** — inflating with `MANDATORY`
+steals salience from every other line and still degrades. Place each «don't» in
+the layer loaded at the moment its decision is made:
+
+| Kind of «don't» | Reliable home | Why |
+|---|---|---|
+| **Activation** — «do not use this skill for X» | `description` (anti-trigger: «… Not for X — use Y») | the body loads only *after* the skill is chosen; a body rule cannot prevent the wrong activation it reacts to |
+| **Safety / execution** — «never push to read-only», «always update the lock file» | `AGENTS.md` (always-on, every turn) | survives long-run context decay; a mid-body line does not |
+| **Runtime precondition** — «do not proceed if SCOPE_WINDOW is unset» | **executable Phase-0 gate** in the body (check → fail-fast → message) | a gate *acts* at the decision point and cannot be skipped; passive prose can |
+| **In-flow branch** — «on the fast path, skip if the diff touches migrations» | inline at its point of use in the workflow | read in the execution flow where it applies |
+
+Anti-pattern: a passive prose «do not use this skill if…» sitting in a mid-body
+`## Notes`. `skill-evaluate` 3.8 surfaces these as `info` findings and names the
+layer to move each to. The robust body-level «don't» is a gate, not a sentence.
+
 ## metainfo block (required since 1.8.0)
 
 `metainfo:` is a **namespaced sub-block** in frontmatter — top-level fields

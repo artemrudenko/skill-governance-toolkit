@@ -204,3 +204,31 @@ This is a **semantic** sub-check (the only one in Phase 3): read both regions an
 Set the JSONL flag `activation_coherent: false` on a 🔴, `true` otherwise. On a contradiction, add a top_issue naming the exact pair (advertised trigger ↔ excluding Skip line). See [`rubrics.md` → D8 Activation-coherence gate](rubrics.md#activation-coherence-gate-caps-d8--3) for worked examples of contradiction vs legitimate narrowing.
 
 Rationale: D8 (Discoverability) asks «will the right need activate this skill, and only the right need?» A description that advertises a case the body then refuses fails that test no matter how rich its trigger phrasing.
+
+## 3.8 — Negative-rule placement (info)
+
+**Self-exclusion (meta-rule):** files inside `skills/skill-evaluate/` are **exempt** — this skill documents the check (its own body carries the worked-example strings) and would self-flag.
+
+**This is the first `info`-severity sub-check.** Its contract: a 3.8 finding is recorded in the `info_flags` JSONL field and the report's **«Info (no action required)»** section. It **does not cap** any dimension and does not affect the Score, tier, or safety gate. Info is a *stage*, not a verdict — a check that accumulates evidence here can later be promoted to a capping severity. See [extending-checks.md → Info / experimental lane](../../../docs/extending-checks.md#info--experimental-lane) for the contract and promotion path.
+
+**Why this check exists.** A prohibition is the most fragile instruction exactly where it matters most. A positive instruction has a natural trigger — the task re-summons it. A negative rule («do not use this skill if…», «never delete without confirm») has no trigger: the thing it forbids never announces itself, so nothing re-activates the rule. On long runs, once the skill body scrolls out of the recent window or is summarized, a low-weight prohibition buried mid-body is simply gone. Inflating it with `YOU MUST` / `MANDATORY` is a losing arms-race: weight added to one section is salience stolen from every other. The fix is **location, not weight** — move each prohibition to the layer loaded at the moment its decision is made.
+
+**Two kinds of «don't» — judged differently.** This is a **semantic** sub-check (like 3.7): read each negative rule in the body and classify its *form*, not match a regex.
+
+| Form in body | Verdict | Recommended relocation |
+|---|---|---|
+| Negative boundary already in `description` (anti-trigger) | ✅ reward — no finding | — (already in the routing layer) |
+| **Activation** prohibition as prose («do not use this skill if/when X», «не используй для X») after `## When to use` | 🔵 info | move the scope into `description` (prevents *selection*; body loads only *after* the wrong choice is made) |
+| **Safety/execution** prohibition as prose («never push to read-only», «always update this file») | 🔵 info | hoist to `AGENTS.md` (always-on, loaded every turn — survives long runs) |
+| Executable **Phase-0 gate** (a check that fails fast with a message) | ✅ no finding | — (a gate *does* something at the moment of decision; it cannot be skipped) |
+| **In-flow branch** conditional read at its point of use («on the fast path, skip if diff touches migrations») | ✅ no finding | — (read in the execution flow where it applies) |
+
+**Detection.** Scan the body **after** the `## When to use` section. Candidate lines: passive prohibitions (`do not use`, `don't use`, `never use this`, `не используй`, `не делай`) **not** inside a fenced code block and **not** part of a Phase-0 gate (no accompanying fail-fast action + message). For each candidate, judge the form per the table above. The robust form of a body-level «don't» is an executable gate; passive prose is the weak form this check surfaces.
+
+| Pass | What we check | Detection | Severity |
+|---|---|---|---|
+| **3.8.1** | **Negative-rule placement.** Passive prose prohibitions buried in the body that would be more reliable in the `description` (activation) or `AGENTS.md` (safety/execution). | Semantic: classify each candidate prohibition by form; emit info for passive-prose activation/safety rules, none for description boundaries / Phase-0 gates / in-flow branches. | 🔵 info |
+
+Set the JSONL flag `info_flags.negative_rule_placement` to the count of passive-prose prohibitions found (0 if none). Each finding names the line and the recommended layer. No dimension cap, ever.
+
+**Worked examples** (the executable spec for this check) — see [`rubrics.md` → Negative-rule placement (info, 3.8)](rubrics.md#negative-rule-placement-info-38).

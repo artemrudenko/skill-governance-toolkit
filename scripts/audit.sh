@@ -32,6 +32,7 @@
 #   P21 — validate-config + explain behavior
 #   P22 — delta-gate integration on a real git repo (--fail-on-new + kill-switch)
 #   P23 — CI template path coverage ⊇ engine-governed asset types
+#   P24 — skill-evaluate sub-check catalog consistency (sync + info contract)
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -524,6 +525,17 @@ for tpl in references/ci/gitlab-ci.yml references/ci/github-pr.yml; do
     pass "$(basename "$tpl") covers all key governed asset path globs"
   fi
 done
+
+# ── P24: skill-evaluate sub-check catalog consistency ────────────────────────
+# Guards catalog↔section sync and the `info` severity contract (info findings
+# never cap a dimension). Deterministic — does NOT execute the LLM rubric.
+
+phase "P24 — skill-evaluate catalog consistency (sub-check sync + info contract)"
+if python3 "$ROOT/scripts/test_skill_evaluate_catalog.py" >/dev/null 2>&1; then
+  pass "skill-evaluate sub-check catalog is consistent"
+else
+  fail "skill-evaluate catalog tests failed — run: python3 scripts/test_skill_evaluate_catalog.py"
+fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 

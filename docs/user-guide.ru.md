@@ -1,173 +1,77 @@
 # Skill Governance Toolkit — руководство пользователя
 
+> **Аудитория:** автор и мейнтейнер скилов · **Тип:** how-to (рабочие процессы) · **Пререквизит:** [QUICKSTART](../QUICKSTART.md)
+
 > **Канонический источник — английский [`user-guide.md`](user-guide.md).** Этот
-> перевод может отставать по версиям и разделам; при расхождении доверяй
-> английской версии.
+> перевод зеркалит его раздел в раздел; при расхождении доверяй английской
+> версии.
 
-Универсальный набор meta-навыков для управления библиотекой Agent Skills
-(SKILL.md по спецификации Anthropic Agent Skills + AGENTS.md по спецификации
-Linux Foundation AAIF). Работает в Claude Code, GitHub Copilot, Cursor,
-OpenAI Codex CLI и Google Gemini CLI **без форка исходников под каждый
-тул**.
+Универсальный набор meta-навыков для команд, принявших стандарты `AGENTS.md`
+и `SKILL.md`. Помогает находить, оценивать, сравнивать, аудитить и портировать
+agent skills без форка исходников под каждый AI-host.
 
-> **Язык документации.** Этот гайд — на русском для команды. Содержимое
-> самих навыков (`skills/*/SKILL.md`, `references/*.md`) — только на
-> английском. Это требование Phase 3.6 (writing quality scan) — один язык
-> на тело навыка для max routing accuracy и token efficiency. Гайды для
-> людей могут быть на любом языке; навыки для агентов — единообразны.
+Этот гайд проводит через восемь ключевых рабочих процессов (Use case 1–8). Он
+сознательно не дублирует справочный материал — глубокое содержимое живёт в
+канонических документах, на которые ссылается каждый раздел;
+[documentation hub](README.md) индексирует их все.
+
+Не знаешь, с чего начать? `python3 scripts/sgt.py quickstart` печатает doctor
+summary, следующую рекомендованную команду и компактную карту intent → skill
+(`--format json` для автоматизации).
 
 ---
 
-## Что внутри
+## Что внутри toolkit
 
 ```mermaid
 flowchart TB
-    subgraph "Toolkit root"
-        AGENTS["AGENTS.md<br/>Single source of truth"]
-        CLAUDE["CLAUDE.md → @AGENTS.md"]
-        GEMINI["GEMINI.md → @AGENTS.md"]
-        COPILOT[".github/copilot-instructions.md"]
-        UG["user-guide.ru.md<br/>(этот файл)"]
-        UGEN["user-guide.md<br/>(English guide)"]
-        README["README.md (EN quick start)"]
-        CHLOG["CHANGELOG.md<br/>per-version history"]
-        INSTSH["install.sh<br/>interactive (bash)"]
-        INSTPS["install.ps1<br/>interactive (PowerShell)"]
+    subgraph "Repository root"
+        AGENTS["AGENTS.md<br/>single source of truth"]
+        ALIASES["CLAUDE.md / GEMINI.md /<br/>.github/copilot-instructions.md<br/>per-host aliases"]
     end
 
-    subgraph "commands/"
-        CMD["integration-init<br/>(renamed from /init)"]
-    end
-
-    subgraph "skills/ — meta-skills, host-neutral"
-        FIND[skill-find<br/>discovery]
-        EVAL[skill-evaluate<br/>quality per-skill]
-        COMP[skill-compare<br/>local vs corporate]
-        AUDIT[library-audit<br/>governance lib-wide]
-        BUILD[skill-build-portable<br/>migration]
-        INIT[integration-init<br/>bootstrap integrations]
+    subgraph "skills/"
+        FIND["skill-find"]
+        EVAL["skill-evaluate"]
+        COMP["skill-compare"]
+        AUDIT["library-audit"]
+        BUILD["skill-build-portable"]
+        INIT["integration-init"]
     end
 
     subgraph "agents/"
-        REV[code-reviewer<br/>TypeScript review]
+        REVIEWER["code-reviewer"]
     end
 
-    subgraph "references/ — repo-level cross-skill"
-        TOOLS["claude/copilot/codex/<br/>gemini-tools.md"]
-        CHECK["checkpointing.md"]
-    end
-
-    subgraph "scripts/ — stdlib-only helpers"
-        IDX["build_index.py<br/>INDEX.jsonl"]
-        CHKP["checkpoint.py<br/>resume state"]
-        DOC["doctor.py<br/>health check"]
-        QSTART["quickstart.py<br/>next step"]
+    subgraph "scripts/"
         SGT["sgt.py<br/>CLI facade"]
-        VERSION["sync_version.py<br/>version sync"]
-        INSTALL["install.sh<br/>multi-runtime (advanced)"]
-        INITSH["init.sh<br/>bash fallback for /integration-init"]
-    end
-
-    subgraph "Per-runtime manifests"
-        CLPL[".claude-plugin/"]
-        CXPL[".codex-plugin/"]
-        GEMPL["gemini-extension.json"]
+        AUDITCLI["agent_audit.py<br/>deterministic engine"]
+        MCP["agent_governance_mcp.py<br/>stdio MCP server"]
     end
 
     AGENTS --> FIND
     AGENTS --> EVAL
-    AGENTS --> AUDIT
     AGENTS --> COMP
+    AGENTS --> AUDIT
     AGENTS --> BUILD
     AGENTS --> INIT
-    REV -.dispatched via Task.-> BUILD
+    AUDITCLI --> MCP
 ```
+
+Над твоими скилами работают два взаимодополняющих слоя:
+
+- **Шесть LLM meta-скилов** (`skills/`) — суждение о качестве, сравнение,
+  портирование.
+- **Один детерминированный audit engine** (`agent_audit.py`) — воспроизводимые
+  проверки безопасности/структуры для CI-гейтов; доступен как CLI, MCP server
+  или Docker image (Use case 4).
+
+Плюс `agents/code-reviewer.md` — диспатчабельный read-only TypeScript-ревьюер
+(Use case 8).
 
 ---
 
-## Статус компонентов и готовность к GitHub
-
-| Компонент | Статус | Что это значит |
-|---|---|---|
-| Six meta-skills | `stable` | Подходят для обычного командного использования; breaking changes — только через release notes. |
-| `agents/code-reviewer.md` | `stable` | Read-only TypeScript-first reviewer; Bash ограничен read-only inspection. |
-| `scripts/doctor.py` | `stable` | Быстрая локальная проверка setup, Git state, свежести индекса и локальных артефактов. |
-| `scripts/quickstart.py` | `stable` | Короткий next-step guide и карта intent → skill. |
-| `scripts/sgt.py` | `stable` | CLI facade для частых сценариев: `init`, `doctor`, `quickstart`, `skills`, `audit`, `gate`, `ci-init`, `new-skill`, `uninstall`. |
-| `scripts/sync_version.py` | `stable` | Синхронизирует plugin manifests, `pyproject.toml` и README pins из root `VERSION`. |
-| CLI/MCP/Docker audit engine | `preview` | Работает и покрыт тестами, но API tools/rules могут уточняться до первого tagged release. |
-| Optional integrations | opt-in | CRG/repomix/serena ставятся только через `integration-init`; не являются baseline requirement. |
-
-**Если непонятно, с чего начать:**
-
-```bash
-python3 scripts/sgt.py quickstart
-python3 scripts/quickstart.py
-```
-
-Скрипт печатает doctor summary, следующий рекомендуемый command и короткую
-карту intent → skill. Для автоматизации используй `--format json`.
-
-**Быстрая проверка локального состояния:**
-
-```bash
-python3 scripts/doctor.py
-```
-
-Для автоматизации используй `--format json`. Doctor падает только на
-actionable проблемах: отсутствующие обязательные файлы, stale
-`skills/INDEX.jsonl` и похожие нарушения.
-
-Используй `sgt.py`, если нужны стабильные command names:
-
-```bash
-python3 scripts/sgt.py doctor
-python3 scripts/sgt.py skills
-python3 scripts/sgt.py audit
-```
-
-**Перед публикацией / PR / релизом запускай:**
-
-```bash
-bash scripts/audit.sh
-python3 scripts/test_install.py
-python3 scripts/test_doctor.py
-python3 scripts/test_quickstart.py
-python3 scripts/test_sgt.py
-python3 scripts/test_sync_version.py
-python3 scripts/test_agent_audit.py
-python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
-docker build -t agent-governance-mcp:local .
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:local
-```
-
-GitHub Actions выполняет этот baseline автоматически в `.github/workflows/ci.yml`.
-
-У версии один ручной источник: root `VERSION`. После изменения запускай:
-
-```bash
-python3 scripts/sync_version.py
-python3 scripts/sync_version.py --check
-```
-
-Sync обновляет plugin manifests, `pyproject.toml` и pinned install examples.
-Check выполняется внутри `scripts/audit.sh`.
-
-**Перед установкой в проект посмотри план:**
-
-```bash
-./install.sh --dry-run
-./install.ps1 -DryRun
-./scripts/install.sh --claude --project --target-project=/path/to/project --dry-run
-```
-
-Dry-run mode использует те же skill filters и target paths, что реальная
-установка, печатает план записей и выходит до изменения файлов.
-
----
-
-## Шесть навыков и для чего они нужны
+## Карта скилов
 
 ```mermaid
 flowchart LR
@@ -181,34 +85,37 @@ flowchart LR
     B -->|«поставить<br/>CRG/repomix/serena»| INIT[integration-init]
 
     FIND -->|нашёл candidate| EVAL
-    EVAL -->|score < target| BUILD
-    AUDIT -->|🔴 findings| BUILD
-    AUDIT -->|🔴 findings| EVAL
+    EVAL -->|score ниже target| BUILD
+    AUDIT -->|findings| BUILD
+    AUDIT -->|findings| EVAL
     COMP -->|MERGE recommendation| EVAL
     BUILD -->|post-conversion| EVAL
     BUILD -->|verify| AUDIT
 ```
 
-**Mental map по scope:**
+| Потребность | Скил |
+|---|---|
+| Узнать, существует ли уже полезный скил | `skill-find` |
+| Оценить один `SKILL.md` по качеству, безопасности и качеству текста | `skill-evaluate` |
+| Сравнить локальный скил с корпоративной или upstream-версией | `skill-compare` |
+| Проаудитить всю библиотеку скилов | `library-audit` |
+| Превратить host-specific скил в портабельный | `skill-build-portable` |
+| Поставить опциональные интеграции | `integration-init` |
 
-| Scope | Skill | Использование |
-|---|---|---|
-| ОДИН скил | `skill-find` | дискавери — есть ли что-то готовое |
-| ОДИН скил | `skill-evaluate` | quality scoring (D1–D9 + lexical security + writing quality) |
-| ОДИН скил | `skill-compare` | local vs corporate 1:1 |
-| ОДИН скил | `skill-build-portable` | трансформация в портабельный вид |
-| ВСЯ библиотека | `library-audit` | cross-skill governance, library-wide token budget, aggregated security |
-| ВСЕ интеграции | `integration-init` | bootstrap CRG/repomix/serena |
+Правило scope:
 
-**Запомнить:** entity в имени = scope. `skill-*` = per-skill. `library-*` =
-библиотека целиком. `integration-*` = интеграции.
+| Префикс | Scope |
+|---|---|
+| `skill-*` | Один скил |
+| `library-*` | Вся библиотека |
+| `integration-*` | Опциональный внешний тулинг |
 
 ---
 
 ## Use case 1 — Адаптация (adopt) внешнего скила
 
-Сценарий: коллега прислал интересный SKILL.md из другого репо. Хочешь
-понять можно ли его использовать.
+Когда коллега или upstream-репозиторий присылает `SKILL.md`, оцени его до
+добавления в свою библиотеку.
 
 ```mermaid
 sequenceDiagram
@@ -218,51 +125,54 @@ sequenceDiagram
     participant J as out/scores/index.jsonl
 
     U->>E: «evaluate this skill»<br/>SKILL_TARGET=path/to/foreign-skill.md
-    E->>R: load D1–D9 rubrics
-    E->>E: Phase 0–3: score 9 dims
-    E->>E: Phase 3.5: lexical security scan
-    E->>E: Phase 3.6: writing quality scan
-    E-->>U: Output report (detailed mode):<br/>summary + per-dim 4-part blocks + verdict
+    E->>R: load D1-D9 rubrics
+    E->>E: Phase 0-3: score 9 dimensions
+    E->>E: Phase 3.5: lexical security scan (caps D9)
+    E->>E: Phase 3.6: writing-quality scan (caps D1)
+    E->>E: Phase 3.7: activation coherence (caps D8)
+    E->>E: Phase 3.8: info lane (never caps)
+    E-->>U: report: summary + per-dim blocks + verdict
     E->>J: append JSONL entry (idempotent)
 
-    Note over U,E: Safety gate проверяется: если D9 ≤ 1 на<br/>mutating skill — overall verdict 🔴 независимо от score
+    Note over U,E: Safety gate форсирует красный вердикт когда (a) D9 ≤ 1<br/>на mutating-скиле OR (b) любой красный lexical security finding
 ```
 
-**Что получаешь:**
+```text
+evaluate this skill
+SKILL_TARGET=path/to/external/SKILL.md
+```
 
-1. **Summary table** D1–D9 одной строкой.
-2. **Per-dim block** для каждого из 9 dim'ов:
-   - What we check (правило)
-   - What we found (file:line evidence)
-   - Why it matters (downstream failure mode)
-   - How to raise the score (конкретное действие)
-3. **Overall verdict** — 🟢 / 🟡 / 🟠 / 🔴 + adopt decision.
-4. **Top 3 priority improvements** через все dim'ы.
-5. **Дополнительные секции** — frontmatter issues, lexical security, writing quality, agent pattern.
+Ожидаемый output:
 
-**Решение на основе verdict'а:**
-
-| Verdict | Decision |
+| Секция | Назначение |
 |---|---|
-| 🟢 Green (80–100) + Safety gate not triggered | Adopt as-is |
-| 🟡 Yellow (60–79) | Adopt после top-3 improvements |
-| 🟠 Orange (40–59) | Не adopt'ить — слишком много работы; искать альтернативу |
-| 🔴 Red (< 40) OR Safety gate triggered | Не adopt'ить, пока не устранены safety findings (gate срабатывает при D9 ≤ 1 на мутирующем скиле или любом 🔴 lexical security finding) |
+| Summary table | Обзор D1–D9 score одной строкой |
+| Per-dimension findings | Evidence, риск и конкретное улучшение по каждому dimension |
+| Safety gate | Блокирует небезопасные mutating-скилы, даже когда средний score выглядит приемлемо |
+| Top 3 improvements | Фиксы с максимальным impact |
+| Verdict | Adopt, adopt после фиксов, rewrite или reject |
+
+Решение на основе вердикта:
+
+| Verdict | Действие |
+|---|---|
+| 🟢 Green (80–100), safety gate чист | Adopt as-is |
+| 🟡 Yellow (60–79) | Adopt после top-фиксов |
+| 🟠 Orange (40–59) | Предпочесть альтернативу получше или сначала rewrite |
+| 🔴 Red (< 40) или safety gate сработал | Не adopt'ить, пока не устранены safety-проблемы (gate срабатывает при D9 ≤ 1 на мутирующем скиле или любом 🔴 lexical security finding) |
 
 ---
 
-## Use case 2 — Создание нового скила с нуля
+## Use case 2 — Создание нового скила
 
 Начинай со скаффолдера — `sgt new-skill` генерирует чистый по governance
 скелет (portable frontmatter, закрытый словарь `metainfo`, структура фаз), так
-что gate и `skill-evaluate` стартуют с проходного baseline. Дальше — заполнить
-TODO и прогнать оценку:
+что gate и `skill-evaluate` стартуют с проходного baseline — затем заполни его
+и прогони оценку.
 
 ```bash
 python3 scripts/sgt.py new-skill prompt-evaluate --category governance
 ```
-
-Workflow:
 
 ```mermaid
 flowchart TD
@@ -275,452 +185,227 @@ flowchart TD
 
     G --> H[Скаффолд skills/name/SKILL.md<br/>с TODO-заглушками]
     H --> I[Уточнить frontmatter:<br/>trigger-фразы в description, compatibility]
-    I --> J[Заполнить body:<br/>Purpose / When to use / Phases /<br/>Hard rules]
-    J --> K[3. skill-evaluate новый]
-    K --> L{Score ≥ 80<br/>AND Safety gate clear?}
-    L -->|Нет| M[Применить Top 3 improvements]
+    I --> J[Заполнить body: Purpose / When to use /<br/>Phases / Hard rules]
+    J --> K[3. skill-evaluate новый скил]
+    K --> L{Score ≥ 80<br/>AND safety gate clear?}
+    L -->|Нет| M[Применить top 3 improvements]
     M --> K
-    L -->|Да| N[4. library-audit вся library]
+    L -->|Да| N[4. library-audit вся библиотека]
     N --> O{Library clean?}
-    O -->|Нет: trigger collision<br/>OR naming violation| P[Fix collision/rename]
+    O -->|Нет: trigger collision<br/>или naming violation| P[Fix collision / rename]
     P --> N
     O -->|Да| Q[5. python3 scripts/build_index.py]
-    Q --> R[✅ Готово]
+    Q --> R[Готово]
 ```
 
-**Канонический скелет SKILL.md:**
+Пока заполняешь скаффолдные TODO:
+
+- Держи frontmatter портабельным — не добавляй host-specific полей вроде
+  `allowed-tools:`.
+- Впиши 2–5 конкретных trigger-фраз в `description` — он управляет активацией.
+- Добавь фазы workflow, hard rules, inputs, outputs и verification.
+- Итерируйся по findings `skill-evaluate`, пока score и safety gate не
+  проходят, затем запусти `library-audit` и пересобери `skills/INDEX.jsonl`.
+
+Форма, которую обязан иметь каждый скил, в миниатюре:
 
 ```markdown
 ---
-name: {entity}-{action}              # обязательное, ≤ 64 chars
-description: |                       # обязательное, 80–1024 chars (sweet spot 100–400)
-  {1–2 sentence WHAT}
-  Use when: «trigger phrase 1», «trigger phrase 2», «trigger phrase 3».
-  Output: {что скил производит}.
-compatibility: "Claude Code · ..."   # рекомендуется
-license: MIT                          # рекомендуется
-metainfo:                             # обязательное в этом toolkit (с 1.8.0)
-  category: [governance]              # closed-vocab, см. docs/skill-authoring-standard.md
-  tier: preview                       # stable · preview · experimental · internal
+name: skill-example
+description: One specific workflow. Use when "trigger one", "trigger two".
+metainfo: { category: governance, tier: preview }  # + compatibility, license
 ---
-
-# {Skill Title}
-
-**Purpose:** {1 sentence business value}
-
-## When to use
-
-**Always:**
-- {trigger 1}
-- {trigger 2}
-
-**ESPECIALLY when:**
-- {high-impact case}
-
-**Skip / Don't use for:**
-- {neighbor skill disambiguation}
-
-**Don't skip when:**
-- {counter-rationalization}
-
-## Predecessor / Successor
-
-## Required inputs
-
-| Input | Type | Default | Description |
-
-## Workflow
-
-### Phase 0 — ...
-### Phase N — ...
-
-## Hard rules
-
-- ❌ ...
-- ✅ ...
+> **Skill type:** Detect-only   <!-- required declaration (SKILL021) -->
 ```
 
+Полный канонический скелет — все обязательные секции, схема `metainfo`, куда
+класть запреты и контракт «Skill type» — в
+[skill authoring standard](skill-authoring-standard.md). Скаффолдер выдаёт его
+за тебя; сверяйся со стандартом при ручном редактировании.
+
 ---
 
-## Use case 3 — Регулярный аудит библиотеки
+## Use case 3 — Аудит библиотеки скилов
 
-Раз в неделю / перед релизом — `library-audit` весь skills/ directory.
+Запускай `library-audit` перед релизами и после крупных изменений скилов.
 
 ```mermaid
 flowchart LR
     U[User] -->|«audit my skills»| LA[library-audit]
-    LA --> P0[P0: env setup]
+    LA --> P0[P0: env + rules setup]
     P0 --> P1[P1: handoff contracts]
     P1 --> P2[P2: token budget]
     P2 --> P3[P3: naming convention]
     P3 --> P4[P4: portability tag]
     P4 --> P45[P4.5: multi-tool compat]
-    P45 --> P55[P5.5: metainfo coverage]
-    P55 --> P5[P5: security<br/>secrets/shell/cred paths]
-    P5 --> P6[P6: aggregate + write report]
+    P45 --> P5[P5: security<br/>secrets / shell / cred paths]
+    P5 --> P55[P5.5: metainfo coverage]
+    P55 --> P6[P6: aggregate + write report]
     P6 --> OUT["out/library-audit/<br/>library-audit-{date}.md"]
 ```
 
-**Report structure** (Phase 6 detailed mode):
-
-```
-Layer 1: Category roll-up table (10-second decision)
-Layer 2: Per-category 4-part block (What/Found/Why/Fix)
-Layer 3: Recommendations (impact-ordered)
+```text
+audit my skills
 ```
 
-**Что покрыто:**
+Что проверяет:
 
-| Category | Что проверяет |
+| Категория | Примеры |
 |---|---|
-| Handoff contracts | Bidirectional refs · trigger uniqueness · body-based clarification policy |
-| Token budget | Always-on cost · per-skill body length · claims-vs-actual |
-| Naming | Closed-vocab verbs (find/audit/evaluate/...) · `{entity}-{action}` pattern · kebab-case |
-| Portability tag | `compatibility:` present · `portability:` value valid |
-| Multi-tool compat | `allowed-tools:` absent · no per-skill `rules/{tool}.md` · sequential fallback for `Task`/sub-agent paths |
-| Security | Hardcoded API keys · dangerous shell · credential-path reads (masks secrets) |
-| Metainfo | Обязательные `category` и `tier` · соответствие закрытому словарю (Phase 5.5) |
+| Handoff contracts | Уникальность триггеров, согласованность predecessor/successor |
+| Token budget | Always-on стоимость, раздутые тела скилов |
+| Naming | Kebab-case, закрытый словарь глаголов, паттерн `{entity}-{action}` |
+| Portability | Отсутствующая compatibility-метадата, host-specific поля |
+| Multi-tool compat | `allowed-tools:`, per-skill tool mappings, отсутствие sequential fallback для sub-agent путей |
+| Security | Секреты, credential paths, опасный shell, риски prompt-injection |
+| Metainfo | Обязательные `category` и `tier`, соответствие закрытому словарю |
 
-**State persistence:** аудит большой library может занять минуту-две. Skill
-пишет checkpoint после каждой фазы в `${CWD}/.skill-state/library-audit/`.
-Crash mid-audit → re-run продолжает с last checkpoint.
+Отчёт пишется в `out/library-audit/library-audit-{YYYY-MM-DD}.md`.
+Большие прогоны чекпойнтятся в `.skill-state/library-audit/` — если прогон
+оборвался на середине, повторный запуск скила продолжит с последнего
+checkpoint (см. [State persistence](#state-persistence--resumable-runs)).
 
 ---
 
-## Use case 4 — Запуск deterministic audit engine: CLI, MCP, Docker
+## Use case 4 — Детерминированный audit engine: CLI, MCP, Docker
 
-`library-audit` — это agent skill: он удобен, когда аудит запускает LLM-host.
-Для CI, локальной диагностики и подключения к разным AI-клиентам есть
-отдельный read-only audit engine.
+`library-audit` — это agent skill. Детерминированный audit engine — отдельный
+read-only слой для CI, локальных проверок и MCP-клиентов. Он индексирует
+артефакты проекта, применяет детерминированные правила и возвращает structured
+findings — он не заменяет человеческую или LLM-интерпретацию.
 
-**Важно:** это preview-слой поверх stable skills. Он детерминированно
-индексирует и проверяет agent assets, но не заменяет LLM-интерпретацию
-findings и не применяет патчи сам.
+Выбери способ доставки:
 
-Полный каталог правил с обоснованием — и сравнение детерминированного engine
-с LLM-навыками — см. [`checks-reference.md`](checks-reference.md).
+- **CLI** — `scripts/agent_audit.py`, для локальных проверок и CI-скриптинга.
+- **MCP server** — `scripts/agent_governance_mcp.py`, тот же engine как набор
+  tools для агентов Claude / Codex / Cursor / VS Code.
+- **Docker** — sandboxed MCP image (`--network none`, read-only mount) для CI
+  и zero-install использования.
 
-Архитектура:
+Setup, конфиги MCP/Docker, tools, профили и поведение путей:
+[agent governance engine](agent-governance-engine.md). Полный каталог правил
+с обоснованием: [checks reference](checks-reference.md).
 
-```mermaid
-flowchart LR
-    CORE[agent_audit.py<br/>core + CLI] --> MCP[agent_governance_mcp.py<br/>stdio MCP server]
-    RULES[references/agent-audit-rules.json<br/>rule metadata] --> CORE
-    CORE --> CI[CI / local terminal]
-    MCP --> CLIENT[Codex / Claude / Cursor / VS Code agent]
-    DOCKER[Docker image] --> MCP
-```
-
-### Вариант A — CLI
-
-CLI подходит для локальной проверки, CI и быстрого JSON-отчета без MCP.
+### CLI
 
 ```bash
 # Найти agent-related артефакты
 python3 scripts/agent_audit.py discover .
 
-# Полный аудит проекта, JSON для CI/агента
+# Полный аудит проекта
 python3 scripts/agent_audit.py audit-project . --profile release-ready --format json
 
-# CI-режим: вернуть exit 1, если есть high findings
+# Абсолютный gate: fail, если в дереве есть ХОТЬ ОДИН high-severity finding
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on high
 
-# Scope merge request: аудит только изменённых относительно базовой ветки артефактов
-python3 scripts/agent_audit.py audit-project . --changed-only --base origin/main --fail-on high
+# Scope MR/PR-гейта: аудит только изменённых артефактов, блок только INTRODUCED findings
+python3 scripts/agent_audit.py audit-project . --changed-only --base origin/main --fail-on-new high
 
 # Аудит одного SKILL.md
 python3 scripts/agent_audit.py audit-skill skills/skill-evaluate/SKILL.md
 
-# Каталог правил и объяснение конкретного rule_id
+# Каталог правил
 python3 scripts/agent_audit.py rules
 python3 scripts/agent_audit.py explain-rule SKILL009
 ```
 
-Профили:
+Каждый JSON-отчёт содержит `engine_version` и `rules_version` — вердикт
+прослеживается до версии движка и политики, которые его произвели. Базовые
+safety-правила несут **severity floor**, который custom-каталог не может
+ослабить — набор floor-правил перечислен в
+[checks-reference § Triggering examples and fixes](checks-reference.md#triggering-examples-and-fixes).
 
-| Profile | Когда использовать |
-|---|---|
-| `security` | Только safety-срез: dangerous shell, secrets, credential paths, external trust, local paths |
-| `quality` | Структура, usability и portability без узкого security-only фокуса |
-| `maintainability` | Полный набор правил для регулярной поддержки |
-| `release-ready` | Полный pre-release audit |
+### GitHub Actions
 
-### Вариант B — MCP server
+`.github/workflows/ci.yml` гоняет baseline-проверки этого репозитория. Чтобы
+поставить changed-only gate на consuming GitHub-репо, запусти
+`sgt ci-init --github` и следуй
+[GitHub onboarding guide](github-onboarding.md).
 
-MCP нужен, когда аудит должен вызываться из AI-клиента как tool call.
-Сервер ничего не редактирует: он возвращает structured findings, а LLM уже
-объясняет риски и предлагает правки.
+### GitLab CI — gate на merge request
 
-Локальный запуск:
-
-```bash
-python3 scripts/agent_governance_mcp.py
-```
-
-Пример MCP config:
-
-```json
-{
-  "mcpServers": {
-    "agent-governance": {
-      "command": "python3",
-      "args": ["/path/to/skill-governance-toolkit/scripts/agent_governance_mcp.py"],
-      "env": {
-        "AGENT_GOVERNANCE_ROOT": "/path/to/project"
-      }
-    }
-  }
-}
-```
-
-По умолчанию MCP server принимает только пути внутри своей рабочей директории.
-`AGENT_GOVERNANCE_ROOT` явно задает эту границу. `AGENT_GOVERNANCE_DEBUG=1`
-включает tracebacks в MCP-ошибках; без него ошибки санитизированы.
-
-Каталог rule metadata живет в `references/agent-audit-rules.json`. Для теста
-или корпоративного каталога можно задать `AGENT_GOVERNANCE_RULES_PATH`.
-Override-каталог обязан содержать все `rule_id`, которые использует engine;
-если rule отсутствует, audit fail-fast.
-
-**Policy guardrails (pilot):** core safety rules SKILL001/002/009/014/015 имеют
-severity floor — каталог, который опускает их ниже `high`, отклоняется при
-загрузке. Готовый override лежит в `references/agent-audit-config.example.json`:
-thresholds/profiles переопределяют дефолты, vocabularies/patterns расширяют их, а
-security-gate можно только расширять, но не ослаблять. Подробности — в
-[`checks-reference.md`](checks-reference.md) § Extending the checks (там же про
-separation-of-duties через `CODEOWNERS`).
-
-Доступные tools:
-
-| Tool | Что делает |
-|---|---|
-| `discover_agent_assets` | Находит `AGENTS.md`, `SKILL.md`, prompts, agent configs, aliases, MCP/plugin configs |
-| `audit_skill` | Проверяет один `SKILL.md` |
-| `audit_project` | Проверяет весь проект и возвращает findings с `severity`, `file`, `line`, `rule_id` |
-| `explain_rule` | Объясняет конкретное правило |
-| `get_rule_catalog` | Возвращает весь каталог правил |
-
-### Вариант C — Docker
-
-Docker удобен для воспроизводимого запуска в CI или корпоративной среде.
-Проект монтируется read-only, сеть можно отключить.
-
-```bash
-# Собрать image
-docker build -t agent-governance-mcp:local .
-
-# Запустить MCP server против текущего проекта
-docker run --rm -i \
-  --network none \
-  -v "$PWD:/workspace:ro" \
-  agent-governance-mcp:local
-```
-
-Image запускается не от root. Если в CI checkout использует строгие file
-permissions, запускай с UID/GID host-пользователя:
-
-```bash
-docker run --rm -i \
-  --network none \
-  --user "$(id -u):$(id -g)" \
-  -v "$PWD:/workspace:ro" \
-  agent-governance-mcp:local
-```
-
-Пример MCP config через Docker:
-
-```json
-{
-  "mcpServers": {
-    "agent-governance": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "--network",
-        "none",
-        "-v",
-        "/path/to/repo:/workspace:ro",
-        "agent-governance-mcp:local"
-      ]
-    }
-  }
-}
-```
-
-В Docker передавай `root` как `/workspace`.
-
-**Минусы Docker-варианта:**
-- нужен установленный и запущенный Docker daemon;
-- пути снаружи и внутри контейнера отличаются (`/path/to/repo` vs `/workspace`);
-- на macOS/Windows volume mount может быть медленнее;
-- если нужно читать файлы вне repo, их надо явно монтировать;
-- для stdio MCP обязателен `-i`, иначе сервер завершится сразу.
-
-**Безопасный baseline:** `--network none` + `-v "$PWD:/workspace:ro"`.
-
-### Вариант D — GitHub Actions
-
-В репозитории есть CI workflow:
-
-```text
-.github/workflows/ci.yml
-```
-
-Он проверяет:
-
-| Job | Что запускает |
-|---|---|
-| `audit` | `scripts/audit.sh`, behavior tests, release-ready audit gate |
-| `docker` | Docker build, MCP `tools/list`, Docker `audit_project /workspace` |
-
-Если добавляешь новый skill, меняешь rule catalog или MCP server, CI должен
-оставаться зеленым. Для локального воспроизведения используй команды из
-раздела «Статус компонентов и готовность к GitHub».
-
-**Self-CI на GitLab:** для зеркала на GitLab в корне репо лежит ещё и
-`.gitlab-ci.yml` — GitLab-близнец `ci.yml`. Он гоняет полный self-CI
-(`scripts/audit.sh`, behavior tests, release-ready gate, плюс джобу
-PowerShell-паритета установщика и опциональный Docker smoke test) на каждом
-merge request и каждом push в default branch. Это CI *самого* toolkit'а — не
-копируй его в consumer-репо; потребителям нужен changed-only gate из
-варианта E ниже.
-
-### Вариант E — GitLab CI: gate на merge request
-
-Готовый шаблон лежит в `references/ci/gitlab-ci.yml`. Скопируй его в корень
-целевого репозитория маркетплейса как `.gitlab-ci.yml`. Он аудитит только
-изменённые в MR скиллы/агенты по многоуровневой схеме:
+Готовый шаблон лежит в `references/ci/gitlab-ci.yml` — скопируй его в корень
+consuming-репозитория как `.gitlab-ci.yml` (или запусти `sgt ci-init --gitlab`).
+Он аудитит только скилы/агенты, изменённые в merge request, по многоуровневой
+схеме. **Канонический rollout-гайд** — env vars, запиненный toolkit SHA, auth
+клона, переопределение образов для внутренних registry, конфиг постера
+MR-комментариев и точные тестовые команды — это
+[GitLab onboarding](gitlab-onboarding.md).
 
 ```mermaid
 flowchart TD
-    MR[MR открыт или обновлён] --> CH{Изменены<br/>skills/agents/AGENTS.md?}
-    CH -- нет --> SKIP[Gate пропущен]
-    CH -- да --> SCOPE[audit-project --changed-only<br/>--base CI_MERGE_REQUEST_DIFF_BASE_SHA]
-    SCOPE --> BLOCK{High-severity<br/>finding?}
-    BLOCK -- да --> FAIL[skill-gate:block падает<br/>merge заблокирован]
-    BLOCK -- нет --> PASS[skill-gate:block проходит]
-    SCOPE --> ADV[skill-gate:advisory<br/>JSON-артефакт + коммент в MR]
-    ADV --> NOTE[Идемпотентный коммент,<br/>не блокирует]
+    MR[MR открыт или обновлён] --> NOOP[noop job: всегда зелёная<br/>гарантирует pipeline каждому MR]
+    MR --> CH{Изменены<br/>skills/agents/AGENTS.md?}
+    CH -- нет --> SKIP[Gate-джобы пропущены]
+    CH -- да --> SUP[Гигиена подавлений:<br/>list-suppressions<br/>просроченная запись блокирует]
+    SUP --> SCOPE[audit-project --changed-only<br/>--base CI_MERGE_REQUEST_DIFF_BASE_SHA]
+    SCOPE --> NEW{--fail-on-new:<br/>INTRODUCED high finding?}
+    NEW -- да --> FAIL[skill-gate:block падает<br/>merge заблокирован]
+    NEW -- нет --> PASS[skill-gate:block проходит]
+    SCOPE --> ADV[skill-gate:advisory<br/>skill-audit.json + идемпотентный коммент в MR]
+    FAIL -. SGT_FAIL_MODE=advisory .-> PASS
 ```
 
 | Job | Команда | Эффект |
 |---|---|---|
-| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on-new high` | Впервые внесённые high-severity findings роняют pipeline и блокируют merge (уже существовавшие на затронутых legacy-ассетах не блокируют) |
+| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on-new high` | Впервые внесённые high-severity findings роняют pipeline и блокируют merge (уже существовавшие high findings на затронутых legacy-ассетах не блокируют) |
 | `skill-gate:advisory` | то же с `--fail-on none --format json` + `post_mr_comment.py` | Не блокирует; публикует `skill-audit.json` и идемпотентный коммент в MR |
-| `noop` | `echo` на `alpine` | Всегда-зелёная заглушка; гарантирует pipeline для каждого MR |
+| `noop` | `echo` на `alpine` | Всегда-зелёная заглушка; с включённым GitLab «Pipelines must succeed» гарантирует pipeline для каждого MR |
 
-Ключевые механики шаблона (держи в синхроне с `references/ci/gitlab-ci.yml`):
+Операционные заметки:
 
-- **Auth клона через `CI_JOB_TOKEN`.** `SGT_REPO` использует per-job токен,
-  который GitLab подставляет автоматически
-  (`https://gitlab-ci-token:${CI_JOB_TOKEN}@<host>/...`) — PAT для клона не
-  нужен. Для приватного зеркала toolkit'а дополнительно добавь
-  consumer-проект в allowlist job-токена: проект toolkit → Settings → CI/CD →
-  Token Access → «Limit access TO this project» → добавить маркетплейс-репо.
-  На зеркале с public/internal visibility токен просто игнорируется.
-- **Переопределение образов для внутренних registry.** `SGT_IMAGE` (по
-  умолчанию `python:3.12-slim`; нужны python3 + git — без git джоба ставит его
-  через apt) и `SGT_NOOP_IMAGE` (по умолчанию `alpine:3.20`) тянутся из Docker
-  Hub. На air-gapped / egress-restricted инстансе переопредели обе как
-  group/project CI/CD variables, указав на внутреннее зеркало registry.
-- **Гигиена подавлений в блокирующей джобе.** На каждом governed MR
-  выполняется `agent_audit.py list-suppressions --root .` — уже
-  **просроченное** подавление блокирует: floor-finding, который оно глушило,
-  снова активен. Ранний сигнал `list-suppressions --expiring-within 30`
-  запускается **только когда сам MR правит `references/audit-ignore.json`** —
-  автор, трогающий подавления, и есть правильный владелец их продления;
-  остальной флот никогда не блокируется чужой скоро-истекающей записью.
-- **Kill-switch.** Поставь org/project CI/CD variable `SGT_FAIL_MODE=advisory`,
-  чтобы перевести gate во всём флоте в non-blocking режим (exit 0 даже при
-  блокирующем finding'е) без правки запиненного шаблона.
-
-`--changed-only` сравнивает закоммиченный `HEAD` с `--base` (git ref) через
-`base...HEAD` three-dot diff — автор отвечает только за закоммиченные сущности,
-которые внёс его MR. Незакоммиченные правки рабочего дерева в scope не попадают.
-Шаблон ставит `GIT_DEPTH: 0`, чтобы базовый коммит был доступен. Локальный запуск
-через `sgt gate` по той же причине падает на «грязном» дереве — сначала
-закоммить или сделай stash, либо передай `--allow-dirty`, чтобы проверить `HEAD`.
-
-Gate-джобы запускаются только на MR, затрагивающих governed-ассет
-(`rules:changes`). Если включить в GitLab **«Pipelines must succeed»**, MR без
-governed-ассетов не создаст pipeline и заблокируется навсегда — джоба `noop`
-(только на `merge_request_event`, без фильтра `changes:`) всегда запускается и
-проходит, поэтому у каждого MR есть зелёный pipeline. Не добавляй к ней `changes:`.
-
-Обработка base-ref:
-- **Пустой `--base`** с `--changed-only` (например, отсутствует
-  `CI_MERGE_REQUEST_DIFF_BASE_SHA`) ⟶ **выход с кодом 2 (fail closed)** с
-  предупреждением в stderr — движок отказывается молча аудить всё дерево (молчаливое
-  переключение scope могло бы блокировать чужие MR на легаси, либо пропустить
-  pipeline, который ничего не проверил). Перезапусти на merge-request pipeline или
-  убери `--changed-only`.
-- **Непустой, но плохой/недостижимый ref** ⟶ выход с кодом 2 и санитизированным
-  сообщением.
-
-Каждый JSON-отчёт содержит `engine_version` и `rules_version` — вердикт
-прослеживается до версии движка и политики.
-
-#### Постер комментариев в MR
-
-`scripts/post_mr_comment.py` превращает advisory-`skill-audit.json` в один
-идемпотентный комментарий MR, сгруппированный по severity. Повторный запуск
-pipeline обновляет тот же комментарий (по скрытому маркеру), а не плодит дубли.
-
-```bash
-# Предпросмотр комментария без вызова API
-python3 scripts/post_mr_comment.py skill-audit.json --dry-run
-```
-
-| Параметр | Источник | Назначение |
-|---|---|---|
-| `--api-url` | `CI_API_V4_URL` | База GitLab API (auto в CI) |
-| `--project-id` | `CI_PROJECT_ID` | Целевой проект (auto в CI) |
-| `--mr-iid` | `CI_MERGE_REQUEST_IID` | Целевой MR (auto в CI) |
-| `--token-env` | `GITLAB_TOKEN` | **Имя** env-переменной с токеном (scope `api`) |
-
-Токен читается из переменной окружения по имени — никогда не передаётся inline.
-Без токена (или в `--dry-run`) постер печатает комментарий и пропускает вызов
-API. Только stdlib: HTTP через `urllib`, без SDK.
+- `--changed-only` сравнивает закоммиченный `HEAD` с `--base` (three-dot diff),
+  так что автор отвечает только за закоммиченные сущности, которые тронул его
+  MR. Локальный запуск гейта через `sgt gate` fail-fast'ится на «грязном»
+  дереве — сначала закоммить или сделай stash, либо передай `--allow-dirty`.
+  Граничные случаи base-ref (пустой base падает закрыто с exit 2, плохие refs,
+  `GIT_DEPTH`) специфицированы в [CLI reference](cli-reference.md).
+- Блокирующая джоба также гоняет гигиену подавлений: уже просроченное
+  подавление блокирует MR. Процедура и SLA:
+  [suppression runbook](security-suppression-runbook.md).
+- Kill-switch: CI/CD-переменная `SGT_FAIL_MODE=advisory` переводит gate во
+  всём флоте в non-blocking режим — процедура инцидента в
+  [security incident runbook](security-incident-runbook.md).
 
 ---
 
 ## Use case 4.5 — Проверки безопасности артефактов и delta-gate (с 1.12.0)
 
 Помимо структуры скила, движок сканирует **каждый** управляемый артефакт на
-проблемы безопасности контента:
+проблемы безопасности контента, по этим семействам правил:
 
-| Правило | Severity | Что детектит |
-|---|---|---|
-| `SEC001` / `SEC002` | high | Bidi/direction-mark и невидимые/format/tag символы, которыми прячут инъекции текста |
-| `SEC003` | medium | Homoglyph-тайпсквоттинг — латинское слово/URL-хост, прячущее кириллический/греческий look-alike |
-| `SEC010` | high | Опасная инструкция (деструктивный shell, небезопасный git) в не-скил артефакте |
-| `SEC011` | high | Inline-секрет в не-скил артефакте |
-| `SEC012` | medium | Путь к файлу учётных данных в не-скил артефакте |
-| `REF001`–`REF004` | high–info | Небезопасные ссылки: не-whitelisted скрипт, ссылка за пределы repo-root, битая ссылка, внешний URL |
-| `SCR001`–`SCR003` | high | Контент *referenced*-скрипта: эвристика env-exfil, опасный shell, inline-секрет |
-| `MCP001` / `MCP002` | high / low | Скилл использует `mcp__server__*` без объявления в `metainfo.requires.mcp` (/ объявил, но не использует) |
-| `HOOK001` / `HOOK002` | high | Команда хука (`.claude/settings*.json`, `plugin.json`, `hooks/*`) запускает опасный shell или утекает секреты |
+- `SEC001`–`SEC003` — скрытые bidi/невидимые символы, homoglyph-тайпсквоттинг.
+- `SEC010`–`SEC012` — опасные инструкции, inline-секреты и credential paths
+  в не-скил артефактах.
+- `REF001`–`REF004` / `SCR001`–`SCR003` — небезопасные ссылки и контент
+  referenced-скриптов (exfiltration, опасный shell, секреты).
+- `MCP001`/`MCP002` — использование `mcp__server__*` без объявления в
+  `metainfo.requires.mcp` (и наоборот).
+- `HOOK001`/`HOOK002` — команды хуков, запускающие опасный shell или
+  утекающие секреты.
 
 Полный каталог с примерами срабатывания и чистыми фиксами:
-[`checks-reference.md`](checks-reference.md).
+[checks reference](checks-reference.md).
 
 ### Delta-gate — блокирует только то, что вносит MR
 
-Блокирующая job в CI и локальный `sgt gate` используют `--fail-on-new`, а не
-абсолютный `--fail-on`. Блокируются только findings, которые MR **внёс** относительно
-базовой ветки; уже существующие остаются advisory. Это позволяет включить набор
-правил поверх легаси-библиотеки без лавины ошибок — см.
-[`security-rollout-guide.md`](security-rollout-guide.md).
+Блокирующая CI-джоба и локальный `sgt gate` используют `--fail-on-new`, а не
+абсолютный `--fail-on`. Они блокируют только findings, которые MR **внёс**
+относительно базовой ветки; уже существующие остаются advisory. Это позволяет
+команде включить набор правил поверх легаси-библиотеки без лавины ошибок — см.
+[security rollout guide](security-rollout-guide.md).
 
 ```bash
-# Воспроизвести точный вердикт блокирующей CI-job локально (changed-only delta-gate)
+# Воспроизвести точный вердикт блокирующей CI-джобы локально (changed-only delta-gate)
 sgt gate --base main
 
 # Эквивалент на сыром движке
 python3 scripts/agent_audit.py audit-project . --changed-only --base main --fail-on-new high
 ```
+
+Каждая подкоманда `agent_audit.py` и `sgt`, флаг, env var и exit code —
+включая два слоя scoping (`--changed-only` — scope файлов vs `--fail-on-new` —
+scope findings) — задокументированы в [CLI reference](cli-reference.md).
 
 ### Подавление findings
 
@@ -731,103 +416,71 @@ python3 scripts/agent_audit.py audit-project . --changed-only --base main --fail
 
 Сломанное/просроченное/без reason подавление fail-safe — finding остаётся, а
 запись `IGNORE001/002/003` всплывает. Полная процедура, SLA и break-glass:
-[`security-suppression-runbook.md`](security-suppression-runbook.md).
+[suppression runbook](security-suppression-runbook.md).
 
-> **Язык findings.** Сообщения и suggestions движка — **только на английском**
-> (locale-overlay пока нет). Объяснения правил на русском см. в этом разделе и
-> [`checks-reference.md`](checks-reference.md); для конкретного finding'а
-> `python3 scripts/agent_audit.py explain-finding <RULE_ID>` печатает fix и путь
-> подавления (rule_id и severity — language-neutral). Будущий
-> `references/agent-audit-rules.ru.json` overlay — планируемое полное решение.
-
-### Инструменты оператора
-
-```bash
-# Проверить org config/overlay паттерны на ReDoS-бюджет до запуска в CI
-python3 scripts/agent_audit.py validate-config
-
-# Напечатать как фиксить правило + правильный путь подавления
-python3 scripts/agent_audit.py explain-finding SEC011
-
-# Инвентарь всех активных подавлений (exit non-zero если есть просроченные/истекающие)
-python3 scripts/agent_audit.py list-suppressions --expiring-within 30
-
-# GitHub workflow annotations (inline на diff в PR)
-python3 scripts/agent_audit.py audit-project . --fail-on high --format github
-
-# Fleet kill-switch — форсирует non-blocking exit 0 во всех pipeline
-SGT_FAIL_MODE=advisory python3 scripts/agent_audit.py audit-project . --fail-on high
-```
+Инструменты оператора — `validate-config`, `explain-finding`,
+`list-suppressions`, аннотации `--format github`: см.
+[CLI reference](cli-reference.md).
 
 ### Два контроля, два момента — качество vs гейт
 
-Детерминированный гейт выше проверяет **только безопасность и структуру** — о
-*качестве* он не судит. Качество (D1–D9: ясность, примеры, специфичные триггеры)
-скорит **LLM-навык `skill-evaluate`** (Use case 1–2), который ты запускаешь
-**локально при авторинге** — в MR-гейте он не работает, потому что суждение LLM
-недетерминированно и не должно блокировать merge.
-
-```text
-Авторинг (ты, локально)                   MR / CI (автоматом)
-────────────────────────────             ────────────────────────────
-skill-evaluate  (LLM)          ─push──▶   sgt gate / agent_audit.py (детерминир.)
-• качество: D1–D9                         • безопасность: SEC / REF / SCR / MCP / HOOK
-• ясность, примеры, триггеры              • структура: frontmatter, нейминг, бюджеты
-• недетерминированно — для авторинга      • воспроизводимо — блокирует merge
-```
-
-Зелёный MR значит «безопасно и корректно по структуре», **а не** «качественно» —
-запусти `skill-evaluate` до push для второй половины. Они дополняют друг друга, не
-заменяют. Полный CLI-справочник: [cli-reference.md](cli-reference.md).
+Детерминированный гейт проверяет **безопасность и структуру**; качество
+(D1–D9) скорит LLM-навык `skill-evaluate`, который ты запускаешь локально при
+авторинге — он никогда не блокирует merge. Зелёный MR значит «безопасно и
+корректно по структуре», **а не** «качественно». Полная картина, включая
+side-by-side диаграмму, — в
+[the governance gate for authors](gate-for-authors.md).
 
 ---
 
 ## Use case 5 — Сделать скил портабельным
 
-Сценарий: есть Claude-Code-only скил с `allowed-tools:`, `paths:`, org-specific путями. Хочешь чтобы работал везде.
+Используй `skill-build-portable`, когда скил привязан к одному host или
+организации.
 
 ```mermaid
 sequenceDiagram
     actor U as User
     participant B as skill-build-portable
     participant S as Source SKILL.md
-    participant T as Target (.portable.md)
+    participant T as Target portable file
 
     U->>B: «universalize this skill»<br/>OUTPUT_MODE=preview
     B->>S: Phase 0: read source
-    B->>B: Phase 1: audit (F1–F7 + B1–B7 + S1–S3)
+    B->>B: Phase 1: audit (F1-F7 + B1-B7 + S1-S3)
     B->>B: Phase 2: plan transformations
-    B-->>U: 🔴 BLOCKERS + 🟡 warnings + diff preview
-    U->>B: «apply with OUTPUT_MODE=new-file»
-    B->>T: write target
-    B-->>U: diff report + Residual concerns
-    Note over U: User reviews .bak / diff before merge
+    B-->>U: Phase 3: diff preview<br/>blockers + warnings
+    U->>B: Phase 4: confirm<br/>apply with OUTPUT_MODE=new-file
+    B->>T: Phase 4: write target
+    B->>B: Phase 5: verify portability<br/>(re-audit the output)
+    B-->>U: diff report + residual concerns
+    Note over U: Ничего не пишется до diff в Phase 3<br/>и подтверждения в Phase 4
 ```
 
-**Что трансформируется автоматически:**
+Типичные проблемы, которые он чинит:
 
-| Rule | Detection | Action |
+| Проблема | Пример | Ожидаемый фикс |
 |---|---|---|
-| F1 `allowed-tools:` | grep frontmatter | удалить · добавить informational note в Hard rules |
-| F2 `type:`, `status:`, `last_updated:` | grep frontmatter | удалить (не в agentskills.io spec) |
-| F4 Claude-only fields (`paths`, `hooks`, `model`, `effort`...) | grep frontmatter | удалить · опц preserve as comment если `KEEP_CLAUDE_FALLBACK=true` |
-| F7 missing `compatibility:` | grep frontmatter | добавить |
-| B1 org-specific paths (`_audits/`, `outputs/`, `materials/raw/`) | grep body | replace на `out/...` |
-| B5 per-skill `rules/{tool}.md` directory | ls | flag for removal · merge content в repo-level `references/` |
-| B6 `Task` usage без sequential fallback | grep body | insert fallback note |
+| Host-specific frontmatter | `allowed-tools:` | Удалить из портабельных скилов |
+| Claude-only поля | `model`, `effort`, `hooks`, `paths` | Удалить или перенести в host-specific packaging |
+| Организационные пути | `_audits/`, внутренние папки | Заменить на портабельные пути `out/...` |
+| Per-skill tool mappings | `rules/codex.md` внутри одного скила | Перенести в repo-level `references/{tool}-tools.md` |
+| Отсутствующий fallback | `Task` без sequential fallback | Добавить non-subagent fallback с эквивалентным output |
 
-**Что НЕ трансформируется автоматически** (residual concerns —
-пользователь смотрит вручную):
-- Description > 1024 chars → требует rewrite (mission-critical для активации).
-- Description < 80 chars → too short, expand вручную.
-- Body > 500 lines → split рекомендуется но не auto-split.
+Полный каталог правил F1–F7 / B1–B7 / S1–S3 (что трансформируется
+автоматически vs флагается как residual concern для ручного ревью) живёт в
+`skills/skill-build-portable/references/audit-rules.md`.
+
+Рекомендованный workflow: начни с `universalize this skill` +
+`OUTPUT_MODE=preview`, просмотри diff, затем пиши в новый файл или явный
+output path. Не переписывай source-файлы, пока diff не отревьюен.
 
 ---
 
 ## Use case 6 — Сравнить локальный скил с корпоративным
 
-Сценарий: команда А выработала local skill, в org-wide репе есть похожий
-corporate. Хочешь понять что delta + merge / adopt / keep.
+Используй `skill-compare`, когда локальный скил пересекается с корпоративной
+или upstream-версией.
 
 ```mermaid
 sequenceDiagram
@@ -839,77 +492,69 @@ sequenceDiagram
     U->>C: «compare with corporate»<br/>LOCAL_SKILL=path · CORPORATE_DIR=path
     C->>L: Phase 0: read local
     C->>CR: Phase 1: find candidates (overlap signals)
-    C->>C: Phase 2: deep comparison<br/>(SHARED/CORP_ONLY/LOCAL_ONLY/CONFLICT)
-    C->>C: Phase 3: classify each diff<br/>(ADOPT/PROPOSE/KEEP/RULES_FILE)
+    C->>C: Phase 2: deep comparison<br/>SHARED / CORP_ONLY / LOCAL_ONLY / CONFLICT
+    C->>C: Phase 3: classify each diff<br/>ADOPT / PROPOSE / KEEP / RULES_FILE
     C->>C: Phase 4: recommendation
-    C-->>U: Report + optional draft blocks<br/>or OUTPUT_DIR artifacts
+    C-->>U: report + optional draft blocks<br/>or OUTPUT_DIR artifacts
 ```
 
-**Четыре рекомендации:**
+```text
+compare with corporate
+LOCAL_SKILL=skills/example/SKILL.md
+CORPORATE_DIR=/path/to/corporate/skills
+```
 
-| Recommendation | Когда |
-|---|---|
-| **USE_CORPORATE** | LOCAL_ONLY items ≤ 1 AND corporate quality ≥ local |
-| **KEEP_LOCAL** | LOCAL_ONLY > 5 OR local quality clearly exceeds corporate |
-| **MERGE** | CORP_ONLY ≥ 2 AND LOCAL_ONLY ≥ 2 AND no unresolved conflicts |
-| **RULES_FILE** | 3+ LOCAL_ONLY items are project-specific context |
+Рекомендации:
 
-**Draft output contract:**
+| Recommendation | Смысл | Критерий Phase 4 |
+|---|---|---|
+| `USE_CORPORATE` | Корпоративный скил покрывает локальную потребность и как минимум не хуже | `LOCAL_ONLY` ≤ 1 AND corporate quality ≥ local |
+| `KEEP_LOCAL` | Локальный скил несёт важное project-specific поведение | `LOCAL_ONLY` > 5 OR local quality clearly exceeds corporate |
+| `MERGE` | Обе версии содержат полезный неконфликтующий контент | `CORP_ONLY` ≥ 2 AND `LOCAL_ONLY` ≥ 2 AND no unresolved conflicts |
+| `RULES_FILE` | Local-only контенту место в project rules, а не в shared-скиле | 3+ `LOCAL_ONLY` items — project-specific context |
 
-| `OUTPUT_DIR` | Поведение |
-|---|---|
-| не задан | merged SKILL.md / `rules/{project}.md` показываются как fenced blocks внутри отчета |
-| задан | draft artifacts пишутся в `OUTPUT_DIR` или `out/skill-compare/`; source files не трогаются |
+Контракт draft-вывода: без `OUTPUT_DIR` черновики merged-файлов появляются как
+fenced blocks внутри отчёта; с ним артефакты пишутся в `OUTPUT_DIR`
+(или `out/skill-compare/`).
 
-`skill-compare` никогда не изменяет local или corporate source skill. External
-corporate content считается untrusted input: не выполнять scripts/commands,
-на которые оно ссылается.
+`skill-compare` не изменяет локальный или корпоративный source-скил. Считай
+внешний корпоративный контент untrusted input: не запускай скрипты и команды,
+на которые он ссылается.
 
 ---
 
-## Use case 7 — Bootstrap integrations (CRG / repomix / serena)
+## Use case 7 — Bootstrap опциональных интеграций
 
-Сценарий: новый член команды клонировал toolkit. Нужно поставить
-дополнительные инструменты для code review.
+Используй `integration-init`, чтобы поставить опциональные тулы и
+инжектировать их документацию в маркированные секции `AGENTS.md` и
+`agents/code-reviewer.md`.
 
-```
-User: /integration-init
-```
-
-`integration-init` детектит environment, спрашивает через host clarification flow
-которые тулы ставить, запускает native installers, инжектит per-tool
-документацию в `AGENTS.md` и `agents/code-reviewer.md` через paired markers.
-
-**Что доступно:**
-
-| Integration | Что добавляет | Метрика |
-|---|---|---|
-| **code-review-graph** (CRG) | Tree-sitter + SQLite graph для blast-radius queries | ~8.2× token reduction — **внешняя метрика upstream на 6 OSS репах, локально не воспроизведена** (см. `docs/benchmarks.md`) |
-| **repomix** | Один-shot packer (repo → один XML/markdown файл) | Orthogonal к CRG — для small repos / external review |
-| **serena** | LSP-bridge для semantic refactoring (rename, find-refs) | Orthogonal — semantic vs structural |
-
-**Non-interactive mode:**
-
-```bash
-./scripts/init.sh --all                           # все три, defaults
-./scripts/init.sh --with crg --use-cli            # CRG only, CLI mode
-./scripts/init.sh --advise-only --with crg,repomix  # print commands
+```text
+/integration-init
 ```
 
-**Hard prereq gating:** если выбрал CRG но `pipx` нет — Phase 0 fail'ится
-с понятной ошибкой ДО попытки install (защита от mid-install crash).
+Доступные интеграции:
+
+| Интеграция | Что добавляет |
+|---|---|
+| code-review-graph | Tree-sitter + SQLite graph для blast-radius запросов |
+| repomix | One-shot упаковка репозитория для внешнего ревью |
+| serena | LSP-backed поддержка semantic refactoring |
+
+Non-interactive helper: `./scripts/init.sh --all` (также `--with crg,repomix`,
+`--use-cli`, `--advise-only`). Если prerequisite отсутствует, скил должен
+упасть до частичной установки.
 
 ---
 
 ## Use case 8 — Code review agent
 
-`agents/code-reviewer.md` — специализированный read-only reviewer, которого
-orchestrator-скил может диспатчить через `Task`, если host поддерживает
-sub-agents.
+`agents/code-reviewer.md` — специализированный read-only ревьюер, которого
+orchestrator-скил может диспатчить, если host это поддерживает.
 
 Фокус — TypeScript. Что репортит:
 
-| Category | Примеры |
+| Категория | Примеры |
 |---|---|
 | Correctness | Runtime-баги, сломанные edge cases |
 | Security | Обращение с секретами, unsafe shell, injection-риски |
@@ -928,361 +573,88 @@ sub-agents.
 
 ## State persistence — resumable runs
 
-Каждый multi-phase скил пишет checkpoint после каждой дорогой фазы. Crash
-/ timeout / Ctrl-C — следующий вызов продолжит с last checkpoint.
+Каждый multi-phase скил пишет checkpoint после каждой дорогой фазы. При
+crash, timeout или Ctrl-C следующий вызов продолжит с последнего checkpoint.
 
 ```mermaid
 flowchart LR
-    Start([Phase 0]) --> Save0["checkpoint.py start<br/>→ run_id"]
+    Start([Phase 0]) --> Save0["checkpoint.py start<br/>-> run_id"]
     Save0 --> P1[Phase 1]
     P1 --> Save1["checkpoint.py save-phase<br/>--phase P1 --output {...}"]
     Save1 --> P2[Phase 2]
     P2 --> Save2["save-phase --phase P2"]
     Save2 --> Pn[...]
-    Pn --> Done["checkpoint.py complete<br/>→ completed_at set"]
+    Pn --> Done["checkpoint.py complete<br/>-> completed_at set"]
 
     Save1 -.crash.-> Resume[Next invocation:<br/>list-resumable]
     Resume --> P2
 ```
 
-**RESUME modes:**
-
-| Mode | Скил use case |
-|---|---|
-| `auto` (default for validators) | Silent resume of latest unfinished run. Detect-only skills stay detect-only. |
-| `ask` (default for gateways) | Clarification prompt: resume latest / pick specific / start fresh. |
-| `new` | Ignore prior state, start fresh. |
-
-**Stale-run filter:** runs older than 24h (по `last_updated`) можно
-отфильтровать через `checkpoint.py list-resumable --max-age-hours 24`.
-
-State location: `${CWD}/.skill-state/{skill-name}/run-{utc-ts}.json`
-(gitignored). Schema и helper CLI — `references/checkpointing.md`.
+State живёт в `${CWD}/.skill-state/{skill-name}/run-{utc-ts}.json` (gitignored).
+Схема checkpoint, helper CLI, per-skill дефолты resume-режима
+(`auto` / `ask` / `new`) и фильтр stale-прогонов специфицированы в
+[references/checkpointing.md](../references/checkpointing.md) — та таблица и
+есть single source of truth.
 
 ---
 
-## Установка toolkit для команды
+## Установка и обновления
 
-### Быстрый старт через `sgt` (одна команда)
-
-Фасад `sgt` оборачивает частые сценарии — не нужно помнить каждый скрипт:
+Самый быстрый путь:
 
 ```bash
 git clone https://github.com/{your-org}/skill-governance-toolkit ~/tools/skill-toolkit
 cd ~/my-project
-python3 ~/tools/skill-toolkit/scripts/sgt.py init           # установка с подсказками + проверка
-python3 ~/tools/skill-toolkit/scripts/sgt.py init --yes      # без вопросов (Claude + project)
+python3 ~/tools/skill-toolkit/scripts/sgt.py init    # установка с подсказками + проверка
 ```
 
-Toolkit живёт на приватном GitLab? Клонируй с внутреннего хоста
-(`https://gitlab.example.com/{your-group}/skill-governance-toolkit`),
-авторизуясь через `glab auth login`, PAT или read-only deploy token — всё
-после клона идентично. Подробности:
-[README § Private GitLab instance](../README.md#private-gitlab-instance--hosting--auth-setup).
-
-| Команда | Назначение |
-|---|---|
-| `sgt init` | Установка с выбором host + scope, затем проверка |
-| `sgt doctor` / `sgt skills` | Health-check / список установленных навыков |
-| `sgt new-skill <name> --category <vocab>` | Скаффолд чистого по governance `SKILL.md` |
-| `sgt ci-init --github` / `--gitlab` | Генерация changed-only гейта PR/MR (SHA уже подставлен) |
-| `sgt uninstall [--dry-run]` | Удаляет только файлы toolkit; ваш контент сохраняется |
-
-Одна страница: [`QUICKSTART.md`](../QUICKSTART.md).
-
-Два варианта distribution — выбрать один или скомбинировать.
-
-### Variant A — Plugin marketplace (рекомендуется)
-
-```bash
-# Claude Code:
-/plugin marketplace add {your-org}/skill-governance-toolkit
-/plugin install skill-governance-toolkit@skill-governance-marketplace
-
-# OpenAI Codex CLI:
-codex plugins install {your-org}/skill-governance-toolkit
-
-# Google Gemini CLI:
-gemini extensions install https://github.com/{your-org}/skill-governance-toolkit
-
-# GitHub Copilot: читает AGENTS.md нативно из project root — никакой
-# install command не нужен, только положить файлы в репо.
-
-# Cursor v2.2+: читает AGENTS.md нативно. Submodule или dotfiles.
-```
-
-### Variant B — Interactive installer (recommended для новичков)
-
-```bash
-git clone https://github.com/{your-org}/skill-governance-toolkit ~/tools/skill-toolkit
-cd ~/tools/skill-toolkit
-
-./install.sh                  # interactive: спросит host + scope, auto-detect upgrade
-./install.sh --yes-default    # non-interactive: Claude + project scope (для CI)
-./install.sh --force          # interactive, но force-wipe target dirs перед copy
-```
-
-Windows / cross-platform PowerShell users:
-```powershell
-./install.ps1                 # interactive (PowerShell 7+)
-./install.ps1 -Force          # force-wipe + reinstall
-./install.ps1 -YesDefault     # non-interactive default
-```
-
-### Variant C — Advanced installer с явными flags
-
-Для продвинутых пользователей которые хотят полный контроль без prompt'ов:
-
-```bash
-./scripts/install.sh --all --global              # все 5 рантаймов, global
-./scripts/install.sh --claude --project --upgrade   # один host, clean upgrade
-./scripts/install.sh --help                      # full flag list
-```
-
-### Variant D — Выборочная установка (с 1.8.0)
-
-По мере роста корпуса навыков ставить «всё» становится бессмысленно: команды
-получают навыки, которые им не нужны, и тратят токены на их activation. С
-1.8.0 у каждого скила во frontmatter есть блок `metainfo:` с `category` и
-`tier`. Инсталлятор читает их из `skills/INDEX.jsonl` и фильтрует копирование.
-
-```bash
-# По категории — закрытый словарь см. docs/skill-authoring-standard.md
-# Категории в текущем корпусе: governance (6 скилов), discovery (2 скила).
-# Полный закрытый словарь (code-review, docs, testing, research, delivery)
-# заработает когда добавишь скилы с такими тегами — пока эти значения
-# дадут пустой filter → installer корректно бейлится с подсказкой.
-./scripts/install.sh --claude --project --category discovery          # skill-find + skill-compare
-./scripts/install.sh --claude --project --category discovery,governance # объединение
-
-# По tier — по умолчанию stable+preview; experimental/internal только явным opt-in
-./scripts/install.sh --claude --project --tier stable                 # только stable
-./scripts/install.sh --claude --project --tier stable,experimental    # включить experimental
-
-# По имени — переопределяет category и tier (когда явно знаешь что нужно)
-./scripts/install.sh --claude --project --skill skill-find,skill-evaluate
-
-# Интерактивное меню — показывает список категорий со счётчиками
-./scripts/install.sh --claude --project --interactive
-```
-
-В каждой целевой папке (`.claude/skills/`, `.cursor/skills/` и т.д.) пишется
-**отфильтрованный `INDEX.jsonl`** — он содержит ровно те скилы, что были
-установлены. `skill-find` в этой инсталляции никогда не сообщит про скилы,
-которых физически нет.
-
-**Закрытый словарь `--category`:** `code-review` · `docs` · `testing` ·
-`governance` · `discovery` · `research` · `delivery`. Добавление новой
-категории требует записи в CHANGELOG — `library-audit` Phase 5.5 ловит
-любое значение вне списка как drift.
-
-**Семантика `tier`:**
-
-| Tier | По умолчанию ставится? | Контракт стабильности |
-|---|---|---|
-| `stable` | ✓ | Публичный API. Breaking changes — только major version. |
-| `preview` | ✓ | Скорее стабильно, breaking changes возможны в minor versions. |
-| `experimental` | ✗ opt-in | Всё может поменяться; trigger phrases — не контракт. |
-| `internal` | ✗ opt-in | Не для распространения наружу; аудитор ловит случайные leak'и в manifest'ах. |
-
-Посмотреть текущую форму корпуса:
-
-```bash
-# Сводка «категория × tier» по корпусу (используется интерактивным установщиком)
-python3 scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories
-
-# Агрегировать evidence info-уровня (например 3.8) по оценённым скиллам — вид для промоушена.
-# --index указывает на индекс оценок skill-evaluate, а не на индекс корпуса.
-python3 scripts/filter_skills.py --index out/scores/index.jsonl --info-summary
-```
-
-**Что устанавливается куда:**
-
-| Runtime | Project rules | Skills | Sub-agents |
-|---|---|---|---|
-| Claude Code | `CLAUDE.md` (`@AGENTS.md`) | `~/.claude/skills/` или `./.claude/skills/` | `~/.claude/agents/` |
-| Copilot | `AGENTS.md` + `.github/copilot-instructions.md` | workspace auto-discover | `agents/` через `agent` tool |
-| Codex CLI | `AGENTS.md` | `~/.codex/skills/` | `agents/` через `spawn_agent` |
-| Gemini CLI | `GEMINI.md` (`@./AGENTS.md`) | `~/.gemini/skills/` | — (нет sub-agent support) |
-| Cursor v2.2+ | `AGENTS.md` (native) | `./.cursor/skills/` (auto-discover) | через Cursor marketplace |
-
----
-
-## Обновление версии — clean upgrade
-
-Когда выходит новая версия toolkit'а (например 1.5.1 → 1.5.2), есть два
-пути в зависимости от как был поставлен toolkit. **Обязательно прочитай
-[`CHANGELOG.md`](../CHANGELOG.md) перед обновлением** — breaking-changes
-(переименования скилов, schema bumps) помечены **🔴 BREAKING** с
-upgrade notes per version.
-
-### Путь A — установлен через `claude plugin install`
-
-Claude Code сам управляет filesystem state, нужно uninstall + install:
-
-```bash
-# 1. убрать текущую версию
-claude plugin uninstall skill-governance-toolkit --scope project
-
-# 2. если marketplace указывает на локальный репо который обновился — re-add
-claude plugin marketplace remove skill-governance-marketplace --scope project
-claude plugin marketplace add ./ --scope project
-
-# 3. поставить новую
-claude plugin install skill-governance-toolkit@skill-governance-marketplace --scope project
-```
-
-**Гарантированно чисто** — нет stale файлов от прошлой версии.
-
-### Путь B — установлен через `./scripts/install.sh`
-
-В v1.5.3+ есть два режима upgrade:
-
-```bash
-# Чистый upgrade (recommended) — обновляет наши файлы и убирает те, что были
-# в старой версии но нет в новой (важно для renamed скилов). С 1.10.0 для
-# scripts/ references/ commands/ используется ownership-merge (.sgt-owned),
-# а не rsync --delete — твои собственные файлы НИКОГДА не удаляются.
-./scripts/install.sh --claude --project --upgrade
-
-# Nuclear option — wipe target dirs entirely, потом fresh copy.
-# Используй когда --upgrade оставил unexpected state.
-./scripts/install.sh --claude --project --force
-```
-
-**Без флага** (`./scripts/install.sh --claude --project` без `--upgrade`/
-`--force`) install копирует поверх — старые файлы переписываются, но файлы
-которые **только в старой версии** остаются (stale leftovers). Это
-поведение по умолчанию — explicit `--upgrade` обязателен для clean state.
-
-### Что сохраняется при upgrade
-
-Эти директории НИКОГДА не трогаются upgrade'ом:
-
-| Path | Что |
-|---|---|
-| `.skill-state/` | Resumable-run checkpoints (твоё runtime state) |
-| `out/` | Audit reports, quality-score logs |
-| `AGENTS.md` правки **вне** `<!-- skill-init: ... -->` маркеров | Твои additions к project rules. Marker blocks re-injected by integration-init на upgrade; вокруг них всё остаётся. |
-| Твои файлы в `scripts/` · `references/` · `commands/` | С 1.10.0 installer мёржит через ownership-sidecar `.sgt-owned` вместо mirror-delete — обновляет/удаляет только свои файлы, твои не трогает. Файл с именем как у нашего сохраняется; наш кладётся рядом как `<name>.skill-governance-toolkit.<ext>`. |
-
-С 1.10.0 в установку попадают только runtime-скрипты из
-[`scripts/runtime-manifest.txt`](../scripts/runtime-manifest.txt) (dev/test
-остаётся в исходном репо), а скиллы резолвят корень установки по
-[`references/path-resolution.md`](../references/path-resolution.md) перед запуском
-скрипта — важно для plugin/global установок, где CWD это твой проект.
-
-### Что НЕ обновляется автоматически
-
-- Внешние документы которые ссылались на старые имена скилов
-  (`skill-init` → `integration-init`, `skill-audit` → `library-audit`).
-  Найди-замени вручную в твоих project docs / playbooks.
-- Custom hooks / scripts которые звали старое имя — обнови ссылки.
-
-CHANGELOG помечает все renamed/removed items под **🔴 BREAKING**.
+Всё остальное — установка plugin/extension под каждый host, интерактивный и
+advanced инсталляторы, выборочная установка по `--category` / `--tier` /
+`--skill`, куда ложатся файлы в каждом runtime,
+[хостинг на приватном GitLab](installation.md#private-gitlab) и контракт
+upgrade / uninstall (что сохраняется, что никогда не трогается) — в
+каноническом [installation guide](installation.md). Одностраничная версия:
+[QUICKSTART](../QUICKSTART.md). Прочитай `CHANGELOG.md` перед обновлением —
+переименования и удаления помечены **🔴 BREAKING**.
 
 ---
 
 ## Регулярное обслуживание
 
-### Перегенерировать INDEX.jsonl
-
-После add/rename/major-edit скила:
+После добавления, переименования или существенной правки скила:
 
 ```bash
 python3 scripts/build_index.py
 ```
 
-`skill-find` использует INDEX.jsonl для fast-path discovery. Без него
-fallback на per-file scan (медленнее).
+Раз в неделю или перед релизом запускай LLM-аудит («audit my skills» →
+`library-audit`). Перед push'ем governed-изменения воспроизведи вердикт CI
+локально:
 
-### Weekly health-check
-
+```bash
+sgt gate --base main
 ```
-«audit my skills»
-```
 
-Host активирует `library-audit`, пишет `out/library-audit/library-audit-{date}.md`.
-Запускать раз в неделю или перед каждым release.
-
-### Score persistence trend
-
-`out/scores/index.jsonl` — append-only лог всех `skill-evaluate` запусков.
-Track quality trend skill'ов over time.
+Тренд score persistence: `out/scores/index.jsonl` — append-only лог каждого
+запуска `skill-evaluate` — отслеживай тренды качества скилов во времени.
 
 ---
 
-## Writing Rules for Skills — как писать скилы
+## Writing Rules — как писать скилы
 
-Каждый SKILL.md загружается в context агента на каждом relevant turn'е.
-Концисный, моноязычный, без redundancy скил роутится точнее и стоит меньше
-токенов. `skill-evaluate` Phase 3.6 enforces эти правила лексически.
-
-**Hard rules** (полный список — в [`AGENTS.md`](../AGENTS.md#writing-style)):
-
-1. **Один язык на body скила.** Английский recommended — frontmatter parsers
-   и embedding models тренированы на английских корпусах. Mixing
-   Cyrillic/CJK в Latin-script body — 🔴 D1 ≤ 3.
-2. **Active voice, прямые императивы.** «Read the file» beats «The file
-   should be read».
-3. **Таблицы для parameter specs.** Не prose paragraphs.
-4. **Списки (numbered OR bulleted) — для enumerable content.**
-5. **Уникальные секции.** Restate только когда нужно для cross-reference
-   (например Hard rules deliberately re-state).
-6. **Banned filler phrases:** «It's important to note», «Make sure to»,
-   «In conclusion» и т.п. — каждое +4–8 overhead токенов.
-
-**Verification:** `skill-evaluate` на новый или rewritten скил — Phase 3.6
-surfaces violations, D1 capped автоматически.
+Держи тела скилов концизными, моноязычными, в active voice и table-driven —
+полные правила (banned filler phrases, эвристики краткости, обоснование) — в
+[AGENTS.md § Writing Style](../AGENTS.md#writing-style). `skill-evaluate`
+Phase 3.6 enforces их лексически и может capнуть D1.
 
 ---
 
-## Known limitations + roadmap
+## См. также
 
-### External MCP-dependent skills (future static check)
-
-Этот раздел не про встроенный `agent-governance` MCP server из Use case 4.
-Он про будущие пользовательские skills, которые зависят от внешних MCP tools
-вроде `mcp__slack__send_message` или `mcp__atlassian__create_issue`.
-
-Текущая версия toolkit'а проверяет такие зависимости косвенно через D2
-(Completeness — failure modes) и D6 (Portability). **Полная Phase 3.7 —
-External dependency documentation check** запланирована в будущем release.
-Что планируется проверять статически:
-
-| Что | Как | Severity |
-|---|---|---|
-| Detection MCP usage | grep `mcp__*` patterns в body | informational |
-| Setup docs present | `## Prerequisites` секция OR `references/dependencies.md` | 🔴 если MCP usage без docs |
-| Graceful failure | Hard rules / Phase 0 fail-fast при MCP unavailable | 🟡 если missing |
-| Auth scopes documented | grep body for «scope», «token», `${...}` | 🟡 — caps D9 authz |
-
-**Что НИКОГДА не будет проверяться статически** (требует runtime):
-- Actual MCP server availability
-- Tool schema / version compatibility
-
-Workaround сейчас: если пишешь skill, который требует внешний MCP server, добавь
-`## Prerequisites` H2 section в body с (a) каким MCP-сервером скил
-пользуется, (b) как его установить, (c) какие env vars / scopes нужны,
-(d) поведение при отсутствии connection. Это удовлетворит D2 и D9 ручной
-проверкой пока 3.7 не зашит.
-
-### Прочие планируемые улучшения
-
-- Telemetry / usage tracking — какие скилы реально срабатывают, на каких
-  trigger'ах — отдельная инфраструктура.
-
----
-
-## Что в этом гайде не покрыто
-
-- **Внутренняя архитектура checkpoint.py** — `references/checkpointing.md`.
-- **Полный verb vocabulary + naming rules** — `skills/library-audit/references/naming-spec.md`.
-- **D1–D9 rubrics в деталях** — `skills/skill-evaluate/references/rubrics.md`.
-- **Lexical security regex catalog** — `skills/library-audit/references/security-spec.md`.
-- **Per-runtime tool-name mapping** — `references/{claude,copilot,codex,gemini}-tools.md`.
-- **MCP/CLI/Docker audit engine internals** — `docs/agent-governance-engine.md`.
-- **English version of this guide** — `docs/user-guide.md`.
+Всё, что сознательно не покрыто здесь — внутренности движка, полный каталог
+проверок, флаги CLI, стандарт авторинга, рубрики скоринга, runbooks и
+tool-name mappings — индексировано в [documentation hub](README.md).
+Английская (каноническая) версия этого гайда: [user-guide.md](user-guide.md).
 
 ---
 

@@ -1,10 +1,20 @@
 # Skill Governance Toolkit - User Guide
 
+> **Audience:** skill author & maintainer · **Type:** how-to (workflows) · **Prerequisite:** [QUICKSTART](../QUICKSTART.md)
+
 Universal meta-skill toolkit for teams adopting `AGENTS.md` and `SKILL.md`
 standards. It helps discover, evaluate, compare, audit, and port agent skills
 without forking source files per AI host.
 
+This guide walks the eight core workflows (Use Cases 1-8). It deliberately does
+not duplicate reference material — deep content lives in the canonical docs
+linked from each section; the [documentation hub](README.md) indexes all of them.
+
 This guide is the English companion to `docs/user-guide.ru.md`.
+
+Not sure where to begin? `python3 scripts/sgt.py quickstart` prints the doctor
+summary, the next command to run, and a compact intent-to-skill map
+(`--format json` for automation).
 
 ---
 
@@ -14,13 +24,7 @@ This guide is the English companion to `docs/user-guide.ru.md`.
 flowchart TB
     subgraph "Repository root"
         AGENTS["AGENTS.md<br/>single source of truth"]
-        CLAUDE["CLAUDE.md -> @AGENTS.md"]
-        GEMINI["GEMINI.md -> @./AGENTS.md"]
-        COPILOT[".github/copilot-instructions.md"]
-        README["README.md<br/>quick start"]
-        UGEN["docs/user-guide.md<br/>this guide"]
-        UGRU["docs/user-guide.ru.md<br/>Russian guide"]
-        CHANGELOG["CHANGELOG.md"]
+        ALIASES["CLAUDE.md / GEMINI.md /<br/>.github/copilot-instructions.md<br/>per-host aliases"]
     end
 
     subgraph "skills/"
@@ -37,19 +41,9 @@ flowchart TB
     end
 
     subgraph "scripts/"
-        INDEX["build_index.py"]
-        CHECKPOINT["checkpoint.py"]
-        DOCTOR["doctor.py"]
-        QUICKSTART["quickstart.py"]
-        SGT["sgt.py"]
-        VERSION["sync_version.py"]
-        AUDITCLI["agent_audit.py"]
-        MCP["agent_governance_mcp.py"]
-    end
-
-    subgraph "docs/"
-        MCPDOC["agent-governance-engine.md"]
-        STANDARD["skill-authoring-standard.md"]
+        SGT["sgt.py<br/>CLI facade"]
+        AUDITCLI["agent_audit.py<br/>deterministic engine"]
+        MCP["agent_governance_mcp.py<br/>stdio MCP server"]
     end
 
     AGENTS --> FIND
@@ -58,90 +52,18 @@ flowchart TB
     AGENTS --> AUDIT
     AGENTS --> BUILD
     AGENTS --> INIT
-    BUILD -.can dispatch.-> REVIEWER
     AUDITCLI --> MCP
 ```
 
----
+Two complementary layers operate on your skills:
 
-## Component Status
+- **Six LLM meta-skills** (`skills/`) — quality judgment, comparison, porting.
+- **One deterministic audit engine** (`agent_audit.py`) — reproducible
+  safety/structure checks for CI gates, available as CLI, MCP server, or Docker
+  image (Use Case 4).
 
-| Component | Status | Meaning |
-|---|---|---|
-| Six meta-skills | `stable` | Ready for normal team use. Breaking changes should appear only in release notes. |
-| `agents/code-reviewer.md` | `stable` | Read-only TypeScript-focused reviewer. Bash usage is limited to inspection. |
-| `scripts/doctor.py` | `stable` | Fast local health check for setup, Git state, index freshness, and local artifacts. |
-| `scripts/quickstart.py` | `stable` | Concise next-step guide and intent-to-skill decision tree. |
-| `scripts/sgt.py` | `stable` | CLI facade for the common workflows: `init`, `doctor`, `quickstart`, `skills`, `audit`, `gate`, `ci-init`, `new-skill`, `uninstall`. |
-| `scripts/sync_version.py` | `stable` | Syncs plugin manifests, `pyproject.toml`, and README pins from root `VERSION`. |
-| CLI/MCP/Docker audit engine | `preview` | Covered by tests and useful today, but tool names and rule details may still change before the first tagged release. |
-| Optional integrations | opt-in | CRG, repomix, and serena are installed only through `integration-init`; they are not baseline requirements. |
-
-If you are unsure where to begin, run:
-
-```bash
-python3 scripts/sgt.py quickstart
-python3 scripts/quickstart.py
-```
-
-It prints the doctor summary, the next command to run, and a compact
-intent-to-skill map. Use `--format json` for automation.
-
-For a quick local readiness check, run:
-
-```bash
-python3 scripts/doctor.py
-```
-
-Use `--format json` in automation. The doctor fails only on actionable
-problems, such as missing required files or stale `skills/INDEX.jsonl`.
-
-Use the `sgt.py` facade when you want stable command names:
-
-```bash
-python3 scripts/sgt.py doctor
-python3 scripts/sgt.py skills
-python3 scripts/sgt.py audit
-```
-
-Before publishing, opening a PR, or cutting a release, run:
-
-```bash
-bash scripts/audit.sh
-python3 scripts/test_install.py
-python3 scripts/test_doctor.py
-python3 scripts/test_quickstart.py
-python3 scripts/test_sgt.py
-python3 scripts/test_sync_version.py
-python3 scripts/test_agent_audit.py
-python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
-docker build -t agent-governance-mcp:local .
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:local
-```
-
-GitHub Actions runs the baseline checks in `.github/workflows/ci.yml`.
-
-Version metadata has one manual source: root `VERSION`. After editing it, run:
-
-```bash
-python3 scripts/sync_version.py
-python3 scripts/sync_version.py --check
-```
-
-The sync command updates plugin manifests, `pyproject.toml`, and pinned
-install examples. The check runs inside `scripts/audit.sh`.
-
-Before installing into a project, preview the plan:
-
-```bash
-./install.sh --dry-run
-./install.ps1 -DryRun
-./scripts/install.sh --claude --project --target-project=/path/to/project --dry-run
-```
-
-Dry-run mode resolves the same skill filters and target paths as a real
-install, prints the planned writes, and exits before mutating files.
+Plus `agents/code-reviewer.md`, a dispatchable read-only TypeScript reviewer
+(Use Case 8).
 
 ---
 
@@ -201,12 +123,14 @@ sequenceDiagram
     U->>E: "evaluate this skill"<br/>SKILL_TARGET=path/to/foreign-skill.md
     E->>R: load D1-D9 rubrics
     E->>E: Phase 0-3: score 9 dimensions
-    E->>E: Phase 3.5: lexical security scan
-    E->>E: Phase 3.6: writing-quality scan
+    E->>E: Phase 3.5: lexical security scan (caps D9)
+    E->>E: Phase 3.6: writing-quality scan (caps D1)
+    E->>E: Phase 3.7: activation coherence (caps D8)
+    E->>E: Phase 3.8: info lane (never caps)
     E-->>U: report: summary + per-dim blocks + verdict
     E->>J: append JSONL entry (idempotent)
 
-    Note over U,E: Safety gate: D9 at or below 1 on a mutating<br/>skill forces a red verdict regardless of score
+    Note over U,E: Safety gate forces a red verdict when (a) D9 at or below 1<br/>on a mutating skill OR (b) any red lexical security finding
 ```
 
 ```text
@@ -270,65 +194,30 @@ flowchart TD
     Q --> R[Done]
 ```
 
-Recommended flow:
+While filling the scaffolded TODOs:
 
-1. Run `skill-find` for the need.
-2. If a close match exists, use `skill-compare` instead of creating another skill.
-3. If no match exists, scaffold it:
-   `python3 scripts/sgt.py new-skill {name} --category {vocab}` — the skeleton
-   ships portable frontmatter (`name`, `description`, `compatibility`, `license`,
-   `metainfo`) and the phase structure with TODO placeholders.
-4. Keep the frontmatter portable while filling the TODOs — do not add
-   host-specific fields like `allowed-tools:`.
-5. Add concrete trigger phrases to `description`.
-6. Add workflow phases, hard rules, inputs, outputs, and verification.
-7. Run `skill-evaluate`.
-8. Fix the top findings until the score and safety gate are acceptable.
-9. Run `library-audit`.
-10. Rebuild `skills/INDEX.jsonl`.
+- Keep the frontmatter portable — do not add host-specific fields like
+  `allowed-tools:`.
+- Write 2–5 concrete trigger phrases into `description` — it drives activation.
+- Add workflow phases, hard rules, inputs, outputs, and verification.
+- Iterate on `skill-evaluate` findings until the score and safety gate pass,
+  then run `library-audit` and rebuild `skills/INDEX.jsonl`.
 
-Minimal shape:
+The shape every skill must have, in miniature:
 
 ```markdown
 ---
 name: skill-example
-description: |
-  Does one specific workflow.
-  Use when: "example trigger", "second trigger", "third trigger".
-compatibility: "Claude Code, Copilot, Cursor, Codex, Gemini"
-license: MIT
-metainfo:
-  category: governance
-  tier: preview
+description: One specific workflow. Use when "trigger one", "trigger two".
+metainfo: { category: governance, tier: preview }  # + compatibility, license
 ---
-
-# Skill Example
-
-## When to use
-
-- Use for ...
-- Skip for ...
-
-## Predecessor / Successor
-
-## Required inputs
-
-| Input | Type | Default | Description |
-|---|---|---|---|
-| TARGET | path | required | File or directory to inspect |
-
-## Workflow
-
-### Phase 0 - Validate inputs
-### Phase 1 - Read bounded context
-### Phase 2 - Produce findings
-### Phase 3 - Verify output
-
-## Hard rules
-
-- Keep the scope bounded.
-- Do not edit files unless the user explicitly asks for edits.
+> **Skill type:** Detect-only   <!-- required declaration (SKILL021) -->
 ```
+
+The full canonical skeleton — every required section, the `metainfo` schema,
+where prohibitions go, and the «Skill type» contract — is in the
+[skill authoring standard](skill-authoring-standard.md). The scaffolder emits it
+for you; consult the standard when editing by hand.
 
 ---
 
@@ -345,9 +234,9 @@ flowchart LR
     P2 --> P3[P3: naming convention]
     P3 --> P4[P4: portability tag]
     P4 --> P45[P4.5: multi-tool compat]
-    P45 --> P55[P5.5: metainfo coverage]
-    P55 --> P5[P5: security<br/>secrets / shell / cred paths]
-    P5 --> P6[P6: aggregate + write report]
+    P45 --> P5[P5: security<br/>secrets / shell / cred paths]
+    P5 --> P55[P5.5: metainfo coverage]
+    P55 --> P6[P6: aggregate + write report]
     P6 --> OUT["out/library-audit/<br/>library-audit-{date}.md"]
 ```
 
@@ -367,42 +256,31 @@ It checks:
 | Security | Secrets, credential paths, dangerous shell, prompt-injection risks |
 | Metainfo | Required `category` and `tier`, closed vocabulary compliance |
 
-The report is written to:
-
-```text
-out/library-audit/library-audit-{YYYY-MM-DD}.md
-```
-
-Large runs checkpoint under:
-
-```text
-.skill-state/library-audit/
-```
-
-If the run stops midway, rerunning the skill can resume from the last
-checkpoint.
+The report is written to `out/library-audit/library-audit-{YYYY-MM-DD}.md`.
+Large runs checkpoint under `.skill-state/library-audit/` — if the run stops
+midway, rerunning the skill resumes from the last checkpoint (see
+[State Persistence](#state-persistence---resumable-runs)).
 
 ---
 
 ## Use Case 4 - Deterministic Audit Engine: CLI, MCP, Docker
 
 `library-audit` is an agent skill. The deterministic audit engine is a
-separate read-only layer for CI, local checks, and MCP clients.
+separate read-only layer for CI, local checks, and MCP clients. It indexes
+project assets, applies deterministic rules, and returns structured findings —
+it does not replace human or LLM interpretation.
 
-It should not replace human or LLM interpretation. It indexes project assets,
-applies deterministic rules, and returns structured findings.
+Pick a delivery mode:
 
-For the full catalog of rules with rationale — and how the deterministic engine
-compares to the LLM skills — see [`checks-reference.md`](checks-reference.md).
+- **CLI** — `scripts/agent_audit.py`, for local checks and CI scripting.
+- **MCP server** — `scripts/agent_governance_mcp.py`, the same engine exposed
+  as tools to Claude / Codex / Cursor / VS Code agents.
+- **Docker** — a sandboxed MCP image (`--network none`, read-only mount) for
+  CI and zero-install use.
 
-```mermaid
-flowchart LR
-    RULES["references/agent-audit-rules.json<br/>rule metadata + optional config"] --> CORE
-    CORE["agent_audit.py<br/>core + CLI"] --> MCP["agent_governance_mcp.py<br/>stdio MCP server"]
-    CORE --> CI[CI / local terminal]
-    MCP --> CLIENT[Codex / Claude / Cursor / VS Code agent]
-    DOCKER[Docker image] --> MCP
-```
+Setup, MCP/Docker configs, tools, profiles, and path behavior:
+[agent governance engine](agent-governance-engine.md). The full rule catalog
+with rationale: [checks reference](checks-reference.md).
 
 ### CLI
 
@@ -413,11 +291,11 @@ python3 scripts/agent_audit.py discover .
 # Audit a full project
 python3 scripts/agent_audit.py audit-project . --profile release-ready --format json
 
-# Fail CI when high-severity findings exist
+# Absolute gate: fail when ANY high-severity finding exists in the tree
 python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on high
 
-# Merge-request scope: audit only assets changed against a base ref
-python3 scripts/agent_audit.py audit-project . --changed-only --base origin/main --fail-on high
+# MR/PR gate scope: audit only changed assets, block only INTRODUCED findings
+python3 scripts/agent_audit.py audit-project . --changed-only --base origin/main --fail-on-new high
 
 # Audit one SKILL.md
 python3 scripts/agent_audit.py audit-skill skills/skill-evaluate/SKILL.md
@@ -427,282 +305,87 @@ python3 scripts/agent_audit.py rules
 python3 scripts/agent_audit.py explain-rule SKILL009
 ```
 
-Every JSON report includes `engine_version` (toolkit `VERSION`) and
-`rules_version` (catalog version) at the top level, so a verdict is traceable to
-the engine and policy that produced it.
-
-Profiles:
-
-| Profile | Use |
-|---|---|
-| `security` | Safety-focused scan |
-| `quality` | Structure, usability, and portability |
-| `maintainability` | Broad regular maintenance scan |
-| `release-ready` | Pre-release gate |
-
-Policy guardrails (pilot): core safety rules SKILL001/002/009/014/015 have a
-severity floor — a catalog that downgrades them below `high` is rejected at load.
-See [`checks-reference.md`](checks-reference.md) § Extending the checks for the
-configurable `config` block and separation-of-duties (`CODEOWNERS`). A ready-to-copy
-policy override lives at `references/agent-audit-config.example.json`: thresholds
-and profiles override the defaults, vocabularies and patterns extend them, and the
-security gate can only be extended, never weakened.
-
-### MCP Server
-
-Run locally:
-
-```bash
-python3 scripts/agent_governance_mcp.py
-```
-
-Example MCP config:
-
-```json
-{
-  "mcpServers": {
-    "agent-governance": {
-      "command": "python3",
-      "args": ["/path/to/skill-governance-toolkit/scripts/agent_governance_mcp.py"],
-      "env": {
-        "AGENT_GOVERNANCE_ROOT": "/path/to/project"
-      }
-    }
-  }
-}
-```
-
-Tools:
-
-| Tool | Purpose |
-|---|---|
-| `discover_agent_assets` | Find `AGENTS.md`, `SKILL.md`, prompts, agent configs, aliases, and MCP/plugin configs |
-| `audit_skill` | Audit one `SKILL.md` |
-| `audit_project` | Audit a project and return structured findings |
-| `explain_rule` | Explain one `rule_id` |
-| `get_rule_catalog` | Return the rule catalog |
-
-Path behavior:
-
-- The server only accepts paths inside its configured root.
-- `AGENT_GOVERNANCE_ROOT` sets the root explicitly.
-- `AGENT_GOVERNANCE_RULES_PATH` can point to a custom rule catalog.
-- A custom rule catalog must define every `rule_id` used by the engine.
-- `AGENT_GOVERNANCE_DEBUG=1` enables tracebacks; without it, MCP errors are sanitized.
-
-### Docker
-
-Build the image:
-
-```bash
-docker build -t agent-governance-mcp:local .
-```
-
-Run against the current repository:
-
-```bash
-docker run --rm -i \
-  --network none \
-  -v "$PWD:/workspace:ro" \
-  agent-governance-mcp:local
-```
-
-For strict CI file permissions:
-
-```bash
-docker run --rm -i \
-  --network none \
-  --user "$(id -u):$(id -g)" \
-  -v "$PWD:/workspace:ro" \
-  agent-governance-mcp:local
-```
-
-MCP config through Docker:
-
-```json
-{
-  "mcpServers": {
-    "agent-governance": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "--network",
-        "none",
-        "-v",
-        "/path/to/repo:/workspace:ro",
-        "agent-governance-mcp:local"
-      ]
-    }
-  }
-}
-```
-
-Inside Docker, pass project roots as `/workspace`.
-
-Docker tradeoffs:
-
-| Tradeoff | Impact |
-|---|---|
-| Requires Docker daemon | Not ideal for very small local checks |
-| Host/container paths differ | Use `/workspace` inside the MCP call |
-| macOS/Windows volume mounts may be slower | Fine for CI and most skill libraries |
-| Files outside the repo are invisible | Mount extra paths explicitly if needed |
-| Stdio MCP needs `-i` | Without stdin, the server exits immediately |
-
-Recommended secure baseline:
-
-```bash
-docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:local
-```
+Every JSON report includes `engine_version` and `rules_version`, so a verdict
+is traceable to the engine and policy that produced it. Core safety rules carry
+a **severity floor** a custom catalog cannot weaken — the floor set is listed in
+[checks-reference § Triggering examples and fixes](checks-reference.md#triggering-examples-and-fixes).
 
 ### GitHub Actions
 
-The repository includes:
-
-```text
-.github/workflows/ci.yml
-```
-
-Jobs:
-
-| Job | What it runs |
-|---|---|
-| `audit` | Shell audit, behavior tests, and release-ready audit gate |
-| `docker` | Docker build, MCP `tools/list`, and Docker `audit_project /workspace` |
-
-**Self-CI on GitLab:** for a GitLab-hosted mirror the repo root also ships
-`.gitlab-ci.yml` — the GitLab twin of `ci.yml`. It runs the full self-CI
-(`scripts/audit.sh`, the behavior tests, the release-ready gate, plus a
-PowerShell installer-parity job and an optional Docker smoke test) on every
-merge request and every push to the default branch. It is the toolkit's *own*
-CI — do not copy it into a consuming repo; consumers use the changed-only gate
-below.
+`.github/workflows/ci.yml` runs the baseline checks on this repository. To put
+the changed-only gate on a consuming GitHub repo, run `sgt ci-init --github`
+and follow the [GitHub onboarding guide](github-onboarding.md).
 
 ### GitLab CI - Merge Request gate
 
-A copy-ready template lives at `references/ci/gitlab-ci.yml`. Copy it to the
-root of the consuming marketplace repo as `.gitlab-ci.yml`. It audits only the
-skills/agents a merge request changes, using a tiered gate. For a guided,
-step-by-step rollout (env vars, pinned toolkit SHA, the masked `GITLAB_TOKEN`,
-and the exact test commands) see [`gitlab-onboarding.md`](gitlab-onboarding.md):
+A copy-ready template lives at `references/ci/gitlab-ci.yml` — copy it to the
+root of the consuming repo as `.gitlab-ci.yml` (or run `sgt ci-init --gitlab`).
+It audits only the skills/agents a merge request changes, using a tiered gate.
+The **canonical rollout guide** — env vars, pinned toolkit SHA, clone auth,
+image overrides for internal registries, the MR comment poster config, and the
+exact test commands — is [GitLab onboarding](gitlab-onboarding.md).
 
 ```mermaid
 flowchart TD
-    MR[Merge request opens or updates] --> CH{Changes touch<br/>skills/agents/AGENTS.md?}
-    CH -- no --> SKIP[Gate skipped]
-    CH -- yes --> SCOPE[audit-project --changed-only<br/>--base CI_MERGE_REQUEST_DIFF_BASE_SHA]
-    SCOPE --> BLOCK{High-severity<br/>finding?}
-    BLOCK -- yes --> FAIL[skill-gate:block fails<br/>merge blocked]
-    BLOCK -- no --> PASS[skill-gate:block passes]
-    SCOPE --> ADV[skill-gate:advisory<br/>JSON artifact + MR comment]
-    ADV --> NOTE[Idempotent note,<br/>never blocks]
+    MR[Merge request opens or updates] --> NOOP[noop job: always green<br/>guarantees every MR has a pipeline]
+    MR --> CH{Changes touch<br/>skills/agents/AGENTS.md?}
+    CH -- no --> SKIP[Gate jobs skipped]
+    CH -- yes --> SUP[Suppression hygiene:<br/>list-suppressions<br/>expired entry blocks]
+    SUP --> SCOPE[audit-project --changed-only<br/>--base CI_MERGE_REQUEST_DIFF_BASE_SHA]
+    SCOPE --> NEW{--fail-on-new:<br/>INTRODUCED high finding?}
+    NEW -- yes --> FAIL[skill-gate:block fails<br/>merge blocked]
+    NEW -- no --> PASS[skill-gate:block passes]
+    SCOPE --> ADV[skill-gate:advisory<br/>skill-audit.json + idempotent MR note]
+    FAIL -. SGT_FAIL_MODE=advisory .-> PASS
 ```
 
 | Job | Command | Effect |
 |---|---|---|
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on-new high` | Newly introduced high-severity findings fail the pipeline and block the merge (pre-existing high findings on touched legacy assets do not block) |
 | `skill-gate:advisory` | same with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` and an idempotent MR comment |
-| `noop` | `echo` on `alpine` | Always-green placeholder; guarantees every MR has a pipeline |
+| `noop` | `echo` on `alpine` | Always-green placeholder; with GitLab's "Pipelines must succeed" enabled, guarantees every MR has a pipeline |
 
-Template essentials (keep in sync with `references/ci/gitlab-ci.yml`):
+Operational notes:
 
-- **Clone auth via `CI_JOB_TOKEN`.** `SGT_REPO` embeds the per-job token GitLab
-  injects automatically (`https://gitlab-ci-token:${CI_JOB_TOKEN}@<host>/...`)
-  — no PAT needed for the clone. For a private toolkit mirror you must also
-  allowlist the consumer project on the toolkit project's job-token allowlist:
-  toolkit project → Settings → CI/CD → Token Access → «Limit access TO this
-  project» → add the marketplace repo(s). On a public/internal-visibility
-  mirror the token is simply ignored.
-- **Image overrides for internal registries.** `SGT_IMAGE` (default
-  `python:3.12-slim`; needs python3 + git — without git the job apt-installs
-  it) and `SGT_NOOP_IMAGE` (default `alpine:3.20`) pull from Docker Hub. On an
-  air-gapped or egress-restricted instance, override both as group/project
-  CI/CD variables pointing at your internal registry mirror.
-- **Suppression hygiene in the block job.** Every governed MR runs
-  `agent_audit.py list-suppressions --root .` — an already-**expired**
-  suppression blocks, because the floor finding it silenced has resurfaced.
-  The early warning `list-suppressions --expiring-within 30` runs **only when
-  the MR itself edits `references/audit-ignore.json`** — the author touching
-  suppressions is the right owner to renew or remove them; the fleet is never
-  blocked on a third party's soon-to-expire entry.
-- **Kill-switch.** Set the org/project CI/CD variable `SGT_FAIL_MODE=advisory`
-  to downgrade the gate fleet-wide to non-blocking (exit 0 even on a blocking
-  finding) without editing the pinned template.
-
-`--changed-only` diffs committed `HEAD` against `--base` (a git ref) using a
-`base...HEAD` three-dot diff, so an author is accountable only for the committed
-entities their MR touches. Uncommitted working-tree edits are not in scope. The
-template sets `GIT_DEPTH: 0` so the merge-base commit is reachable. Running the
-gate locally via `sgt gate` fails fast on a dirty tree for this reason — commit
-or stash first, or pass `--allow-dirty` to audit `HEAD` anyway.
-
-The gate jobs run only on MRs that touch a governed asset (`rules:changes`). If
-you enable GitLab's **"Pipelines must succeed"**, an MR that touches no governed
-asset would have no pipeline and block forever — the `noop` job (gated only on
-`merge_request_event`, no `changes:` filter) always runs and always passes so
-every MR has a green pipeline. Do not add a `changes:` filter to it.
-
-Base-ref handling:
-- **Empty `--base`** with `--changed-only` (e.g. a missing
-  `CI_MERGE_REQUEST_DIFF_BASE_SHA`) **exits 2 (fails closed)** with a stderr
-  notice — it refuses to silently audit the whole tree (a silent scope switch
-  could block unrelated MRs on legacy assets, or pass a pipeline that audited
-  nothing). Re-run on a merge-request pipeline, or drop `--changed-only`.
-- **A non-empty but bad/unreachable ref** exits 2 with a sanitized message.
-
-#### MR comment poster
-
-`scripts/post_mr_comment.py` turns the advisory `skill-audit.json` into a
-single, idempotent MR note grouped by severity. Re-running a pipeline updates
-the same note (matched by a hidden marker) instead of stacking duplicates.
-
-```bash
-# Preview the rendered comment without calling the API
-python3 scripts/post_mr_comment.py skill-audit.json --dry-run
-```
-
-| Config | Source | Purpose |
-|---|---|---|
-| `--api-url` | `CI_API_V4_URL` | GitLab API base (auto-set in CI) |
-| `--project-id` | `CI_PROJECT_ID` | Target project (auto-set in CI) |
-| `--mr-iid` | `CI_MERGE_REQUEST_IID` | Target merge request (auto-set in CI) |
-| `--token-env` | `GITLAB_TOKEN` | Env var **name** holding an `api`-scoped token |
-
-The token is read from an environment variable by name — never passed inline.
-Without a token (or in `--dry-run`) the poster prints the comment and skips the
-API call. Stdlib-only: HTTP uses `urllib`, no SDK.
+- `--changed-only` diffs committed `HEAD` against `--base` (three-dot diff), so
+  an author is accountable only for the committed entities their MR touches.
+  Running the gate locally via `sgt gate` fails fast on a dirty tree — commit
+  or stash first, or pass `--allow-dirty`. Base-ref edge cases (empty base
+  fails closed with exit 2, bad refs, `GIT_DEPTH`) are specified in the
+  [CLI reference](cli-reference.md).
+- The block job also runs suppression hygiene: an already-expired suppression
+  blocks the MR. Procedure and SLA:
+  [suppression runbook](security-suppression-runbook.md).
+- Kill-switch: setting the CI/CD variable `SGT_FAIL_MODE=advisory` downgrades
+  the gate fleet-wide to non-blocking — incident procedure in the
+  [security incident runbook](security-incident-runbook.md).
 
 ---
 
 ## Use Case 4.5 - Asset security checks and the delta gate (since 1.12.0)
 
-Beyond per-skill structure, the engine scans **every** governed asset for content
-security issues:
+Beyond per-skill structure, the engine scans **every** governed asset for
+content security issues, in these rule families:
 
-| Rule | Severity | Detects |
-|---|---|---|
-| `SEC001` / `SEC002` | high | Bidi/direction-mark and invisible/format/tag characters used to hide injected text |
-| `SEC003` | medium | Homoglyph typosquat — a Latin word/URL host hiding a Cyrillic/Greek look-alike |
-| `SEC010` | high | Dangerous instruction (destructive shell, unsafe git) in a non-skill asset |
-| `SEC011` | high | Inline secret value in a non-skill asset |
-| `SEC012` | medium | Credential-file path referenced in a non-skill asset |
-| `REF001`–`REF004` | high–info | Unsafe references: un-whitelisted script, link traversing the repo root, dangling link, external URL |
-| `SCR001`–`SCR003` | high | A *referenced* script's content: env-var exfiltration heuristic, dangerous shell, inline secret |
-| `MCP001` / `MCP002` | high / low | A skill uses `mcp__server__*` without declaring it in `metainfo.requires.mcp` (/ declares one it never uses) |
-| `HOOK001` / `HOOK002` | high | A hook command (`.claude/settings*.json`, `plugin.json`, `hooks/*`) runs dangerous shell or leaks secrets |
+- `SEC001`–`SEC003` — hidden bidi/invisible characters, homoglyph typosquats.
+- `SEC010`–`SEC012` — dangerous instructions, inline secrets, and credential
+  paths in non-skill assets.
+- `REF001`–`REF004` / `SCR001`–`SCR003` — unsafe references and the content of
+  referenced scripts (exfiltration, dangerous shell, secrets).
+- `MCP001`/`MCP002` — `mcp__server__*` usage not declared in
+  `metainfo.requires.mcp` (and vice versa).
+- `HOOK001`/`HOOK002` — hook commands running dangerous shell or leaking secrets.
 
 Full catalog with triggering examples and clean fixes:
-[`checks-reference.md`](checks-reference.md).
+[checks reference](checks-reference.md).
 
 ### The delta gate — block only what an MR introduces
 
 The CI block job and the local `sgt gate` use `--fail-on-new`, not absolute
-`--fail-on`. They block only on findings the MR **introduced** versus its base ref;
-pre-existing findings stay advisory. This lets a team enable the suite over a
-legacy library without an avalanche — see
-[`security-rollout-guide.md`](security-rollout-guide.md).
+`--fail-on`. They block only on findings the MR **introduced** versus its base
+ref; pre-existing findings stay advisory. This lets a team enable the suite over
+a legacy library without an avalanche — see the
+[security rollout guide](security-rollout-guide.md).
 
 ```bash
 # Reproduce the exact CI block verdict locally (changed-only delta gate)
@@ -712,7 +395,9 @@ sgt gate --base main
 python3 scripts/agent_audit.py audit-project . --changed-only --base main --fail-on-new high
 ```
 
-For every `agent_audit.py` and `sgt` subcommand, flag, env var, and exit code — including the two scoping layers (`--changed-only` file scope vs `--fail-on-new` finding scope) and the fail-closed empty-`--base` behavior — see the full [CLI reference](cli-reference.md).
+Every `agent_audit.py` and `sgt` subcommand, flag, env var, and exit code —
+including the two scoping layers (`--changed-only` file scope vs `--fail-on-new`
+finding scope) — is documented in the [CLI reference](cli-reference.md).
 
 ### Suppression
 
@@ -723,47 +408,18 @@ For every `agent_audit.py` and `sgt` subcommand, flag, env var, and exit code �
 
 A broken/expired/missing-reason suppression fails safe — the finding stays and an
 `IGNORE001/002/003` record surfaces. Full procedure, SLA, and break-glass:
-[`security-suppression-runbook.md`](security-suppression-runbook.md).
+[suppression runbook](security-suppression-runbook.md).
 
-### Operator tooling
-
-```bash
-# Validate org config/overlay patterns against a ReDoS budget before CI
-python3 scripts/agent_audit.py validate-config
-
-# Print how to fix a rule + the correct suppression path
-python3 scripts/agent_audit.py explain-finding SEC011
-
-# Inventory every active suppression (exit non-zero if any expired/expiring)
-python3 scripts/agent_audit.py list-suppressions --expiring-within 30
-
-# GitHub workflow annotations (inline on the PR diff)
-python3 scripts/agent_audit.py audit-project . --fail-on high --format github
-
-# Fleet kill-switch — forces non-blocking exit 0 across every pipeline
-SGT_FAIL_MODE=advisory python3 scripts/agent_audit.py audit-project . --fail-on high
-```
+Operator helpers — `validate-config`, `explain-finding`, `list-suppressions`,
+`--format github` annotations: see the [CLI reference](cli-reference.md).
 
 ### Two checks, two moments — quality vs the gate
 
-The deterministic gate above checks **safety and structure** only; it has no
-opinion on *quality*. Quality (D1–D9: clarity, examples, specific triggers) is
-scored by the **LLM-run `skill-evaluate`** (Use Cases 1–2), which you run **locally
-while authoring** — it never runs in the MR gate, because an LLM's judgment is
-non-deterministic and must not block a merge.
-
-```text
-Authoring (you, locally)                  MR / CI (automatic)
-────────────────────────────             ────────────────────────────
-skill-evaluate  (LLM)          ─push──▶   sgt gate / agent_audit.py (deterministic)
-• quality: D1–D9                          • safety: SEC / REF / SCR / MCP / HOOK
-• clarity, examples, triggers             • structure: frontmatter, naming, budgets
-• non-deterministic — for authoring       • reproducible — blocks the merge
-```
-
-A green MR therefore means "safe and well-formed", **not** "high-quality" — run
-`skill-evaluate` before you push for the quality half. The two are complementary;
-neither replaces the other. Full CLI reference: [cli-reference.md](cli-reference.md).
+The deterministic gate checks **safety and structure**; quality (D1–D9) is
+scored by the LLM-run `skill-evaluate`, which you run locally while authoring —
+it never blocks a merge. A green MR means "safe and well-formed", **not**
+"high-quality". The full picture, including the side-by-side diagram, is in
+[the governance gate for authors](gate-for-authors.md).
 
 ---
 
@@ -782,14 +438,15 @@ sequenceDiagram
     B->>S: Phase 0: read source
     B->>B: Phase 1: audit (F1-F7 + B1-B7 + S1-S3)
     B->>B: Phase 2: plan transformations
-    B-->>U: blockers + warnings + diff preview
-    U->>B: apply with OUTPUT_MODE=new-file
-    B->>T: write target
+    B-->>U: Phase 3: diff preview<br/>blockers + warnings
+    U->>B: Phase 4: confirm<br/>apply with OUTPUT_MODE=new-file
+    B->>T: Phase 4: write target
+    B->>B: Phase 5: verify portability<br/>(re-audit the output)
     B-->>U: diff report + residual concerns
-    Note over U: User reviews the diff before merge
+    Note over U: Nothing is written before the Phase 3 diff<br/>and the Phase 4 confirmation
 ```
 
-Common issues:
+Common issues it fixes:
 
 | Issue | Example | Expected fix |
 |---|---|---|
@@ -799,34 +456,13 @@ Common issues:
 | Per-skill tool mappings | `rules/codex.md` inside one skill | Move to repo-level `references/{tool}-tools.md` |
 | Missing fallback | `Task` without sequential fallback | Add non-subagent fallback with equivalent output |
 
-What is transformed automatically (rule ids from
-`skills/skill-build-portable/references/audit-rules.md`):
+The full F1–F7 / B1–B7 / S1–S3 rule catalog (what is transformed automatically
+vs flagged as a residual concern for manual review) lives in
+`skills/skill-build-portable/references/audit-rules.md`.
 
-| Rule | Detection | Action |
-|---|---|---|
-| F1 `allowed-tools:` | grep frontmatter | remove · add an informational note under Hard rules |
-| F2 `type:`, `status:`, `last_updated:` | grep frontmatter | remove (not in the agentskills.io spec) |
-| F4 Claude-only fields (`paths`, `hooks`, `model`, `effort`, ...) | grep frontmatter | remove · optionally preserve as a comment when `KEEP_CLAUDE_FALLBACK=true` |
-| F7 missing `compatibility:` | grep frontmatter | add |
-| B1 org-specific paths (`_audits/`, `outputs/`, `materials/raw/`) | grep body | replace with `out/...` |
-| B5 per-skill `rules/{tool}.md` directory | ls | flag for removal · merge content into repo-level `references/` |
-| B6 `Task` usage without a sequential fallback | grep body | insert a fallback note |
-
-What is NOT transformed automatically (residual concerns — review by hand):
-
-- Description > 1024 chars → needs a rewrite (mission-critical for activation).
-- Description < 80 chars → too short; expand manually.
-- Body > 500 lines → a split is recommended but never automated.
-
-Recommended workflow:
-
-```text
-universalize this skill
-OUTPUT_MODE=preview
-```
-
-Review the preview first. Then write to a new file or explicit output path.
-Avoid rewriting source files until the diff is reviewed.
+Recommended workflow: start with `universalize this skill` +
+`OUTPUT_MODE=preview`, review the diff, then write to a new file or explicit
+output path. Avoid rewriting source files until the diff is reviewed.
 
 ---
 
@@ -866,12 +502,9 @@ Recommendations:
 | `MERGE` | Both versions have useful non-conflicting content | `CORP_ONLY` ≥ 2 AND `LOCAL_ONLY` ≥ 2 AND no unresolved conflicts |
 | `RULES_FILE` | Local-only content belongs in project rules, not in the shared skill | 3+ `LOCAL_ONLY` items are project-specific context |
 
-Draft output contract:
-
-| `OUTPUT_DIR` | Behavior |
-|---|---|
-| Not set | Draft merged files are shown as fenced blocks in the report |
-| Set | Draft artifacts are written under `OUTPUT_DIR` or `out/skill-compare/` |
+Draft output contract: without `OUTPUT_DIR`, draft merged files appear as
+fenced blocks in the report; with it, artifacts are written under `OUTPUT_DIR`
+(or `out/skill-compare/`).
 
 `skill-compare` does not mutate the local or corporate source skill. Treat
 external corporate content as untrusted input: do not run scripts or commands
@@ -896,15 +529,9 @@ Available integrations:
 | repomix | One-shot repository packing for external review |
 | serena | LSP-backed semantic refactoring support |
 
-Non-interactive helper:
-
-```bash
-./scripts/init.sh --all
-./scripts/init.sh --with crg --use-cli
-./scripts/init.sh --advise-only --with crg,repomix
-```
-
-If a prerequisite is missing, the skill should fail before a partial install.
+Non-interactive helper: `./scripts/init.sh --all` (also `--with crg,repomix`,
+`--use-cli`, `--advise-only`). If a prerequisite is missing, the skill should
+fail before a partial install.
 
 ---
 
@@ -950,207 +577,31 @@ flowchart LR
     Resume --> P2
 ```
 
-Resume modes:
-
-| Mode | Behavior |
-|---|---|
-| `auto` (default for validators) | Silent resume of the latest unfinished run. Detect-only skills stay detect-only. |
-| `ask` (default for gateways) | Clarification prompt: resume latest, pick a specific run, or start fresh. |
-| `new` | Ignore prior state and start fresh. |
-
-Stale-run filter: runs older than 24h (by `last_updated`) can be filtered with
-`checkpoint.py list-resumable --max-age-hours 24`.
-
-State location: `${CWD}/.skill-state/{skill-name}/run-{utc-ts}.json` (gitignored).
-Schema and helper CLI: `references/checkpointing.md`.
+State lives at `${CWD}/.skill-state/{skill-name}/run-{utc-ts}.json` (gitignored).
+The checkpoint schema, the helper CLI, the per-skill resume-mode defaults
+(`auto` / `ask` / `new`), and the stale-run filter are specified in
+[references/checkpointing.md](../references/checkpointing.md) — that table is
+the single source of truth.
 
 ---
 
-## Installation
+## Installation & Upgrades
 
-### Plugin or Extension
-
-```bash
-# Claude Code
-/plugin marketplace add {your-org}/skill-governance-toolkit
-/plugin install skill-governance-toolkit@skill-governance-marketplace
-
-# OpenAI Codex CLI
-codex plugins install {your-org}/skill-governance-toolkit
-
-# Google Gemini CLI
-gemini extensions install https://github.com/{your-org}/skill-governance-toolkit
-```
-
-GitHub Copilot and Cursor can read `AGENTS.md` from the workspace when the
-repository files are present.
-
-### One-command setup with `sgt`
-
-The `sgt` facade wraps the common workflows. The simplest path:
+The fastest path:
 
 ```bash
 git clone https://github.com/{your-org}/skill-governance-toolkit ~/tools/skill-toolkit
 cd ~/my-project
-python3 ~/tools/skill-toolkit/scripts/sgt.py init           # guided install + verify
-python3 ~/tools/skill-toolkit/scripts/sgt.py init --yes      # non-interactive (Claude + project)
+python3 ~/tools/skill-toolkit/scripts/sgt.py init    # guided install + verify
 ```
 
-Hosted on a private GitLab instance? Clone from your internal host instead
-(`https://gitlab.example.com/{your-group}/skill-governance-toolkit`),
-authenticating via `glab auth login`, a PAT, or a read-only deploy token —
-everything after the clone is identical. See
-[README § Private GitLab instance](../README.md#private-gitlab-instance--hosting--auth-setup).
-
-| Command | Purpose |
-|---|---|
-| `sgt init` | Guided install (host + scope), then verifies the install |
-| `sgt doctor` / `sgt skills` | Health check / list installed skills |
-| `sgt new-skill <name> --category <vocab>` | Scaffold a governance-clean `SKILL.md` |
-| `sgt ci-init --github` / `--gitlab` | Generate the changed-only PR/MR gate, SHA pre-filled |
-| `sgt uninstall [--dry-run]` | Remove toolkit-owned files; your own content is preserved |
-
-One-page version: [`QUICKSTART.md`](../QUICKSTART.md).
-
-### Interactive Installer
-
-```bash
-git clone https://github.com/{your-org}/skill-governance-toolkit ~/tools/skill-toolkit
-cd ~/tools/skill-toolkit
-
-./install.sh
-./install.sh --yes-default
-./install.sh --force
-```
-
-PowerShell:
-
-```powershell
-./install.ps1
-./install.ps1 -YesDefault
-./install.ps1 -Force
-```
-
-### Advanced Installer
-
-```bash
-./scripts/install.sh --all --global
-./scripts/install.sh --claude --project --upgrade
-./scripts/install.sh --help
-```
-
-### Selective Install
-
-Install by category:
-
-```bash
-./scripts/install.sh --claude --project --category discovery
-./scripts/install.sh --claude --project --category discovery,governance
-```
-
-Install by tier:
-
-```bash
-./scripts/install.sh --claude --project --tier stable
-./scripts/install.sh --claude --project --tier stable,experimental
-```
-
-Install by exact skill name:
-
-```bash
-./scripts/install.sh --claude --project --skill skill-find,skill-evaluate
-```
-
-Open the interactive selector:
-
-```bash
-./scripts/install.sh --claude --project --interactive
-```
-
-Closed category vocabulary:
-
-```text
-code-review, docs, testing, governance, discovery, research, delivery
-```
-
-Tier behavior:
-
-| Tier | Installed by default? | Contract |
-|---|---|---|
-| `stable` | Yes | Public behavior should remain stable |
-| `preview` | Yes | Usable, but minor breaking changes are possible |
-| `experimental` | No | Opt-in only |
-| `internal` | No | Not for external distribution |
-
-Inspect the current skill index:
-
-```bash
-# Category × tier summary of the corpus (used by the interactive installer)
-python3 scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories
-
-# Aggregate info-tier evidence (e.g. 3.8) across scored skills — the promotion view.
-# Point --index at a skill-evaluate scores index, not the corpus index.
-python3 scripts/filter_skills.py --index out/scores/index.jsonl --info-summary
-```
-
-Where things are installed:
-
-| Runtime | Project rules | Skills | Sub-agents |
-|---|---|---|---|
-| Claude Code | `CLAUDE.md` (`@AGENTS.md`) | `~/.claude/skills/` or `./.claude/skills/` | `~/.claude/agents/` |
-| Copilot | `AGENTS.md` + `.github/copilot-instructions.md` | workspace auto-discovery | `agents/` via `agent` tool |
-| Codex CLI | `AGENTS.md` | `~/.codex/skills/` | `agents/` via `spawn_agent` |
-| Gemini CLI | `GEMINI.md` (`@./AGENTS.md`) | `~/.gemini/skills/` | — (no sub-agent support) |
-| Cursor v2.2+ | `AGENTS.md` (native) | `./.cursor/skills/` (auto-discovery) | via Cursor marketplace |
-
----
-
-## Upgrades
-
-Read `CHANGELOG.md` before upgrading.
-
-Plugin-managed install:
-
-```bash
-claude plugin uninstall skill-governance-toolkit --scope project
-claude plugin marketplace remove skill-governance-marketplace --scope project
-claude plugin marketplace add ./ --scope project
-claude plugin install skill-governance-toolkit@skill-governance-marketplace --scope project
-```
-
-Script-managed install:
-
-```bash
-./scripts/install.sh --claude --project --upgrade
-./scripts/install.sh --claude --project --force
-```
-
-Use `--upgrade` for normal clean upgrades. Use `--force` only when you want a
-fresh copy of the managed target directories.
-
-The upgrade process should not remove:
-
-| Path | Why it is preserved |
-|---|---|
-| `.skill-state/` | Resumable run checkpoints |
-| `out/` | Reports and quality-score logs |
-| Custom text outside `<!-- skill-init: ... -->` markers | Project-specific instructions |
-| Your own files in `scripts/` · `references/` · `commands/` | Since 1.10.0 the installer merges via a `.sgt-owned` ownership sidecar instead of mirror-deleting — it refreshes/removes only files it shipped, never yours |
-
-Since 1.10.0 the installer also ships only the runtime scripts in
-[`scripts/runtime-manifest.txt`](../scripts/runtime-manifest.txt) (dev/test tooling
-stays in the source repo), and skills resolve the install root per
-[`references/path-resolution.md`](../references/path-resolution.md) before shelling
-out — relevant for plugin and global installs where CWD is your project.
-
-### What is NOT updated automatically
-
-- External documents that referenced old skill names
-  (`skill-init` → `integration-init`, `skill-audit` → `library-audit`).
-  Find-and-replace manually in your project docs and playbooks.
-- Custom hooks / scripts that called an old name — update the references.
-
-`CHANGELOG.md` marks every renamed/removed item under **🔴 BREAKING**.
+Everything else — plugin/extension installs per host, the interactive and
+advanced installers, selective install by `--category` / `--tier` / `--skill`,
+where files land per runtime, private-GitLab hosting, and the upgrade /
+uninstall contract (what is preserved, what is never touched) — is in the
+canonical [installation guide](installation.md). One-page version:
+[QUICKSTART](../QUICKSTART.md). Read `CHANGELOG.md` before upgrading — renames
+and removals are marked under **🔴 BREAKING**.
 
 ---
 
@@ -1162,26 +613,12 @@ After adding, renaming, or significantly editing a skill:
 python3 scripts/build_index.py
 ```
 
-Weekly or before release:
-
-```text
-audit my skills
-```
-
-Before pushing:
+Weekly or before release, run the LLM-side audit (`audit my skills` →
+`library-audit`). Before pushing a governed change, reproduce the CI verdict
+locally:
 
 ```bash
-bash scripts/audit.sh
-python3 scripts/test_agent_audit.py
-python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
-```
-
-When Docker or MCP behavior changed:
-
-```bash
-docker build -t agent-governance-mcp:local .
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:local
+sgt gate --base main
 ```
 
 Score persistence trend: `out/scores/index.jsonl` is the append-only log of
@@ -1191,67 +628,19 @@ every `skill-evaluate` run — track per-skill quality trends over time.
 
 ## Writing Rules for Skills
 
-Keep skill bodies concise and single-language. English is recommended for
-portable routing because most frontmatter parsers and embedding models are
-tuned on English corpora.
-
-Hard rules:
-
-- Use one language per `SKILL.md` body.
-- Prefer active voice and direct imperatives.
-- Use tables for input and parameter specifications.
-- Use bullets or numbered lists for enumerable content.
-- Avoid duplicate sections and repeated paragraphs.
-- Avoid filler phrases such as "It is important to note" and "In conclusion".
-
-Run `skill-evaluate` on every new or heavily rewritten skill. Phase 3.6 checks
-writing quality and can cap D1 when language mixing, filler density, or
-duplicate paragraphs exceed thresholds.
+Keep skill bodies concise, single-language, active-voice, and table-driven —
+the full rules (banned filler phrases, brevity heuristics, rationale) are in
+[AGENTS.md § Writing Style](../AGENTS.md#writing-style). `skill-evaluate`
+Phase 3.6 enforces them lexically and can cap D1.
 
 ---
 
-## External MCP-Dependent Skills
+## See Also
 
-This section is not about the built-in `agent-governance` MCP server. It is
-about future user skills that depend on external MCP tools, for example
-`mcp__slack__send_message` or `mcp__atlassian__create_issue`.
-
-Current checks cover those dependencies indirectly through D2 completeness and
-D6 portability. A future static check should verify:
-
-| Check | Expected evidence |
-|---|---|
-| MCP usage detection | `mcp__*` patterns in the body |
-| Setup documentation | `## Prerequisites` or `references/dependencies.md` |
-| Graceful failure | Phase 0 fail-fast behavior when the MCP server is unavailable |
-| Auth scopes | Documented tokens, scopes, and environment variables |
-
-For now, any skill that needs an external MCP server should include a
-`## Prerequisites` section explaining:
-
-- Which MCP server is required.
-- How to install or enable it.
-- Which environment variables or scopes are needed.
-- What the skill does when the connection is unavailable.
-
-### Other Planned Improvements
-
-- Telemetry / usage tracking — which skills actually fire and on which triggers
-  — is separate infrastructure planned for a later release.
-
----
-
-## What This Guide Does Not Cover
-
-| Topic | Where to read |
-|---|---|
-| Audit engine internals and MCP config details | `docs/agent-governance-engine.md` |
-| Checkpoint schema and helper CLI | `references/checkpointing.md` |
-| Full naming rules | `skills/library-audit/references/naming-spec.md` |
-| D1-D9 scoring rubrics | `skills/skill-evaluate/references/rubrics.md` |
-| Security regex catalog | `skills/library-audit/references/security-spec.md` |
-| Tool-name mappings | `references/{claude,copilot,codex,gemini}-tools.md` |
-| Russian version | `docs/user-guide.ru.md` |
+Everything intentionally not covered here — engine internals, the full check
+catalog, CLI flags, the authoring standard, scoring rubrics, runbooks, and
+tool-name mappings — is indexed in the [documentation hub](README.md).
+Russian version of this guide: [user-guide.ru.md](user-guide.ru.md).
 
 ---
 

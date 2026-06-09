@@ -641,6 +641,10 @@ security issues:
 | `SEC010` | high | Dangerous instruction (destructive shell, unsafe git) in a non-skill asset |
 | `SEC011` | high | Inline secret value in a non-skill asset |
 | `SEC012` | medium | Credential-file path referenced in a non-skill asset |
+| `REF001`–`REF004` | high–info | Unsafe references: un-whitelisted script, link traversing the repo root, dangling link, external URL |
+| `SCR001`–`SCR003` | high | A *referenced* script's content: env-var exfiltration heuristic, dangerous shell, inline secret |
+| `MCP001` / `MCP002` | high / low | A skill uses `mcp__server__*` without declaring it in `metainfo.requires.mcp` (/ declares one it never uses) |
+| `HOOK001` / `HOOK002` | high | A hook command (`.claude/settings*.json`, `plugin.json`, `hooks/*`) runs dangerous shell or leaks secrets |
 
 Full catalog with triggering examples and clean fixes:
 [`checks-reference.md`](checks-reference.md).
@@ -680,6 +684,9 @@ python3 scripts/agent_audit.py validate-config
 
 # Print how to fix a rule + the correct suppression path
 python3 scripts/agent_audit.py explain-finding SEC011
+
+# Inventory every active suppression (exit non-zero if any expired/expiring)
+python3 scripts/agent_audit.py list-suppressions --expiring-within 30
 
 # GitHub workflow annotations (inline on the PR diff)
 python3 scripts/agent_audit.py audit-project . --fail-on high --format github

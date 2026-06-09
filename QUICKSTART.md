@@ -79,6 +79,21 @@ sgt ci-init --gitlab     # writes .gitlab-ci.yml
 The command prints the exact remaining setup (token scope, branch protection,
 CODEOWNERS). Full walkthrough: [`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).
 
+The gate scans **every** governed asset (skills, agents, MCP/plugin configs,
+hooks, referenced scripts) for content-security issues — hidden/bidi characters
+and homoglyph typosquats (`SEC001`–`SEC003`), inline secrets and dangerous shell
+(`SEC010`–`SEC012`), unsafe references (`REF*`/`SCR*`), MCP server consistency
+(`MCP*`), and hook commands (`HOOK*`). It blocks only on findings an MR
+**introduces**, so it can be turned on over an existing library without an
+avalanche. Reproduce the exact CI verdict locally before pushing:
+
+```bash
+sgt gate --base main     # same delta-gate verdict the CI block job uses
+```
+Blocked by a false positive? See [`docs/gate-for-authors.md`](docs/gate-for-authors.md)
+(linked from every MR comment) — fix, inline-suppress an advisory rule, or
+request a CODEOWNER-gated central suppression.
+
 **CLI vs MCP vs Docker?** The audit engine is one engine in three forms: **CLI**
 for CI/local (default), **MCP** for an agent to audit while you edit, **Docker**
 for sandboxed/reproducible runs. Decision guide:

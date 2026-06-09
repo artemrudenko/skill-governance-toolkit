@@ -648,6 +648,10 @@ API. Только stdlib: HTTP через `urllib`, без SDK.
 | `SEC010` | high | Опасная инструкция (деструктивный shell, небезопасный git) в не-скил артефакте |
 | `SEC011` | high | Inline-секрет в не-скил артефакте |
 | `SEC012` | medium | Путь к файлу учётных данных в не-скил артефакте |
+| `REF001`–`REF004` | high–info | Небезопасные ссылки: не-whitelisted скрипт, ссылка за пределы repo-root, битая ссылка, внешний URL |
+| `SCR001`–`SCR003` | high | Контент *referenced*-скрипта: эвристика env-exfil, опасный shell, inline-секрет |
+| `MCP001` / `MCP002` | high / low | Скилл использует `mcp__server__*` без объявления в `metainfo.requires.mcp` (/ объявил, но не использует) |
+| `HOOK001` / `HOOK002` | high | Команда хука (`.claude/settings*.json`, `plugin.json`, `hooks/*`) запускает опасный shell или утекает секреты |
 
 Полный каталог с примерами срабатывания и чистыми фиксами:
 [`checks-reference.md`](checks-reference.md).
@@ -694,6 +698,9 @@ python3 scripts/agent_audit.py validate-config
 
 # Напечатать как фиксить правило + правильный путь подавления
 python3 scripts/agent_audit.py explain-finding SEC011
+
+# Инвентарь всех активных подавлений (exit non-zero если есть просроченные/истекающие)
+python3 scripts/agent_audit.py list-suppressions --expiring-within 30
 
 # GitHub workflow annotations (inline на diff в PR)
 python3 scripts/agent_audit.py audit-project . --fail-on high --format github

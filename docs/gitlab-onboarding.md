@@ -125,9 +125,13 @@ and engine can be changed by the same author who edits a skill in the same MR.
 
 ## Base-ref behaviour (edge cases)
 
-- **Empty `--base`** (e.g. missing `CI_MERGE_REQUEST_DIFF_BASE_SHA`) →
-  falls back to a **full-tree audit** with a stderr notice. The gate fails on
-  governance, not on infrastructure.
+- **Empty `--base`** with `--changed-only` (e.g. missing
+  `CI_MERGE_REQUEST_DIFF_BASE_SHA` on the first pipeline of a new MR, or a
+  non-merge-request pipeline) → **exits 2 (fails closed)** with a stderr notice.
+  It refuses to silently audit the whole tree — a silent scope switch could both
+  block unrelated MRs on legacy assets and, under `--fail-on none`, produce a
+  green pipeline that audited nothing. Re-run on a merge-request pipeline, or
+  drop `--changed-only` to audit the full project on purpose.
 - **Non-empty but bad/unreachable ref** → exits 2 with a sanitized message.
 
 ## Verify locally before pushing

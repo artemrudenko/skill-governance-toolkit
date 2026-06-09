@@ -600,9 +600,11 @@ asset would have no pipeline and block forever — the `noop` job (gated only on
 every MR has a green pipeline. Do not add a `changes:` filter to it.
 
 Base-ref handling:
-- **Empty `--base`** (e.g. a missing `CI_MERGE_REQUEST_DIFF_BASE_SHA`) falls back
-  to a **full-tree audit** with a stderr notice — the gate fails on governance,
-  not on infrastructure.
+- **Empty `--base`** with `--changed-only` (e.g. a missing
+  `CI_MERGE_REQUEST_DIFF_BASE_SHA`) **exits 2 (fails closed)** with a stderr
+  notice — it refuses to silently audit the whole tree (a silent scope switch
+  could block unrelated MRs on legacy assets, or pass a pipeline that audited
+  nothing). Re-run on a merge-request pipeline, or drop `--changed-only`.
 - **A non-empty but bad/unreachable ref** exits 2 with a sanitized message.
 
 #### MR comment poster

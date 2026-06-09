@@ -152,6 +152,7 @@ dangerous instructions / secrets (`SEC010`–`SEC012`), hidden/bidi characters
 (`SEC001`/`SEC002`), and homoglyph typosquats (`SEC003`), and blocks only on
 findings an MR *introduces* (`--fail-on-new`). Author and operator docs:
 
+- [`docs/cli-reference.md`](docs/cli-reference.md) — complete `agent_audit.py` + `sgt` subcommand / flag / env-var / exit-code reference.
 - [`docs/gate-for-authors.md`](docs/gate-for-authors.md) — one-page author entry point (linked from every MR comment).
 - [`docs/security-suppression-runbook.md`](docs/security-suppression-runbook.md) — false positives, inline vs central suppression, SLA + break-glass.
 - [`docs/security-rollout-guide.md`](docs/security-rollout-guide.md) — enable the suite over an existing library without an avalanche.

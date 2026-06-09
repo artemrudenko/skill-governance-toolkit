@@ -667,6 +667,8 @@ sgt gate --base main
 python3 scripts/agent_audit.py audit-project . --changed-only --base main --fail-on-new high
 ```
 
+For every `agent_audit.py` and `sgt` subcommand, flag, env var, and exit code — including the two scoping layers (`--changed-only` file scope vs `--fail-on-new` finding scope) and the fail-closed empty-`--base` behavior — see the full [CLI reference](cli-reference.md).
+
 ### Suppression
 
 | Mechanism | Suppresses | How |

@@ -130,8 +130,8 @@
     {
       "rule_id": "SKILL020",
       "severity": "low",
-      "title": "Missing predecessor or successor metadata",
-      "description": "Workflow contracts are clearer when related skills are documented."
+      "title": "Missing workflow-chain contract",
+      "description": "A skill that participates in a workflow chain — it declares handoffs, replaces another skill, or describes running before/after a peer — should document a \"## Predecessor\" / \"## Successor\" section so orchestrators know the run order. Standalone skills are exempt."
     },
     {
       "rule_id": "SKILL021",

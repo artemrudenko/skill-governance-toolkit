@@ -76,6 +76,18 @@ def _suggestion_cell(item: dict[str, Any]) -> str:
     return f"Suppress: {suppress}"
 
 
+def _rule_cell(item: dict[str, Any]) -> str:
+    """Compose the table's Rule cell: the rule id in code font plus the rule's
+    human-readable title on a second line, so a reviewer sees WHAT the rule is.
+    Both halves are markdown-cell-safe (title derives from the catalog, but stay
+    consistent with the rest of the table's escaping)."""
+    rid = _md_cell(item.get("rule_id"))
+    title = _md_cell(item.get("title"))
+    if title:
+        return f"`{rid}`<br/>{title}"
+    return f"`{rid}`"
+
+
 def _md_cell(value: Any) -> str:
     """Make an arbitrary finding value safe inside a Markdown table cell.
 
@@ -109,7 +121,7 @@ def _severity_tables(findings: list[dict[str, Any]], lines: list[str]) -> None:
         for item in visible:
             location = f"`{_md_cell(item.get('file'))}:{_md_cell(item.get('line'))}`"
             lines.append(
-                f"| {_md_cell(item.get('rule_id'))} | {location} "
+                f"| {_rule_cell(item)} | {location} "
                 f"| {_md_cell(item.get('message'))} | {_suggestion_cell(item)} |"
             )
         overflow = len(group) - len(visible)
@@ -178,7 +190,7 @@ def render_comment(report: dict[str, Any], max_findings: int = 50) -> str:
         for item in group:
             location = f"`{_md_cell(item.get('file'))}:{_md_cell(item.get('line'))}`"
             lines.append(
-                f"| {_md_cell(item.get('rule_id'))} | {location} "
+                f"| {_rule_cell(item)} | {location} "
                 f"| {_md_cell(item.get('message'))} | {_suggestion_cell(item)} |"
             )
         lines.append("")

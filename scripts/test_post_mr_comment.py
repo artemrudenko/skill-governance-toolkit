@@ -44,6 +44,18 @@ class PostMrCommentTests(unittest.TestCase):
         self.assertIn("skills/x/SKILL.md", body)
         self.assertIn("Missing frontmatter", body)
 
+    def test_render_shows_rule_title_in_rule_column(self) -> None:
+        report = _report([
+            {"rule_id": "SKILL001", "severity": "high", "file": "skills/x/SKILL.md", "line": 1,
+             "message": "Missing frontmatter", "suggestion": "Add name and description.",
+             "title": "Missing YAML frontmatter", "rationale": "Frontmatter carries routing metadata."},
+        ])
+
+        body = post_mr_comment.render_comment(report)
+
+        self.assertIn("Missing YAML frontmatter", body)
+        self.assertIn("SKILL001", body)
+
     def test_render_clean_report_says_passed(self) -> None:
         body = post_mr_comment.render_comment(_report([]))
 

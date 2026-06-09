@@ -376,6 +376,26 @@ def rules_by_id() -> dict[str, dict[str, str]]:
     return {rule["rule_id"]: rule for rule in load_rule_catalog()["rules"]}
 
 
+def enrich_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Annotate each finding dict with the catalog `title` and `rationale`.
+
+    Additive only — the dict keeps `rule_id, severity, file, line, message,
+    suggestion` and gains `title` (catalog title) + `rationale` (catalog
+    description), so a report reader sees WHAT the rule is and WHY it exists.
+    A finding whose rule_id is absent from the catalog (shouldn't happen) is
+    left untouched. `finding_key` ignores both fields, so delta identity is
+    unchanged.
+    """
+    catalog = rules_by_id()
+    for f in findings:
+        rule = catalog.get(f.get("rule_id"))
+        if rule is None:
+            continue
+        f["title"] = rule["title"]
+        f["rationale"] = rule["description"]
+    return findings
+
+
 def as_posix(path: Path) -> str:
     return str(path).replace("\\", "/")
 
@@ -467,6 +487,34 @@ def has_never_asks_contract(body: str) -> bool:
 
 def is_mutating_skill(body: str) -> bool:
     return bool(re.search(r"Skill type:\**\s*(?:MUTATING|Mutating)", body, re.I))
+
+
+# Workflow-relationship prose: the skill describes running before/after a peer,
+# hands off, or replaces/is-replaced. Case-insensitive; used as a SKILL020 chain signal.
+_CHAIN_BODY_RE = re.compile(
+    r"\b(predecessor|successor|hand[\s-]?off|hands? off|next skill|previous skill|"
+    r"runs? (?:after|before) the|replaces the|replaced by)\b",
+    re.I,
+)
+
+
+def _has_chain_signal(fm: dict[str, Any], body: str) -> bool:
+    """True when a skill participates in a workflow chain — the only case where a
+    missing Predecessor/Successor contract (SKILL020) is a real defect.
+
+    Signals (any one suffices):
+    - a top-level `handoffs:` frontmatter key (declares named transitions to peers),
+    - `metainfo.replaced_by` or `metainfo.deprecated` set (replacement relationship),
+    - workflow-relationship prose in the body (handoff / before-after / replaces).
+    A standalone skill exhibits none of these and is exempt.
+    """
+    if isinstance(fm, dict):
+        if fm.get("handoffs"):
+            return True
+        metainfo = fm.get("metainfo")
+        if isinstance(metainfo, dict) and (metainfo.get("replaced_by") or metainfo.get("deprecated")):
+            return True
+    return bool(_CHAIN_BODY_RE.search(body))
 
 
 def finding(rule_id: str, file: Path, line: int, message: str, suggestion: str) -> Finding:
@@ -754,9 +802,18 @@ def audit_skill(path: str | Path, profile: str = "release-ready", root: str | Pa
             finding("SKILL019", skill_path, line_for_body_regex(text, body, overbroad_pattern, re.I), "Overbroad scope language detected.", "Narrow the workflow and define skip criteria.")
         )
 
-    if "## Predecessor" not in body and "## Successor" not in body:
+    # SKILL020 fires only when a skill participates in a workflow chain (declares
+    # handoffs, replaces/is-replaced, or describes running before/after a peer) yet
+    # documents no run-order. A standalone skill has no adjacent skill, so it is exempt.
+    if "## Predecessor" not in body and "## Successor" not in body and _has_chain_signal(fm, body):
         findings.append(
-            finding("SKILL020", skill_path, 1, "No predecessor/successor workflow contract detected.", "Consider documenting adjacent skills or handoff points.")
+            finding(
+                "SKILL020",
+                skill_path,
+                1,
+                "This skill signals a workflow relationship (handoff or replacement) but has no \"## Predecessor\" / \"## Successor\" section, so an orchestrator can't tell which skill runs before or after it.",
+                "Add a \"## Predecessor\" and/or \"## Successor\" section naming the adjacent skill(s). A standalone skill with no handoff or replacement does not need this.",
+            )
         )
 
     # Hidden-char scan (SEC001/SEC002) — skills can be imported/copy-pasted too,
@@ -798,7 +855,7 @@ def audit_skill(path: str | Path, profile: str = "release-ready", root: str | Pa
         "rules_version": load_rule_catalog()["version"],
         "target": as_posix(skill_path),
         "summary": summarize_findings(kept),
-        "findings": [asdict(f) for f in kept],
+        "findings": enrich_findings([asdict(f) for f in kept]),
     }
 
 
@@ -1768,7 +1825,9 @@ def audit_project(
             continue
         report = audit_skill(asset["path"], profile=profile, root=root_path)
         skill_reports.append(report)
-        findings.extend(Finding(**f) for f in report["findings"])
+        # audit_skill returns enriched dicts (title/rationale added); rebuild the
+        # frozen Finding from only its own fields so the extra keys don't break it.
+        findings.extend(Finding(**{k: f[k] for k in Finding.__dataclass_fields__}) for f in report["findings"])
         skill_text = safe_read_asset(Path(asset["path"]), root_path)
         if skill_text is not None:
             inline.update(_parse_inline_ignores(skill_text, _norm_rel(asset["path"], str(root_path))))
@@ -1830,7 +1889,9 @@ def audit_project(
             findings.append(f)
 
     ignore_doc = _load_ignore_doc(root_path)
-    findings_dicts = _apply_ignores([asdict(f) for f in findings], ignore_doc, inline, root=str(root_path))
+    findings_dicts = enrich_findings(
+        _apply_ignores([asdict(f) for f in findings], ignore_doc, inline, root=str(root_path))
+    )
 
     return {
         "kind": "project-audit",
@@ -2266,8 +2327,17 @@ def print_text_report(report: dict[str, Any]) -> None:
             print(f"  {rule_id}: {count}")
     for item in report.get("findings", []):
         print("")
-        print(f"[{item['severity'].upper()}] {item['rule_id']} {item['file']}:{item['line']}")
+        title = item.get("title")
+        header = f"[{item['severity'].upper()}] {item['rule_id']}"
+        if title:
+            header += f" — {title}"
+        print(f"{header}   {item['file']}:{item['line']}")
         print(f"  {item['message']}")
+        rationale = item.get("rationale")
+        # Only add a "Why:" line when the rationale adds information beyond the
+        # message itself — a rationale identical to the message would be noise.
+        if rationale and rationale != item.get("message"):
+            print(f"  Why: {rationale}")
         print(f"  Suggestion: {item['suggestion']}")
 
 
@@ -2284,7 +2354,11 @@ def print_github_annotations(report: dict[str, Any]) -> None:
         rule_id = item.get("rule_id", "")
         # Strip newlines — a literal newline would terminate the workflow command early.
         message = str(item.get("message", "")).replace("\n", " ")
-        print(f"::{level} file={rel},line={line},title={rule_id}::{message}")
+        # The annotation title carries the human-readable rule title after the id, so a
+        # reviewer reading the PR annotation sees WHAT the rule is, not just the code.
+        rule_title = str(item.get("title", "")).replace("\n", " ")
+        title = f"{rule_id}: {rule_title}" if rule_title else rule_id
+        print(f"::{level} file={rel},line={line},title={title}::{message}")
 
 
 def emit(data: dict[str, Any], fmt: str) -> None:

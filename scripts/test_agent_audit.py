@@ -514,6 +514,128 @@ class AgentAuditBehaviorTests(unittest.TestCase):
 
             self.assertIn("SKILL023", {item["rule_id"] for item in report["findings"]})
 
+    # --- Part 2: SKILL020 fires only on real workflow chains ---
+
+    def test_skill020_silent_for_standalone_skill(self) -> None:
+        """A standalone skill (no chain signal) does NOT trip SKILL020."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "\n".join(
+                    [
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit and verify sample skills.",
+                    ]
+                ),
+            )
+            report = agent_audit.audit_skill(skill)
+            self.assertNotIn("SKILL020", {item["rule_id"] for item in report["findings"]})
+
+    def test_skill020_fires_when_handoffs_declared(self) -> None:
+        """A `handoffs:` frontmatter key signals a chain but no Predecessor/Successor."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skills" / "sample"
+            skill_dir.mkdir(parents=True)
+            path = skill_dir / "SKILL.md"
+            path.write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "name: sample-skill",
+                        "description: this sample skill has enough routing words and trigger phrases for deterministic audit tests",
+                        "compatibility: all",
+                        "license: MIT",
+                        "handoffs: [other-skill]",
+                        "metainfo:",
+                        "  category: [governance]",
+                        "  tier: stable",
+                        "---",
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit and verify sample skills.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            report = agent_audit.audit_skill(path)
+            findings = {item["rule_id"]: item for item in report["findings"]}
+            self.assertIn("SKILL020", findings)
+            self.assertEqual(findings["SKILL020"]["severity"], "low")
+            self.assertIn("workflow relationship", findings["SKILL020"]["message"])
+
+    def test_skill020_fires_on_handoff_body_language(self) -> None:
+        """Workflow-relationship prose in the body is a chain signal."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "\n".join(
+                    [
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit sample skills.",
+                        "This skill replaces the older sample-audit skill.",
+                    ]
+                ),
+            )
+            report = agent_audit.audit_skill(skill)
+            self.assertIn("SKILL020", {item["rule_id"] for item in report["findings"]})
+
+    def test_skill020_fires_on_replaced_by_metainfo(self) -> None:
+        """metainfo.replaced_by is a chain signal."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skills" / "sample"
+            skill_dir.mkdir(parents=True)
+            path = skill_dir / "SKILL.md"
+            path.write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "name: sample-skill",
+                        "description: this sample skill has enough routing words and trigger phrases for deterministic audit tests",
+                        "compatibility: all",
+                        "license: MIT",
+                        "metainfo:",
+                        "  category: [governance]",
+                        "  tier: stable",
+                        "  replaced_by: newer-skill",
+                        "---",
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit and verify sample skills.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            report = agent_audit.audit_skill(path)
+            self.assertIn("SKILL020", {item["rule_id"] for item in report["findings"]})
+
+    def test_skill020_silent_when_chain_documented(self) -> None:
+        """A skill with a chain signal AND a Predecessor section does not trip."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(
+                Path(tmp),
+                "\n".join(
+                    [
+                        "# Sample",
+                        "> **Skill type:** Detect-only.",
+                        "## When to use",
+                        "Use this to audit sample skills.",
+                        "This skill replaces the older sample-audit skill.",
+                        "## Predecessor",
+                        "sample-audit",
+                        "## Successor",
+                        "terminal",
+                    ]
+                ),
+            )
+            report = agent_audit.audit_skill(skill)
+            self.assertNotIn("SKILL020", {item["rule_id"] for item in report["findings"]})
+
     def test_non_skill_assets_are_content_scanned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -545,6 +667,60 @@ class AgentAuditBehaviorTests(unittest.TestCase):
             report = agent_audit.audit_skill(skill)
 
             self.assertIn("SKILL015", {item["rule_id"] for item in report["findings"]})
+
+    # --- Part 1: findings carry rule title + rationale ---
+
+    def test_finding_dicts_carry_title_and_rationale(self) -> None:
+        """Each serialized finding gains the catalog `title` + `rationale` (description)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skills" / "bad"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text("No frontmatter here\n", encoding="utf-8")
+
+            report = agent_audit.audit_project(tmp)
+            catalog = agent_audit.rules_by_id()
+            self.assertTrue(report["findings"])
+            for item in report["findings"]:
+                rule = catalog.get(item["rule_id"])
+                self.assertIsNotNone(rule, item["rule_id"])
+                self.assertEqual(item["title"], rule["title"])
+                self.assertEqual(item["rationale"], rule["description"])
+
+    def test_audit_skill_findings_carry_title_and_rationale(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = self._write_valid_skill(Path(tmp), "## When to use\nverify nothing.\n")
+            report = agent_audit.audit_skill(skill)
+            catalog = agent_audit.rules_by_id()
+            self.assertTrue(report["findings"])
+            for item in report["findings"]:
+                rule = catalog[item["rule_id"]]
+                self.assertEqual(item["title"], rule["title"])
+                self.assertEqual(item["rationale"], rule["description"])
+
+    def test_finding_key_ignores_title_and_rationale(self) -> None:
+        """Delta identity must not shift when title/rationale are present."""
+        base = {"rule_id": "SKILL001", "file": "skills/x/SKILL.md", "message": "m"}
+        enriched = {**base, "title": "T", "rationale": "R", "line": 9, "severity": "high"}
+        self.assertEqual(agent_audit.finding_key(base), agent_audit.finding_key(enriched))
+
+    def test_text_report_renders_title_and_why(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skills" / "bad"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text("No frontmatter here\n", encoding="utf-8")
+            result = self.run_cli("audit-project", tmp, "--format", "text")
+            catalog = agent_audit.rules_by_id()
+            self.assertIn(catalog["SKILL001"]["title"], result.stdout)
+            self.assertIn("Why:", result.stdout)
+
+    def test_github_format_title_contains_rule_title(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skills" / "bad"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text("No frontmatter here\n", encoding="utf-8")
+            result = self.run_cli("audit-project", tmp, "--format", "github")
+            title = agent_audit.rules_by_id()["SKILL001"]["title"]
+            self.assertIn(f"title=SKILL001: {title}::", result.stdout)
 
 
 if __name__ == "__main__":

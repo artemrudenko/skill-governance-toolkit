@@ -90,7 +90,10 @@ esac
 
 case "$scope_choice" in
   1) SCOPE_FLAG="--global";  SCOPE_PREFIX="$HOME" ;;
-  2) SCOPE_FLAG="--project"; SCOPE_PREFIX="$REPO_ROOT" ;;
+  # Project scope installs into the CURRENT directory (scripts/install.sh uses
+  # its own $(pwd), which exec preserves) — NOT the toolkit dir. Report the real
+  # target so the banner can't mislead a user who ran the installer from elsewhere.
+  2) SCOPE_FLAG="--project"; SCOPE_PREFIX="$PWD" ;;
   *) echo "Invalid scope choice: $scope_choice" >&2; exit 1 ;;
 esac
 

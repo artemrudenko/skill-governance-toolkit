@@ -122,6 +122,46 @@ How well will the skill's `description` field activate the skill when the user e
 | 1 | Description < 80 chars, or doesn't answer one of the two questions |
 | 0 | Description is a single noun or missing |
 
+### Activation-coherence gate (caps D8 ≤ 3)
+
+The score above rates the `description` **in isolation**. This gate rates it
+**against the body's `## When to use`** — the two activation surfaces load at
+different times (description routes activation; the body's Skip criteria refine
+it after activation), so they must not disagree on the **positive** scope.
+
+Compare the description's positive triggers against the body's `Skip / Don't use
+for` and `## When not to use` lines:
+
+- **Contradiction (🔴 → D8 ≤ 3):** the body excludes a case the `description`
+  **positively advertises**. The agent activates on the description, then the body
+  tells it to abort — wasted activation and an untrustworthy routing surface.
+- **Legitimate narrowing (no finding):** the body excludes a *neighbour or subset*
+  the description never claimed (hand-off to a sibling skill). Bodies are *expected*
+  to narrow; only negating the description's own positive scope is a defect.
+
+Detection is semantic, not lexical: read both regions and judge whether each Skip
+line **removes** an advertised case or merely **bounds** an unclaimed one.
+
+**Worked example — contradiction (activation_coherent: false, D8 ≤ 3):**
+
+```text
+description: "Use when deploying to production, shipping a release, or promoting a build."
+## When to use → Skip / Don't use for: "Don't use for production deploys — staging only."
+```
+
+The description advertises "production deploy"; the body forbids it. Cap D8 ≤ 3 and
+emit a top_issue: *"description triggers on 'production deploy' but the body Skip
+excludes it — align the two or the agent activates then aborts."*
+
+**Worked example — narrowing, NOT a contradiction (activation_coherent: true):**
+
+```text
+description: "Use when reviewing TypeScript PRs for bugs and style."
+## When to use → Skip / Don't use for: "Don't use for Python or Go — use the lang-specific reviewer."
+```
+
+The Skip bounds languages the description never claimed (TS only). No finding.
+
 ## D9 — Safety / Risk Awareness
 
 Does the skill identify and document mitigations for safety-critical concerns? This dimension evaluates **behavioral design**, not lexical content (lexical secret/dangerous-pattern scanning lives in `library-audit` Phase 5).

@@ -87,7 +87,7 @@ metainfo:
 
 ## Parallelization guidance
 
-- **Phase 1 (D1–D9) — do NOT parallelize.** Cross-dim insights (D3+D4 interaction, D5 vs D9, D9 caps from 3.5, D1 caps from 3.6) require all 9 dims in ONE context.
+- **Phase 1 (D1–D9) — do NOT parallelize.** Cross-dim insights (D3+D4 interaction, D5 vs D9, D9 caps from 3.5, D1 caps from 3.6, D8 caps from 3.7's semantic description↔body comparison) require all 9 dims in ONE context.
 - **Phase 3 sub-checks — batch tool calls.** 3.0/3.0b/3.1/3.2/3.3/3.4/3.4b/3.5/3.6 are independent; emit supporting `grep`/`ls`/`Read` in ONE message with multiple `tool_use` blocks. Aggregate in context to apply caps.
 - **Phase 0 / 4 / 5 / 6 — sequential** (trivially fast or synthesis-dependent).
 - **Never require `Task` / sub-agent dispatch for scoring correctness.** Optional specialized sub-agent paths are acceptable only when the skill also documents a sequential fallback with the same output schema. Do not use sub-agents for plain parallelization; use batched tool calls.
@@ -140,8 +140,9 @@ Each sub-check is detect-only; findings appear in the Phase 4 report.
 | 3.4b — Multi-tool compatibility | aligned with library-audit Phase 4.5 | feeds D6 |
 | 3.5 — Lexical security scan | reuses `skills/library-audit/references/security-spec.md` | **caps D9 ≤ 2 / 3 / 4** |
 | 3.6 — Writing quality scan | language consistency, filler density, duplicate paragraphs, long prose | **caps D1 ≤ 3 / 4** |
+| 3.7 — Activation coherence | `description` positive triggers vs body `Skip / When not to use` (semantic) | **caps D8 ≤ 3** |
 
-**Self-exclusion:** `skills/skill-evaluate/**` files exempt from Phase 3.5 + 3.6 scanning of their own bodies (they document the patterns; would trivially self-flag).
+**Self-exclusion:** `skills/skill-evaluate/**` files exempt from Phase 3.5 + 3.6 + 3.7 scanning of their own bodies (they document the patterns; would trivially self-flag).
 
 **Phase 3.5 dependency:** the security pattern catalog lives in the `library-audit` bundle (`security-spec.md`), shared to avoid drift. Resolve it as `$SGT_ROOT/skills/library-audit/references/security-spec.md` (see `references/path-resolution.md` for `$SGT_ROOT`). If `skill-evaluate` was installed **without** `library-audit` (`--skill skill-evaluate` alone), the catalog is absent — install both together (`--skill skill-evaluate,library-audit`) or Phase 3.5 runs in reduced mode (flag only inline-obvious secrets) and logs the degradation. Never silently skip the scan.
 
@@ -225,7 +226,7 @@ Produce the complete improved SKILL.md.
 Append exactly one line to `out/scores/index.jsonl` — valid JSON, no trailing comma:
 
 ```json
-{"date":"YYYY-MM-DD","skill_name":"NAME","skill_path":"PATH","score":NN,"tier":"TIER","safety_gate_triggered":true|false,"lines":NNN,"pattern":"ReAct|ReWOO|Orchestrator-Workers|Evaluator-Optimizer|CodeAct|Procedural","has_frontmatter":true|false,"needs_references":true|false,"name_length":NN,"name_valid":true|false,"description_length":NNN,"description_in_sweet_spot":true|false,"description_answers_what":true|false,"description_answers_when":true|false,"forbidden_frontmatter":["allowed-tools","type"],"canonical_when_to_use":true|false,"has_scripts":true|false,"has_assets":true|false,"scripts_run_pattern":true|false|null,"dims":{"clarity":N,"completeness":N,"specificity":N,"examples":N,"constraints":N,"portability":N,"testability":N,"discoverability":N,"safety":N},"lexical_security":{"secret_hits":N,"dangerous_hits":N,"cred_path_hits":N,"d9_cap_applied":"none|2|3|4"},"writing_quality":{"language_mix_hits":N,"filler_hits":N,"duplicate_paragraph_hits":N,"long_prose_hits":N,"d1_cap_applied":"none|3|4"},"top_issues":["issue1","issue2","issue3"]}
+{"date":"YYYY-MM-DD","skill_name":"NAME","skill_path":"PATH","score":NN,"tier":"TIER","safety_gate_triggered":true|false,"lines":NNN,"pattern":"ReAct|ReWOO|Orchestrator-Workers|Evaluator-Optimizer|CodeAct|Procedural","has_frontmatter":true|false,"needs_references":true|false,"name_length":NN,"name_valid":true|false,"description_length":NNN,"description_in_sweet_spot":true|false,"description_answers_what":true|false,"description_answers_when":true|false,"forbidden_frontmatter":["allowed-tools","type"],"canonical_when_to_use":true|false,"activation_coherent":true|false,"has_scripts":true|false,"has_assets":true|false,"scripts_run_pattern":true|false|null,"dims":{"clarity":N,"completeness":N,"specificity":N,"examples":N,"constraints":N,"portability":N,"testability":N,"discoverability":N,"safety":N},"lexical_security":{"secret_hits":N,"dangerous_hits":N,"cred_path_hits":N,"d9_cap_applied":"none|2|3|4"},"writing_quality":{"language_mix_hits":N,"filler_hits":N,"duplicate_paragraph_hits":N,"long_prose_hits":N,"d1_cap_applied":"none|3|4"},"top_issues":["issue1","issue2","issue3"]}
 ```
 
 Confirm the line was written. Do not rewrite existing lines.

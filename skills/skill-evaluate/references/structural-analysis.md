@@ -182,3 +182,25 @@ the SKILL.md body (frontmatter excluded). Detect-only; findings cap D1.
 Rationale: D1 (Clarity) ultimately asks «can a fresh reader follow this skill?» — a skill that is multilingual, filler-heavy, or repeats itself answers «no» regardless of how clearly the phases are individually written.
 
 Findings land in the Phase 4 output's **«Writing quality»** section, separately from the D1 score — both signals matter. See [AGENTS.md → Writing Style](../../../AGENTS.md#writing-style) for the project-level guidelines that inform these checks.
+
+## 3.7 — Activation coherence (THIS skill)
+
+**Self-exclusion (meta-rule):** files inside `skills/skill-evaluate/` are **exempt** — this skill documents the check (its own body carries the worked-example strings) and would self-flag.
+
+The `description` and the body's `## When to use` are two activation surfaces that load at different times: `description` routes activation (always in context); the body's `Skip / Don't use for` + `## When not to use` refine it *after* activation. They must agree on the **positive** scope — a body that excludes a case the description positively advertises makes the agent activate then abort, and erodes trust in the routing surface.
+
+This is a **semantic** sub-check (the only one in Phase 3): read both regions and judge each Skip line, rather than matching a regex.
+
+| Pass | What we check | Detection | Severity |
+|---|---|---|---|
+| **3.7.1** | **Activation coherence.** The body's `Skip / Don't use for` and `## When not to use` must only *narrow* (exclude a neighbour/subset the description never claimed), never *negate* a case the `description` positively triggers on. | Extract the description's positive triggers (the «when use it» clauses) and the body's Skip/When-not-to-use lines. For each Skip line, judge: does it remove an **advertised** case (🔴 contradiction) or bound an **unclaimed** one (no finding)? | 🔴 |
+
+**D8 score cap from a coherence finding** (applied AFTER initial D8 scoring from the rubric):
+
+| Finding | D8 cap |
+|---|---|
+| Any 🔴 contradiction (3.7.1) | D8 ≤ 3 |
+
+Set the JSONL flag `activation_coherent: false` on a 🔴, `true` otherwise. On a contradiction, add a top_issue naming the exact pair (advertised trigger ↔ excluding Skip line). See [`rubrics.md` → D8 Activation-coherence gate](rubrics.md#activation-coherence-gate-caps-d8--3) for worked examples of contradiction vs legitimate narrowing.
+
+Rationale: D8 (Discoverability) asks «will the right need activate this skill, and only the right need?» A description that advertises a case the body then refuses fails that test no matter how rich its trigger phrasing.

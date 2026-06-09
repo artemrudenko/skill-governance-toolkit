@@ -70,7 +70,7 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
 - **Doc-vs-reality drift:** `agent-governance-engine.md` now shows `--fail-on-new high`
   for the ci-init gate (was `--fail-on high`) and an illustrative (not frozen)
   `engine_version`; `cli-reference.md` documents `sgt gate --allow-dirty`; the user
-  guides document `filter_skills --info-summary`; `AGENTS.md` self-CI range is `P1–P30`;
+  guides document `filter_skills --info-summary`; `AGENTS.md` self-CI range is `P1–P35`;
   `QUICKSTART.md` clone command no longer uses an unresolved `<toolkit-repo>` placeholder.
 - **Consumer-onboarding doc fixes:** `QUICKSTART.md` raw-installer line now points at
   `scripts/install.sh` (the root wrapper rejects `--claude`/`--project`); README's
@@ -118,6 +118,9 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
   (bash placed them). Added `Ensure-DocsCopied` (conflict-rename + `.sgt-owned`, mirroring bash)
   and root-manifest placement. **P28** gained a pwsh-independent content-parity check — the blind
   spot that hid this, since the runner has no `pwsh`.
+- **Self-CI phase-range drift guarded (P35).** `AGENTS.md` documented `P1–P32` while `audit.sh` ran
+  to `P33` (two reviews flagged this across releases). New **P35** asserts the documented range
+  equals the highest phase label, so adding a phase without updating the doc now fails the gate.
 
 ---
 

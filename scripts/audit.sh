@@ -43,6 +43,7 @@
 #   P32 — generate_subset_agents_md.py subset rewriter behavior
 #   P33 — cli-reference flag coverage (argparse ⊆ docs)
 #   P34 — onboarding ci-init uses a toolkit-scoped SHA (not the consumer's HEAD)
+#   P35 — documented self-CI phase range (AGENTS.md) matches audit.sh
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -715,6 +716,22 @@ if [[ -n "$onboarding_bad" ]]; then
   fail "onboarding doc resolves the consumer's HEAD for --ref (breaks the gate):$onboarding_bad"
 else
   pass "onboarding ci-init examples pin a toolkit-scoped SHA"
+fi
+
+# ── P35: documented self-CI phase range matches audit.sh ─────────────────────
+# Stale "P1–PN" prose drifted across consecutive releases (two reviews flagged
+# it). Assert AGENTS.md's documented range equals the highest phase label here,
+# so adding a phase without updating the doc fails the gate.
+
+phase "P35 — documented self-CI phase range matches audit.sh"
+max_phase="$(grep -oE 'phase "P[0-9]+' "$ROOT/scripts/audit.sh" | grep -oE '[0-9]+' | sort -n | tail -1)"
+doc_phase="$(grep -oE 'P1[–-]P[0-9]+ suite' "$ROOT/AGENTS.md" | grep -oE '[0-9]+' | tail -1)"
+if [[ -z "$doc_phase" ]]; then
+  fail "AGENTS.md does not document a 'P1–PN suite' self-CI range"
+elif [[ "$doc_phase" != "$max_phase" ]]; then
+  fail "AGENTS.md self-CI range P1–P$doc_phase != audit.sh highest phase P$max_phase"
+else
+  pass "AGENTS.md documents P1–P$max_phase, matching audit.sh"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

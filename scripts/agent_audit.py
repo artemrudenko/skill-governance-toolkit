@@ -2054,6 +2054,194 @@ def validate_config(config_path: str | None = None) -> dict[str, Any]:
     return {"kind": "validate-config", "issues": issues, "checked": checked}
 
 
+def _days_remaining(expires: str, today: str) -> int | None:
+    """Whole-day delta between an expires date (YYYY-MM-DD) and today.
+    Returns None for a malformed date so callers can skip the window check."""
+    if not _EXPIRES_RE.match(expires):
+        return None
+    from datetime import date
+
+    try:
+        exp = date.fromisoformat(expires)
+        now = date.fromisoformat(today)
+    except ValueError:
+        return None
+    return (exp - now).days
+
+
+def collect_suppressions(root: str | Path = ".") -> list[dict[str, Any]]:
+    """Enumerate every suppression: central audit-ignore.json entries plus inline
+    <!-- sgt-ignore: RULEID --> markers across governed asset bodies under root.
+
+    Each record: rule_id, path, source (central|inline), reason/expires (central
+    only), days_remaining + expired (when a central expires date is present)."""
+    root_path = Path(root).expanduser().resolve()
+    today = utc_now()[:10]
+    out: list[dict[str, Any]] = []
+
+    # Central entries from references/audit-ignore.json.
+    for e in _load_ignore_doc(root_path).get("ignores", []):
+        if not isinstance(e, dict):
+            continue
+        rid, path = e.get("rule_id"), e.get("path")
+        if not rid or not path:
+            continue
+        rec: dict[str, Any] = {
+            "rule_id": str(rid),
+            "path": _norm_rel(str(path), str(root_path)),
+            "source": "central",
+            "reason": str(e.get("reason", "")).strip(),
+            "expires": str(e.get("expires", "")).strip() or None,
+            "days_remaining": None,
+            "expired": False,
+        }
+        if rec["expires"]:
+            dr = _days_remaining(rec["expires"], today)
+            rec["days_remaining"] = dr
+            # A bad date or a past date both count as expired (fail-safe parity
+            # with _apply_ignores, which refuses to honor either).
+            rec["expired"] = dr is None or dr < 0
+        out.append(rec)
+
+    # Inline markers across discovered asset bodies.
+    discovery = discover_agent_assets(root_path)
+    for asset in discovery["assets"]:
+        text = safe_read_asset(Path(asset["path"]), root_path)
+        if text is None:
+            continue
+        rel = _norm_rel(asset["path"], str(root_path))
+        for (_path, line), rule_ids in _parse_inline_ignores(text, rel).items():
+            for rid in sorted(rule_ids):
+                out.append({
+                    "rule_id": rid,
+                    "path": rel,
+                    "line": line,
+                    "source": "inline",
+                    "reason": None,
+                    "expires": None,
+                    "days_remaining": None,
+                    "expired": False,
+                })
+    return out
+
+
+def list_suppressions_report(
+    root: str | Path = ".", expiring_within: int | None = None
+) -> dict[str, Any]:
+    """Build the list-suppressions report. `blocked` is True when any entry is
+    expired, or (with expiring_within) any entry expires within that many days."""
+    suppressions = collect_suppressions(root)
+    expired = [s for s in suppressions if s["expired"]]
+    expiring: list[dict[str, Any]] = []
+    if expiring_within is not None:
+        expiring = [
+            s for s in suppressions
+            if not s["expired"]
+            and s["days_remaining"] is not None
+            and s["days_remaining"] <= expiring_within
+        ]
+    return {
+        "kind": "list-suppressions",
+        "generated_at": utc_now(),
+        "root": as_posix(Path(root).expanduser().resolve()),
+        "expiring_within": expiring_within,
+        "suppressions": suppressions,
+        "blocked": bool(expired or expiring),
+    }
+
+
+def print_list_suppressions(report: dict[str, Any]) -> None:
+    sups = report.get("suppressions", [])
+    print(f"Suppressions under {report.get('root')}: {len(sups)}")
+    for s in sups:
+        bits = [s["rule_id"], s["path"], f"source={s['source']}"]
+        if s.get("expires"):
+            tag = "EXPIRED" if s["expired"] else f"{s['days_remaining']}d left"
+            bits.append(f"expires={s['expires']} ({tag})")
+        if s.get("reason"):
+            bits.append(f"reason={s['reason']}")
+        print("  " + "  ".join(bits))
+
+
+def findings_history_path(root: Path) -> Path:
+    return root / "out" / "security" / "findings.jsonl"
+
+
+def record_findings(root: Path, findings: list[dict[str, Any]], ts: str) -> None:
+    """Append one JSON line per finding to out/security/findings.jsonl. Opt-in;
+    creates the directory if missing. `ts` is stamped via utc_now() by the caller."""
+    hist = findings_history_path(root)
+    hist.parent.mkdir(parents=True, exist_ok=True)
+    with hist.open("a", encoding="utf-8") as fh:
+        for f in findings:
+            rec: dict[str, Any] = {
+                "ts": ts,
+                "rule_id": f.get("rule_id"),
+                "severity": f.get("severity"),
+                "file": f.get("file"),
+                "suppressed": False,
+            }
+            if "introduced" in f:
+                rec["introduced"] = bool(f.get("introduced"))
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+def report_trends(root: str | Path = ".") -> dict[str, Any]:
+    """Summarize out/security/findings.jsonl: total events, top rules by count,
+    severity breakdown, introduced count. Missing/empty file -> empty report."""
+    root_path = Path(root).expanduser().resolve()
+    hist = findings_history_path(root_path)
+    events: list[dict[str, Any]] = []
+    try:
+        for line in hist.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue  # tolerate a torn line from a concurrent append
+    except OSError:
+        events = []
+
+    by_rule: dict[str, int] = {}
+    by_severity: dict[str, int] = {}
+    introduced = 0
+    for e in events:
+        rid = str(e.get("rule_id", ""))
+        if rid:
+            by_rule[rid] = by_rule.get(rid, 0) + 1
+        sev = str(e.get("severity", ""))
+        if sev:
+            by_severity[sev] = by_severity.get(sev, 0) + 1
+        if e.get("introduced"):
+            introduced += 1
+
+    top_rules = [
+        {"rule_id": rid, "count": cnt}
+        for rid, cnt in sorted(by_rule.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
+    return {
+        "kind": "report-trends",
+        "generated_at": utc_now(),
+        "root": as_posix(root_path),
+        "total": len(events),
+        "top_rules": top_rules,
+        "by_severity": by_severity,
+        "introduced": introduced,
+    }
+
+
+def print_report_trends(report: dict[str, Any]) -> None:
+    print(f"Findings history under {report.get('root')}: {report.get('total', 0)} event(s)")
+    if report.get("introduced"):
+        print(f"  introduced: {report['introduced']}")
+    for sev, cnt in (report.get("by_severity") or {}).items():
+        print(f"  {sev}: {cnt}")
+    for r in report.get("top_rules", []):
+        print(f"  {r['rule_id']}\t{r['count']}")
+
+
 def print_text_report(report: dict[str, Any]) -> None:
     summary = report.get("summary", {})
     print(f"{report.get('kind', 'audit')} ({report.get('profile', 'default')})")
@@ -2062,6 +2250,11 @@ def print_text_report(report: dict[str, Any]) -> None:
     for severity, count in (summary.get("by_severity") or {}).items():
         if count:
             print(f"  {severity}: {count}")
+    by_rule = summary.get("by_rule")
+    if by_rule:
+        print("By rule:")
+        for rule_id, count in sorted(by_rule.items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f"  {rule_id}: {count}")
     for item in report.get("findings", []):
         print("")
         print(f"[{item['severity'].upper()}] {item['rule_id']} {item['file']}:{item['line']}")
@@ -2096,6 +2289,10 @@ def emit(data: dict[str, Any], fmt: str) -> None:
     else:
         if data.get("kind") in {"project-audit", "skill-audit"}:
             print_text_report(data)
+        elif data.get("kind") == "list-suppressions":
+            print_list_suppressions(data)
+        elif data.get("kind") == "report-trends":
+            print_report_trends(data)
         elif data.get("kind") == "explain-finding":
             print(render_explain_finding(data))
         elif data.get("kind") == "validate-config":
@@ -2147,6 +2344,17 @@ def main(argv: list[str] | None = None) -> int:
     p_project.add_argument("--fail-on-new", choices=["none", "high", "medium", "low", "info", "any"], default="none", help="Exit 1 only when findings INTRODUCED vs --base meet or exceed this severity. Requires --base.")
     p_project.add_argument("--changed-only", action="store_true", help="Audit only assets changed against --base (merge request scope).")
     p_project.add_argument("--base", default="origin/main", help="Git ref to diff against when --changed-only or --fail-on-new is set.")
+    p_project.add_argument("--whole-tree", action="store_true", help="Impact-report mode: force a FULL audit (ignore --changed-only/delta), add a per-rule histogram, and never block (always exit 0).")
+    p_project.add_argument("--record", action="store_true", help="Append one JSON line per finding to out/security/findings.jsonl under the audited root (opt-in observability).")
+
+    p_suppress = sub.add_parser("list-suppressions", help="List central + inline suppressions and flag expired/expiring ones.")
+    p_suppress.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
+    p_suppress.add_argument("--root", default=".")
+    p_suppress.add_argument("--expiring-within", type=int, default=None, metavar="DAYS", help="Exit 2 if any suppression expires within DAYS (in addition to already-expired).")
+
+    p_trends = sub.add_parser("report-trends", help="Summarize out/security/findings.jsonl — top rules, severities, introduced ratio.")
+    p_trends.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
+    p_trends.add_argument("--root", default=".")
 
     p_skill = sub.add_parser("audit-skill", help="Audit one SKILL.md file.")
     p_skill.add_argument("--format", choices=["text", "json", "github"], default=argparse.SUPPRESS)
@@ -2178,6 +2386,26 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "discover":
             emit(discover_agent_assets(args.root), args.format)
         elif args.command == "audit-project":
+            # Impact-report mode: force a full audit, emit a per-rule histogram,
+            # and never block — a platform owner measures blast radius here before
+            # flipping --fail-on-new across repos.
+            if args.whole_tree:
+                report = audit_project(args.root, profile=args.profile, changed_paths=None)
+                by_rule: dict[str, int] = {}
+                for f in report.get("findings") or []:
+                    rid = str(f.get("rule_id", ""))
+                    if rid:
+                        by_rule[rid] = by_rule.get(rid, 0) + 1
+                report["summary"]["by_rule"] = by_rule
+                if args.record:
+                    root_path = Path(args.root).expanduser().resolve()
+                    record_findings(root_path, report.get("findings") or [], report["generated_at"])
+                print(
+                    "agent_audit: --whole-tree is an impact report — full audit, never blocks (exit 0).",
+                    file=sys.stderr,
+                )
+                emit(report, args.format)
+                return 0
             changed_paths = None
             if args.changed_only:
                 if args.base and args.base.strip():
@@ -2217,6 +2445,10 @@ def main(argv: list[str] | None = None) -> int:
                 base = base_findings(args.base, root_path, report.get("findings") or [], profile=args.profile)
                 tag_introduced(report["findings"], base, root_path)
 
+            if args.record:
+                rec_root = Path(args.root).expanduser().resolve()
+                record_findings(rec_root, report.get("findings") or [], report["generated_at"])
+
             emit(report, args.format)
 
             blocked = False
@@ -2230,6 +2462,12 @@ def main(argv: list[str] | None = None) -> int:
             report = audit_skill(args.path, profile=args.profile)
             emit(report, args.format)
             return _gate_exit_code(should_fail(report, args.fail_on))
+        elif args.command == "list-suppressions":
+            report = list_suppressions_report(args.root, expiring_within=args.expiring_within)
+            emit(report, args.format)
+            return 2 if report["blocked"] else 0
+        elif args.command == "report-trends":
+            emit(report_trends(args.root), args.format)
         elif args.command == "explain-rule":
             emit(explain_rule(args.rule_id), args.format)
         elif args.command == "explain-finding":

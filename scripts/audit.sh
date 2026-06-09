@@ -424,6 +424,11 @@ if python3 "$ROOT/scripts/test_asset_security.py" >/dev/null 2>&1; then
 else
   fail "asset-security tests failed — run: python3 scripts/test_asset_security.py"
 fi
+if python3 "$ROOT/scripts/test_ops_reporting.py" >/dev/null 2>&1; then
+  pass "ops-reporting behavior tests pass (list-suppressions, --whole-tree, report-trends)"
+else
+  fail "ops-reporting tests failed — run: python3 scripts/test_ops_reporting.py"
+fi
 
 # ── P21: validate-config + explain behavior ──────────────────────────────────
 

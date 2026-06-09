@@ -71,9 +71,11 @@ _smart_copy() {
     if [[ "$INSTALL_MODE" == "upgrade" ]]; then
       echo "  ! --upgrade requires rsync; falling back to --force semantics for $dest" >&2
       rm -rf "$dest"
-      mkdir -p "$dest"
     fi
-    cp -R "$src" "$dest"
+    mkdir -p "$dest"
+    # "${src%/}/." copies the directory CONTENTS identically on BSD and GNU cp.
+    # Plain `cp -R "$src/" "$dest"` nests src inside an existing dest on GNU.
+    cp -R "${src%/}/." "$dest"
     find "$dest" \( -name '.DS_Store' -o -name '__pycache__' -o -name '.skill-state' \) -exec rm -rf {} + 2>/dev/null || true
   fi
 }
@@ -214,7 +216,18 @@ while [[ $# -gt 0 ]]; do
     --all)      TARGETS=("claude" "copilot" "codex" "gemini" "cursor") ;;
     --global)   SCOPE="global" ;;
     --project)  SCOPE="project" ;;
-    --target-project=*) TARGET_PROJECT="${1#*=}"; TARGET_PROJECT="$(cd "$TARGET_PROJECT" && pwd)" ;;
+    --target-project=*)
+      TARGET_PROJECT="${1#*=}"
+      # Bash does not tilde-expand after `=` in ordinary arguments — expand a
+      # leading ~ ourselves so the documented `--target-project=~/myapp` works.
+      case "$TARGET_PROJECT" in
+        "~") TARGET_PROJECT="$HOME" ;;
+        "~/"*) TARGET_PROJECT="$HOME/${TARGET_PROJECT#\~/}" ;;
+      esac
+      TARGET_PROJECT="$(cd "$TARGET_PROJECT" 2>/dev/null && pwd)" || {
+        echo "✗ --target-project: directory not found: ${1#*=}" >&2
+        exit 1
+      } ;;
     --upgrade)  INSTALL_MODE="upgrade" ;;
     --force)    INSTALL_MODE="force" ;;
     --dry-run)  DRY_RUN=true ;;
@@ -431,7 +444,14 @@ _copy_owned_tree() {
     if [[ -e "$d" ]] && ! printf '%s\n' "$was_owned" | grep -qxF "$rel" && ! cmp -s "$f" "$d"; then
       # User file collides with our name and we never owned it → preserve theirs.
       base="${rel##*/}"; dir="${rel%/*}"; [[ "$dir" == "$rel" ]] && dir=""
-      renamed="${base%.*}.skill-governance-toolkit.${base##*.}"
+      if [[ "$base" == *.* ]]; then
+        renamed="${base%.*}.skill-governance-toolkit.${base##*.}"
+      else
+        # Extensionless: ${base%.*}/${base##*.} both expand to the whole name
+        # (LICENSE.skill-governance-toolkit.LICENSE). Match install.ps1's naming
+        # so upgrade bookkeeping agrees across platforms.
+        renamed="$base.skill-governance-toolkit"
+      fi
       [[ -n "$dir" ]] && renamed="$dir/$renamed"
       cp "$f" "$dest/$renamed"
       echo "  ⚠ conflict: user has $rel — saved ours as $renamed" >&2

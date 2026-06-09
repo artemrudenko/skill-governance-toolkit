@@ -47,14 +47,31 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.hook.exists(), "--check must not create the hook")
 
-    def test_existing_foreign_hook_is_backed_up_not_lost(self) -> None:
+    def test_existing_foreign_hook_aborts_without_force(self) -> None:
+        # The installer must NOT clobber a hook it does not own. Previously it
+        # printed "merge manually" and then overwrote the file in the same run.
         self.hook.parent.mkdir(parents=True, exist_ok=True)
         self.hook.write_text("#!/bin/sh\necho my own hook\n", encoding="utf-8")
         result = self._run()
+        self.assertNotEqual(result.returncode, 0, "must refuse to overwrite a foreign hook")
+        self.assertIn("--force", result.stdout + result.stderr)
+        self.assertIn("my own hook", self.hook.read_text(encoding="utf-8"))
+        self.assertNotIn(MARKER, self.hook.read_text(encoding="utf-8"))
+
+    def test_existing_foreign_hook_replaced_with_backup_under_force(self) -> None:
+        self.hook.parent.mkdir(parents=True, exist_ok=True)
+        self.hook.write_text("#!/bin/sh\necho my own hook\n", encoding="utf-8")
+        result = self._run("--force")
         self.assertEqual(result.returncode, 0, result.stderr)
         backups = list(self.hook.parent.glob("pre-commit.bak.*"))
         self.assertTrue(backups, "pre-existing foreign hook was not backed up")
         self.assertIn("my own hook", backups[0].read_text(encoding="utf-8"))
+        self.assertIn(MARKER, self.hook.read_text(encoding="utf-8"))
+
+    def test_rerun_over_our_own_hook_needs_no_force(self) -> None:
+        self._run()
+        result = self._run()
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(MARKER, self.hook.read_text(encoding="utf-8"))
 
     def test_uninstall_removes_our_hook(self) -> None:

@@ -18,6 +18,7 @@
 #   ./scripts/install-pre-commit-hook.sh
 #   ./scripts/install-pre-commit-hook.sh --uninstall
 #   ./scripts/install-pre-commit-hook.sh --check          # show what would happen, don't install
+#   ./scripts/install-pre-commit-hook.sh --force          # replace a foreign pre-commit hook (backs it up first)
 
 set -euo pipefail
 
@@ -34,8 +35,14 @@ PCC_FILE="$REPO_ROOT/.pre-commit-config.yaml"
 MARKER="# skill-init: CRG freshness check"
 
 MODE="install"
-[[ "${1:-}" == "--uninstall" ]] && MODE="uninstall"
-[[ "${1:-}" == "--check" ]] && MODE="check"
+FORCE=false
+for arg in "$@"; do
+  case "$arg" in
+    --uninstall) MODE="uninstall" ;;
+    --check)     MODE="check" ;;
+    --force)     FORCE=true ;;
+  esac
+done
 
 # ── Detect pre-commit framework ────────────────────────────────────────────────
 
@@ -116,10 +123,14 @@ do_install() {
   else
     mkdir -p "$REPO_ROOT/.git/hooks"
     if [[ -f "$HOOK_FILE" ]] && ! grep -q "$MARKER" "$HOOK_FILE" 2>/dev/null; then
-      echo "⚠ Existing $HOOK_FILE detected and does not have our marker."
-      echo "  Back up and re-run, or merge manually."
+      if ! $FORCE; then
+        echo "✗ Existing $HOOK_FILE detected and does not have our marker." >&2
+        echo "  Refusing to overwrite a hook we do not own." >&2
+        echo "  Merge manually, or re-run with --force to back it up and replace it." >&2
+        exit 1
+      fi
       cp "$HOOK_FILE" "$HOOK_FILE.bak.$(date +%s)"
-      echo "  Backup saved as $HOOK_FILE.bak.*"
+      echo "⚠ --force: existing foreign hook backed up as $HOOK_FILE.bak.*"
     fi
     echo "$STANDALONE_PAYLOAD" > "$HOOK_FILE"
     chmod +x "$HOOK_FILE"

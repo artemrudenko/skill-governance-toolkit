@@ -326,6 +326,87 @@ class UpgradeSafetyTests(unittest.TestCase):
                             "toolkit skill missing after install")
 
 
+class TargetProjectFlagTests(unittest.TestCase):
+    def test_root_installer_accepts_target_project_flag(self) -> None:
+        # install.ps1 forwards --target-project=<path> to the ROOT install.sh on
+        # macOS/Linux; the root parser must accept it (it used to exit 1
+        # "Unknown flag"), making -TargetProject unusable outside Windows.
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                ["bash", str(ROOT / "install.sh"), "--yes-default", "--dry-run",
+                 f"--target-project={tmp}"],
+                cwd=ROOT, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("Dry-run install plan", result.stdout)
+
+    def test_target_project_tilde_is_expanded(self) -> None:
+        # Bash does not tilde-expand `--target-project=~/x` (expansion after `=`
+        # only happens in assignments); the documented usage example therefore
+        # failed with cd's terse error. The handler must expand a leading ~/.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "myapp").mkdir()
+            env = dict(os.environ, HOME=str(home))
+            result = subprocess.run(
+                ["bash", str(ROOT / "scripts" / "install.sh"), "--claude",
+                 "--project", "--target-project=~/myapp", "--dry-run"],
+                cwd=ROOT, text=True, capture_output=True, check=False, env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("Dry-run install plan", result.stdout)
+
+    def test_target_project_missing_dir_fails_with_actionable_error(self) -> None:
+        result = subprocess.run(
+            ["bash", str(ROOT / "scripts" / "install.sh"), "--claude",
+             "--project", "--target-project=/no/such/dir-xyz", "--dry-run"],
+            cwd=ROOT, text=True, capture_output=True, check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("target-project", (result.stdout + result.stderr).lower())
+
+
+class CpFallbackPortabilityTests(unittest.TestCase):
+    """Without rsync, _smart_copy must copy directory CONTENTS — identical on
+    BSD and GNU cp. Plain `cp -R src/ dest` nests src inside an existing dest
+    on GNU/Linux, producing a broken install. (The bug is GNU-only, so this is
+    a true regression test on Linux CI and a contract pin on macOS.)"""
+
+    def _path_without_rsync(self) -> str:
+        farm = Path(tempfile.mkdtemp(prefix="no-rsync-bin."))
+        seen: set[str] = set()
+        for entry in os.environ.get("PATH", "").split(os.pathsep):
+            d = Path(entry)
+            if not d.is_dir():
+                continue
+            for binary in d.iterdir():
+                if binary.name in seen or binary.name == "rsync":
+                    continue
+                if os.access(binary, os.X_OK) and not binary.is_dir():
+                    try:
+                        (farm / binary.name).symlink_to(binary)
+                        seen.add(binary.name)
+                    except OSError:
+                        pass
+        return str(farm)
+
+    def test_install_without_rsync_does_not_nest_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            env = dict(os.environ, PATH=self._path_without_rsync())
+            result = subprocess.run(
+                ["bash", str(ROOT / "scripts" / "install.sh"), "--claude",
+                 "--project", f"--target-project={target}"],
+                cwd=ROOT, text=True, capture_output=True, check=False, env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            skill = target / ".claude" / "skills" / "skill-find"
+            self.assertTrue((skill / "SKILL.md").exists(),
+                            "skill content missing in cp-fallback install")
+            self.assertFalse((skill / "skill-find").exists(),
+                             "GNU cp nested the source dir inside the destination")
+
+
 class GlobalScopeSafetyTests(unittest.TestCase):
     """--global writes to ~/.<host>/ — a user's personal skills/scripts there
     must survive the safe modes (fresh + --upgrade). HOME is redirected to a

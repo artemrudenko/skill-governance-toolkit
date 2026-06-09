@@ -24,6 +24,7 @@ INSTALLER="$REPO_ROOT/scripts/install.sh"
 FORCE_FLAG=""
 DRY_RUN_FLAG=""
 NON_INTERACTIVE=0
+TARGET_PROJECT=""
 # Pass-through flags for selective install (since 1.8.0). We don't parse them
 # semantically here — just forward to scripts/install.sh so the canonical
 # filter logic stays in one place (resolve_skill_subset + filter_skills.py).
@@ -41,6 +42,10 @@ while [[ $# -gt 0 ]]; do
     --skill)         PASSTHROUGH+=("--skill" "$2"); shift 2 ;;
     --skill=*)       PASSTHROUGH+=("$1"); shift ;;
     --interactive)   PASSTHROUGH+=("--interactive"); shift ;;
+    # install.ps1 forwards -TargetProject this way on macOS/Linux; track the
+    # value so the banner + upgrade detection look at the REAL target.
+    --target-project)   TARGET_PROJECT="$2"; shift 2 ;;
+    --target-project=*) TARGET_PROJECT="${1#*=}"; shift ;;
     -h|--help)
       sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
@@ -90,10 +95,11 @@ esac
 
 case "$scope_choice" in
   1) SCOPE_FLAG="--global";  SCOPE_PREFIX="$HOME" ;;
-  # Project scope installs into the CURRENT directory (scripts/install.sh uses
-  # its own $(pwd), which exec preserves) — NOT the toolkit dir. Report the real
-  # target so the banner can't mislead a user who ran the installer from elsewhere.
-  2) SCOPE_FLAG="--project"; SCOPE_PREFIX="$PWD" ;;
+  # Project scope installs into --target-project if given, else the CURRENT
+  # directory (scripts/install.sh uses its own $(pwd), which exec preserves) —
+  # NOT the toolkit dir. Report the real target so the banner can't mislead a
+  # user who ran the installer from elsewhere.
+  2) SCOPE_FLAG="--project"; SCOPE_PREFIX="${TARGET_PROJECT:-$PWD}" ;;
   *) echo "Invalid scope choice: $scope_choice" >&2; exit 1 ;;
 esac
 
@@ -133,6 +139,7 @@ echo
 DELEGATE_ARGS=("$HOST_FLAG" "$SCOPE_FLAG")
 [[ -n "$MODE_FLAG" ]] && DELEGATE_ARGS+=("$MODE_FLAG")
 [[ -n "$DRY_RUN_FLAG" ]] && DELEGATE_ARGS+=("$DRY_RUN_FLAG")
+[[ -n "$TARGET_PROJECT" ]] && DELEGATE_ARGS+=("--target-project=$TARGET_PROJECT")
 if [[ ${#PASSTHROUGH[@]} -gt 0 ]]; then
   DELEGATE_ARGS+=("${PASSTHROUGH[@]}")
 fi

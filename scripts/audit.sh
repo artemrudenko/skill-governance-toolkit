@@ -14,7 +14,7 @@
 #   P3 — JSON validity for every manifest
 #   P4 — install.sh dry-run smoke test (fresh + re-run)
 #   P5 — init.sh argv-passing smoke (verifies "$@" not eval semantics)
-#   P6 — per-skill body-length budget (warn at >400, fail at >600)
+#   P6 — per-skill body-length budget (warn at >body_budget, fail at >body_critical)
 #   P7 — secret-pattern scan via library-audit/references/security-spec.md
 #   P8 — INDEX.jsonl freshness (regen and compare)
 #   P9 — metainfo coverage (presence + closed vocab + skills-by-category matrix)
@@ -155,7 +155,16 @@ fi
 
 # ── P6: per-skill body-length budget ─────────────────────────────────────────
 
-phase "P6 — Skill body length (≤200 clean, ≤400 warn, ≤600 risk, >600 critical)"
+# Boundaries are read from the engine config (body_budget / body_critical in
+# agent_audit.py) — the single source of truth — so this gate can never drift
+# stricter than the real audit. Never hardcode the numbers here.
+read -r BODY_BUDGET BODY_CRITICAL < <(python3 -c "
+import re
+t = open('$ROOT/scripts/agent_audit.py').read()
+print(re.search(r'\"body_budget\"\s*:\s*(\d+)', t).group(1),
+      re.search(r'\"body_critical\"\s*:\s*(\d+)', t).group(1))
+")
+phase "P6 — Skill body length (≤200 clean, ≤${BODY_BUDGET} candidate, ≤${BODY_CRITICAL} over budget, >${BODY_CRITICAL} critical)"
 for f in "$ROOT"/skills/*/SKILL.md; do
   name=$(basename "$(dirname "$f")")
   body_lines=$(python3 -c "
@@ -164,10 +173,10 @@ text = open('$f').read()
 body = re.sub(r'^---\n.*?\n---\n', '', text, count=1, flags=re.DOTALL)
 print(len(body.splitlines()))
 ")
-  if   [[ "$body_lines" -le 200 ]]; then pass "$name: $body_lines (clean)"
-  elif [[ "$body_lines" -le 400 ]]; then pass "$name: $body_lines (review-recommended, accepted)"
-  elif [[ "$body_lines" -le 600 ]]; then warn "$name: $body_lines (overload risk — should extract)"
-  else                                   fail "$name: $body_lines (critical — split now)"
+  if   [[ "$body_lines" -le 200 ]];            then pass "$name: $body_lines (clean)"
+  elif [[ "$body_lines" -le "$BODY_BUDGET" ]]; then pass "$name: $body_lines (overload candidate, accepted)"
+  elif [[ "$body_lines" -le "$BODY_CRITICAL" ]]; then warn "$name: $body_lines (over body_budget — should extract)"
+  else                                         fail "$name: $body_lines (over body_critical — split now)"
   fi
 done
 

@@ -13,6 +13,28 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.16.1] — 2026-06-09 — body-length threshold drift fixed + guarded
+
+### Fixed
+- **`library-audit` body-length grid re-aligned to the gate config.** The skill
+  body (`skills/library-audit/SKILL.md`) and its report template
+  (`assets/output-template-detailed.md`) still rendered a `201–400 → 🟡` /
+  `401–600 → 🔴` grid, marking a 450-line skill 🔴 when the engine
+  (`body_budget=500`/`body_critical=600`) would not even warn until 500. Both now
+  echo the config: `201–500 → 🟡` candidate, `501–600 → 🟡` over budget,
+  `> 600 → 🔴` critical. The template's example severities were corrected to match.
+- **Self-CI P6 reads thresholds from the engine config** instead of hardcoding
+  `≤400 warn / ≤600 fail`, so the body-length phase can never drift stricter than
+  the real gate.
+
+### Changed
+- **Drift guard widened.** `test_audit_config.py` now also asserts
+  `library-audit/SKILL.md`, its output template, and `scripts/audit.sh` echo
+  `body_budget`/`body_critical` and never resurrect the stale `401`/`-le 400`
+  boundary — the files the prior single-source test did not cover.
+
+---
+
 ## [1.16.0] — 2026-06-09 — gate honesty: dirty-tree guard + full kill-switch
 
 Two correctness fixes to the gate's local-vs-CI parity and the fleet kill-switch,

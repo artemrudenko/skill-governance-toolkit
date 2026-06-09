@@ -43,6 +43,12 @@ class BodyThresholdSingleSourceTests(unittest.TestCase):
     STRUCT = ROOT / "skills" / "skill-evaluate" / "references" / "structural-analysis.md"
     BUDGET = ROOT / "skills" / "library-audit" / "references" / "budget-spec.md"
     STANDARD = ROOT / "docs" / "skill-authoring-standard.md"
+    # The library-audit skill body + its report template render the same grid to
+    # the agent and into generated reports — they drifted to a 401/201–400 scheme
+    # and made reports stricter than the gate, so they must echo the config too.
+    LIB_SKILL = ROOT / "skills" / "library-audit" / "SKILL.md"
+    LIB_TEMPLATE = ROOT / "skills" / "library-audit" / "assets" / "output-template-detailed.md"
+    AUDIT_SH = ROOT / "scripts" / "audit.sh"
 
     def _default(self, key: str) -> str:
         text = self.AGENT_AUDIT.read_text(encoding="utf-8")
@@ -53,12 +59,23 @@ class BodyThresholdSingleSourceTests(unittest.TestCase):
     def test_docs_echo_config_thresholds(self) -> None:
         budget = self._default("body_budget")   # 500
         critical = self._default("body_critical")  # 600
-        for doc in (self.STRUCT, self.BUDGET, self.STANDARD):
+        for doc in (self.STRUCT, self.BUDGET, self.STANDARD,
+                    self.LIB_SKILL, self.LIB_TEMPLATE):
             body = doc.read_text(encoding="utf-8")
             self.assertIn(budget, body, f"{doc.name} must echo body_budget={budget}")
             self.assertIn(critical, body, f"{doc.name} must echo body_critical={critical}")
-            # The pre-fix divergent boundary must not resurface.
-            self.assertNotIn("401 –", body, f"{doc.name} still uses the stale 401 boundary")
+            # The pre-fix divergent boundary must not resurface (spaced or unspaced).
+            self.assertNotIn("401", body, f"{doc.name} still uses the stale 401 boundary")
+
+    def test_audit_sh_reads_thresholds_from_config(self) -> None:
+        # The self-CI body-length phase must derive its boundaries from the engine
+        # config, not hardcode them — otherwise it can drift stricter than the gate.
+        body = self.AUDIT_SH.read_text(encoding="utf-8")
+        self.assertIn("body_budget", body, "audit.sh must read body_budget from the config")
+        self.assertIn("body_critical", body, "audit.sh must read body_critical from the config")
+        # No resurrected hardcoded boundary.
+        self.assertNotIn("-le 400", body, "audit.sh still hardcodes the stale 400 boundary")
+        self.assertNotIn("401", body, "audit.sh still references the stale 401 boundary")
 
 
 class AuditConfigTests(unittest.TestCase):

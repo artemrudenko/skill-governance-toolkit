@@ -119,12 +119,12 @@ Apply 3 atomic passes per `references/budget-spec.md`:
 
 1. **Measurement:** measure always-on context cost (project rules files + always-loaded indexes + auto-injected memory). Convert words → tokens via `WORD_TO_TOKEN_RATIO`.
 2. **Claims-vs-actual:** if any documentation file claims a token saving («−31% context», «−7500 tokens»), compare against measured baseline. Threshold: ±20% deviation = 🟡; ±50% = 🔴.
-3. **Per-skill body length:** for each SKILL.md, measure body length (excluding frontmatter):
+3. **Per-skill body length:** for each SKILL.md, measure body length (excluding frontmatter). Boundaries echo the gate config (`body_budget`/`body_critical`, defaults **500**/**600**) — never hardcode a different number; see `references/budget-spec.md`:
    - ≤ 120 lines → 🟢 clean
-   - 121–200 lines → 🟢 review-recommended
-   - 201–400 lines → 🟡 overload candidate, suggest moving detail to `references/`
-   - 401–600 lines → 🔴 overload risk, recommend split
-   - > 600 lines → 🔴 critical, instructions in the middle will degrade
+   - 121–200 lines → 🟢 review-recommended (target ≤ 200)
+   - 201–500 lines → 🟡 overload candidate, move detail to `references/`
+   - 501–600 lines → 🟡 over budget (`body_budget`), extract aggressively
+   - > 600 lines → 🔴 critical (`body_critical`), instructions in the middle will degrade
 
 ### Phase 3 — Naming validation
 

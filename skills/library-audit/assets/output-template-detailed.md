@@ -85,20 +85,20 @@ frontmatter) and apply thresholds per `references/budget-spec.md`. We also
 sum always-on context cost (project rules + auto-loaded indexes + skill
 descriptions for routing). Threshold table:
 - ≤ 120 lines → 🟢 clean
-- 121–200 → 🟢 review-recommended
-- 201–400 → 🟡 overload candidate
-- 401–600 → 🔴 overload risk (split or extract)
-- > 600 → 🔴 critical (instructions in middle ignored by some hosts)
+- 121–200 → 🟢 review-recommended (target ≤ 200)
+- 201–500 → 🟡 overload candidate
+- 501–600 → 🟡 over budget (`body_budget` — extract aggressively)
+- > 600 → 🔴 critical (`body_critical` — instructions in middle ignored by some hosts)
 
 **What we found:**
 | Skill | Body lines | Severity | Detail |
 |---|---|---|---|
-| integration-init | 612 | 🔴 | Exceeds 600-line threshold by 12 lines; examples section 320 lines is the bulk. |
-| skill-evaluate | 487 | 🔴 | 401–600 range — already has `references/rubrics.md` but body still long. |
+| integration-init | 612 | 🔴 | Above the 600-line `body_critical`; examples section 320 lines is the bulk. |
+| skill-evaluate | 487 | 🟡 | 201–500 overload candidate — already has `references/rubrics.md` but body still long. |
 | skill-build-portable | 326 | 🟡 | Overload candidate; portability rules table could split. |
-| skill-find | 293 | 🟢 | Review-recommended; no urgent action. |
-| library-audit | 238 | 🟢 | Clean. |
-| skill-compare | 279 | 🟢 | Review-recommended. |
+| skill-find | 293 | 🟡 | Overload candidate; no urgent action. |
+| library-audit | 238 | 🟡 | Overload candidate. |
+| skill-compare | 279 | 🟡 | Overload candidate. |
 
 **Why it matters:**
 Anthropic Agent Skills spec recommends ≤ 500 body lines because instructions

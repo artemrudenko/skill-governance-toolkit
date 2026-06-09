@@ -170,6 +170,18 @@
       "description": "A Latin-majority word or URL host hides a confusable character from another script (e.g. Cyrillic U+0430 mimicking Latin 'a'), a common typosquat/phishing vector. Pure foreign-language words and legitimate diacritics do not trigger."
     },
     {
+      "rule_id": "MCP001",
+      "severity": "high",
+      "title": "MCP tool used but server not declared",
+      "description": "A skill body uses an `mcp__<server>__<tool>` MCP tool whose server is neither listed in `metainfo.requires.mcp` nor in the org `allowlists.mcp_servers`. Declare the server so reviewers and runtimes can provision and gate it. Tokens inside fenced/inline code or on a detection-context line are not counted as usage."
+    },
+    {
+      "rule_id": "MCP002",
+      "severity": "low",
+      "title": "Declared MCP server unused",
+      "description": "A server listed in `metainfo.requires.mcp` is never used (no `mcp__<server>__` token) in the skill body. Remove the stale declaration or add the usage. Org allowlist servers are exempt — an unused org-allowlisted server is fine."
+    },
+    {
       "rule_id": "SEC010",
       "severity": "high",
       "title": "Dangerous instruction in non-skill asset",

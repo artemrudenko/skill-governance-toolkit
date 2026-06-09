@@ -108,6 +108,35 @@ under `metainfo:` so that:
 | `deprecated` | ISO date string | If set, marks the skill as deprecated since that date. Installer warns; auditor flags. |
 | `replaced_by` | skill name | If `deprecated:` is set, points to the successor. |
 
+### Optional sub-block — `requires:`
+
+`metainfo.requires` declares the skill's runtime dependencies. Today it carries
+one key, `mcp`, listing the MCP servers the skill needs.
+
+| Field | Type | Notes |
+|---|---|---|
+| `requires.mcp` | array of strings | MCP server names this skill uses via `mcp__<server>__<tool>` tools (e.g. `github`, `playwright`). |
+
+```yaml
+metainfo:
+  category: [governance]
+  tier: preview
+  requires:
+    mcp: [github]
+```
+
+**Why declare it.** The auditor cross-checks every `mcp__<server>__` tool used in
+the body against this list (∪ the org `allowlists.mcp_servers`):
+
+- A server **used but not declared** → `MCP001` (high). Declaring it makes the
+  dependency explicit so a runtime can provision and gate it.
+- A server **declared but never used** → `MCP002` (low). Remove the stale entry or
+  add the usage. (Org-allowlist servers are exempt from MCP002.)
+
+Tokens inside fenced/inline code or on a detection-context line do not count as
+usage, so documenting an MCP tool in an example never trips `MCP001`. See
+[`checks-reference.md` § MCP consistency rules](checks-reference.md#mcp-consistency-rules-mcp).
+
 ### Closed vocabulary — `category:`
 
 Closed list, additions go through CHANGELOG. A skill may carry 1–3

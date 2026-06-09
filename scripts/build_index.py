@@ -96,8 +96,36 @@ def _parse_yaml_lines(lines: list[str]) -> dict[str, Any]:
                         i += 1
                     elif nxt.startswith("  ") and not nxt.startswith("   "):
                         nk, _, nv = nxt[2:].partition(":")
-                        nested[nk.strip()] = _coerce(nv.strip())
-                        i += 1
+                        nk = nk.strip()
+                        nv = nv.strip()
+                        if nv == "":
+                            # Deeper block (4-space indent) under this 2-space key —
+                            # collect a sub-list or sub-map one more level down.
+                            sub_items: list[Any] = []
+                            sub_map: dict[str, Any] = {}
+                            i += 1
+                            while i < len(lines):
+                                deep = lines[i]
+                                if deep.startswith("    -") or deep.startswith("  \t-"):
+                                    sub_items.append(_coerce(deep.split("-", 1)[1].strip()))
+                                    i += 1
+                                elif deep.startswith("    ") and not deep.startswith("     "):
+                                    dk, _, dv = deep[4:].partition(":")
+                                    sub_map[dk.strip()] = _coerce(dv.strip())
+                                    i += 1
+                                elif deep.strip() == "":
+                                    i += 1
+                                else:
+                                    break
+                            if sub_items:
+                                nested[nk] = sub_items
+                            elif sub_map:
+                                nested[nk] = sub_map
+                            else:
+                                nested[nk] = None
+                        else:
+                            nested[nk] = _coerce(nv)
+                            i += 1
                     elif nxt.strip() == "":
                         i += 1
                     else:

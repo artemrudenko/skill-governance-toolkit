@@ -35,5 +35,6 @@ When entries from different sources yield the same numeric match, order them by 
 
 - Match ≥ 75% AND quality score ≥ 70: `✓ Use directly` → show invocation hint
 - Match ≥ 75% AND quality score < 70: `⚠ Use, but run skill-evaluate first` — quality below threshold
+- Match ≥ 75% AND quality = n/a (no cached score): `✓ Use — run skill-evaluate to confirm quality` — only gate on quality once a score exists
 - Match 50–74%: `~ Partial — run skill-compare to adapt for your context`
 - Match 25–49%: `○ Weak match — use as reference only when writing a new skill`

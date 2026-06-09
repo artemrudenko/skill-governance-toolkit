@@ -101,6 +101,15 @@ If the same `name` appears in multiple sources: keep all entries and note the du
 
 If total entries across all sources is 0: report sources checked and stop.
 
+### Phase 1d — Attach cached quality scores
+
+Quality is computed by `skill-evaluate`, never here. Read cached scores from
+`out/scores/index.jsonl` (the project-relative store `skill-evaluate` appends to;
+one JSON object per line). For each catalog entry, find the line whose
+`skill_name` matches and take the most recent by `date`; attach its `score`
+(0–100) and `tier`. If the store is absent or has no line for a skill, set
+`quality = null`. **Never fabricate a score** — an absent score renders as `n/a`.
+
 ---
 
 ## Phase 2 — Semantic matching
@@ -130,6 +139,9 @@ Sources: project · personal · corporate ({N} skills total)
       ...
 ────────────────────────────────────────────────────────────
 ```
+
+`Quality` renders as `{score}/100 {tier-emoji}` when the skill has a cached score
+in `out/scores/index.jsonl`, else `n/a` (not yet evaluated) — never a guessed number.
 
 Next-step recommendation strings per result tier — see `references/ranking.md`.
 

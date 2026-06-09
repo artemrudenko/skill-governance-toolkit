@@ -64,17 +64,18 @@ Recommended sections (each missing → 🟡 Minor):
 
 ## 3.1 — Skill size & density
 
-Platform limits:
-- Hard limit: **≤ 500 body lines** before instructions in the middle degrade.
-- Recommended: **≤ 200 body lines** for high reliability.
-- Below 120 lines → lean, no extraction needed.
+**Thresholds are the single source of truth in the gate config** (`body_budget`,
+`body_critical` in `references/agent-audit-config` — configurable; never hardcode
+a different boundary here or in `library-audit`). Defaults: budget **500**,
+critical **600**. Recommended authoring target: **≤ 200** lines.
 
 | Body lines | Classification |
 |---|---|
 | ≤ 120 | Clean — no action |
-| 121 – 200 | Review — check for extractable detail |
-| 201 – 500 | Overload candidate — strongly recommend `references/` |
-| > 500 | Critical — split immediately |
+| 121 – 200 | Review — recommended target ≤ 200 |
+| 201 – 500 | Overload candidate — extract to `references/` |
+| 501 – 600 | Over budget (`body_budget`) — 🟡 |
+| > 600 | Critical (`body_critical`) — 🔴 split now |
 
 ## 3.2 — Scan for extractable content
 
@@ -100,7 +101,7 @@ If 3+ matches found → produce an **Extraction Proposal** in the output.
 | **Evaluator-Optimizer** | «generate then evaluate», «retry if criteria not met», «max N rounds» |
 | **None / procedural** | Simple sequential steps, no looping or delegation |
 
-If a pattern is detected → note it. If the wrong pattern is used for the task → suggest the right one with a one-sentence justification.
+**Informational only — no score impact.** If a pattern is detected → note it; if the task clearly calls for a different pattern → suggest it in one sentence. Do NOT cap any dimension on this; pattern naming is too subjective to score consistently across runs. (If a future need makes it scoreable, give it explicit thresholds first.)
 
 ## 3.4 — Scripts efficiency check (Anthropic guidance)
 

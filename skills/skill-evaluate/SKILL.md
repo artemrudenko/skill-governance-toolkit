@@ -135,7 +135,7 @@ Each sub-check is detect-only; findings appear in the Phase 4 report.
 | 3.0b — Body structure | mandatory + recommended sections | feeds D1/D2 |
 | 3.1 — Skill size & density | body line count, thresholds 120/200/500 | feeds D1/D2 |
 | 3.2 — Extractable content scan | proposals to move to `references/` | informational |
-| 3.3 — Agent pattern identification | ReAct / ReWOO / CodeAct / Orchestrator / Evaluator-Optimizer / procedural | feeds D7 |
+| 3.3 — Agent pattern identification | ReAct / ReWOO / CodeAct / Orchestrator / Evaluator-Optimizer / procedural | informational note only (no score impact) |
 | 3.4 — Scripts efficiency | «run, don't read» pattern | feeds D6 |
 | 3.4b — Multi-tool compatibility | aligned with library-audit Phase 4.5 | feeds D6 |
 | 3.5 — Lexical security scan | reuses `skills/library-audit/references/security-spec.md` | **caps D9 ≤ 2 / 3 / 4** |

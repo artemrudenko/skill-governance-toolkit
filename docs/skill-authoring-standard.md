@@ -222,15 +222,38 @@ metainfo:
 
 ## Body length budget
 
+**Thresholds live in ONE place — the audit config** (`body_budget`,
+`body_critical`; defaults 500 / 600). This table, `skill-evaluate` 3.1, and
+`library-audit` budget-spec all echo those two numbers — never hardcode a
+different boundary.
+
 | Lines | Verdict |
 |---|---|
 | ≤ 200 | 🟢 clean (target) |
-| 201 – 400 | 🟡 review-recommended (acceptable for complex skills with deep references/) |
-| 401 – 600 | 🔴 overload risk — extract to references |
-| > 600 | 🔴 critical — split into multiple skills |
+| 201 – 500 | 🟡 overload candidate — extract to references |
+| 501 – 600 | 🟡 over budget (`body_budget`) — extract aggressively |
+| > 600 | 🔴 critical (`body_critical`) — split into multiple skills |
 
 **Target for new skills: 120–200 body lines.** Push detail into `references/`
 and `assets/` early — they load on demand, the body loads every invocation.
+
+## Description length
+
+`description` length is enforced by the gate (`description_min` / `description_max`
+in the audit config; defaults **80 / 1024** chars — 1024 is the Agent Skills hard
+limit). `skill-evaluate` D8/3.0 additionally rate a **sweet spot of 100–400**.
+As with body length, the config is the single source of truth — do not restate a
+different bound elsewhere.
+
+## Single source of truth for thresholds & vocabularies
+
+Every numeric threshold (body/description length, token budgets) and every closed
+vocabulary (`category`, `tier`, naming action verbs) is defined **once** — in the
+audit config (`references/agent-audit-config`) for thresholds, or in this document
+for vocabularies. Everywhere else **references** it; nothing restates the value.
+A duplicated value is a drift waiting to happen (see the body-length drift that
+prompted this rule). Self-CI guards the body-length echo (`test_audit_config.py`)
+and gate-rule rationale coverage (`test_rationale_coverage.py`).
 
 ## Detect-only vs Mutating tag (required)
 

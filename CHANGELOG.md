@@ -13,6 +13,43 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.14.0] — 2026-06-09 — single source of truth for thresholds + rationale coverage
+
+A consistency/rationality pass from a full cross-corpus rule review. Removes
+threshold drift, makes every gate rule justify itself, and trims two
+over-engineered checks. No deterministic gate behavior changes (SKILL011 budget
+500 / critical 600 unchanged); the rules catalog is untouched.
+
+### Added
+- **Gate-rule rationale coverage guard (self-CI P25).** Every gate rule must carry
+  a `why` (catalog `title` + `description`) **and** a `checks-reference.md`
+  rationale row, else self-CI fails. A check you cannot justify is a candidate for
+  removal — `test_rationale_coverage.py`.
+- **Body-length single-source guard (`test_audit_config.py`).** The prose tables in
+  `skill-evaluate` 3.1, `library-audit` budget-spec, and the authoring standard
+  must echo the gate config's `body_budget` / `body_critical`; the stale `401`
+  boundary can never resurface.
+
+### Changed
+- **One source of truth for body-length thresholds.** The gate config
+  (`body_budget=500`, `body_critical=600`) is canonical; the three doc tables that
+  had drifted (one used a `401–600` boundary, another `>500 critical`) now echo it:
+  `≤200` target · `201–500` overload · `501–600` over-budget 🟡 · `>600` critical 🔴.
+  AGENTS.md rule 4 now points at the config instead of stating `≤ 500`.
+- **`description` length bounds documented.** `description_min=80` /
+  `description_max=1024` were only in code — now referenced in the authoring
+  standard (with the 100–400 sweet spot), pointing at the config as source.
+- **New authoring-standard rule:** "Single source of truth for thresholds &
+  vocabularies" — define once (config for thresholds, standard for vocab),
+  reference everywhere else.
+- **`skill-evaluate` 3.3 (agent-pattern ID) is informational only** — removed from
+  dimension scoring (too subjective to score consistently; was already effectively
+  advisory).
+- **`library-audit` Pass 2.2 (claims-vs-actual) is OPTIONAL** — runs only when a doc
+  makes an explicit token-saving claim; skipped entirely otherwise.
+
+---
+
 ## [1.13.0] — 2026-06-09 — info severity lane + optional activation sections
 
 Adds a zero-impact `info` reporting lane for R&D-grade checks and its first

@@ -408,8 +408,8 @@ If the toolkit lives in a private org repo:
    - Codex / Gemini: standard `GH_TOKEN` env var works.
 2. **Pin a release tag** for reproducibility:
    ```bash
-   /plugin install skill-governance-toolkit@1.13.0    # Claude
-   gemini extensions install ...@1.13.0                # Gemini
+   /plugin install skill-governance-toolkit@1.14.0    # Claude
+   gemini extensions install ...@1.14.0                # Gemini
    ```
 3. **CI auto-update** — set up a CI job in each consuming project that opens a PR when the toolkit publishes a new tag. Pattern: scheduled `dependabot.yml` config pointing at the toolkit repo, or a custom workflow.
 

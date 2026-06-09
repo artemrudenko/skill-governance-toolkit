@@ -33,6 +33,7 @@
 #   P22 — delta-gate integration on a real git repo (--fail-on-new + kill-switch)
 #   P23 — CI template path coverage ⊇ engine-governed asset types
 #   P24 — skill-evaluate sub-check catalog consistency (sync + info contract)
+#   P25 — gate-rule rationale coverage (why + checks-reference entry)
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -535,6 +536,18 @@ if python3 "$ROOT/scripts/test_skill_evaluate_catalog.py" >/dev/null 2>&1; then
   pass "skill-evaluate sub-check catalog is consistent"
 else
   fail "skill-evaluate catalog tests failed — run: python3 scripts/test_skill_evaluate_catalog.py"
+fi
+
+# ── P25: gate-rule rationale coverage ────────────────────────────────────────
+# Forcing function + anti-drift: every gate rule must carry a why (title +
+# description) and a checks-reference.md rationale row. A check you cannot
+# justify is a candidate for removal.
+
+phase "P25 — Gate-rule rationale coverage (why + checks-reference entry)"
+if python3 "$ROOT/scripts/test_rationale_coverage.py" >/dev/null 2>&1; then
+  pass "every gate rule has a why and a checks-reference entry"
+else
+  fail "rationale coverage gap — run: python3 scripts/test_rationale_coverage.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,6 +32,33 @@ VALID_FRONTMATTER = [
     "Run the audit to verify the result.",
     "{body}",
 ]
+
+
+class BodyThresholdSingleSourceTests(unittest.TestCase):
+    """The gate config is the single source of truth for body-length thresholds.
+    The prose tables in skill-evaluate 3.1 and library-audit budget-spec must echo
+    the config values, never diverge (this is the drift that prompted the rule)."""
+
+    AGENT_AUDIT = ROOT / "scripts" / "agent_audit.py"
+    STRUCT = ROOT / "skills" / "skill-evaluate" / "references" / "structural-analysis.md"
+    BUDGET = ROOT / "skills" / "library-audit" / "references" / "budget-spec.md"
+    STANDARD = ROOT / "docs" / "skill-authoring-standard.md"
+
+    def _default(self, key: str) -> str:
+        text = self.AGENT_AUDIT.read_text(encoding="utf-8")
+        m = re.search(rf'"{key}"\s*:\s*(\d+)', text)
+        self.assertIsNotNone(m, f"{key} not found in agent_audit.py defaults")
+        return m.group(1)
+
+    def test_docs_echo_config_thresholds(self) -> None:
+        budget = self._default("body_budget")   # 500
+        critical = self._default("body_critical")  # 600
+        for doc in (self.STRUCT, self.BUDGET, self.STANDARD):
+            body = doc.read_text(encoding="utf-8")
+            self.assertIn(budget, body, f"{doc.name} must echo body_budget={budget}")
+            self.assertIn(critical, body, f"{doc.name} must echo body_critical={critical}")
+            # The pre-fix divergent boundary must not resurface.
+            self.assertNotIn("401 –", body, f"{doc.name} still uses the stale 401 boundary")
 
 
 class AuditConfigTests(unittest.TestCase):

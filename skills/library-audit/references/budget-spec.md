@@ -33,18 +33,18 @@ Compute:
 - **B2.2** — Always-on cost between 4000 and 8000 tokens → 🟡 (review for extraction opportunities)
 - **B2.3** — `AGENTS.md` exceeds 200 lines → 🟡 (Claude Code guidance threshold)
 
-## Pass 2.2 — Claims-vs-actual reconciliation
+## Pass 2.2 — Claims-vs-actual reconciliation (OPTIONAL)
 
-If any documentation file (changelog, ADR, design note) claims a token saving — e.g. «−7500 tokens» or «−31% context» — verify:
+**Run only if a doc makes an explicit token-saving claim** (e.g. «−7500 tokens»,
+«−31% context»). Most libraries make no such claim — in that case skip this pass
+entirely (no findings, no scan). It exists to keep a stated number honest, not to
+hunt for one.
 
-1. Identify the baseline the claim was measured against (look for `baseline:` or `prior measurement:` annotations).
-2. Re-measure with the current files.
-3. Compute deviation:
-   ```
-   deviation_pct = (current_savings − claimed_savings) / claimed_savings × 100
-   ```
+When a claim exists: identify its baseline (`baseline:` / `prior measurement:`
+annotation), re-measure with current files, and compute
+`deviation_pct = (current − claimed) / claimed × 100`.
 
-**Findings:**
+**Findings (only when a claim was present):**
 - **B2.4** — Deviation within ±20% → 🟢
 - **B2.5** — Deviation ±20–50% → 🟡
 - **B2.6** — Deviation > ±50% → 🔴 (claim is materially wrong; update or retract)
@@ -53,13 +53,18 @@ If any documentation file (changelog, ADR, design note) claims a token saving �
 
 For each `SKILL.md`, count body lines (excluding the YAML frontmatter block, which ends at the second `---` delimiter).
 
+**Thresholds are the single source of truth in the gate config** (`body_budget`,
+`body_critical` in `references/agent-audit-config` — configurable; this table and
+`skill-evaluate` 3.1 must echo it, never diverge). Defaults: budget **500**,
+critical **600**.
+
 | Body lines | Severity | Action |
 |---|---|---|
 | ≤ 120 | 🟢 | Clean — no action |
-| 121 – 200 | 🟢 | Review-recommended — check for extractable detail |
-| 201 – 400 | 🟡 | Overload candidate — move detail to `references/{topic}.md` |
-| 401 – 600 | 🔴 | Overload risk — split into multiple skills or aggressively extract |
-| > 600 | 🔴 | Critical — instructions in the middle will be ignored by some hosts |
+| 121 – 200 | 🟢 | Review-recommended — target ≤ 200 |
+| 201 – 500 | 🟡 | Overload candidate — move detail to `references/{topic}.md` |
+| 501 – 600 | 🟡 | Over budget (`body_budget`) — extract aggressively |
+| > 600 | 🔴 | Critical (`body_critical`) — instructions in the middle ignored by some hosts |
 
 **Practical guidance:** body should contain **declarative phases and decision points**. Long procedures, edge-case catalogues, worked examples, and large templates belong in `references/`.
 

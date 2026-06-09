@@ -12,8 +12,15 @@ MCP/plugin manifests, …) is audited by the toolkit's deterministic engine
 | Job | Command | Effect |
 |---|---|---|
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --profile release-ready --fail-on-new high` | **Newly introduced** high-severity findings (secrets, dangerous shell, broken frontmatter, `allowed-tools`) **fail the pipeline → block the merge**; pre-existing high findings on touched legacy assets do not block |
-| `skill-gate:advisory` | same with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` artifact + an idempotent MR comment |
-| `noop` | `echo` on `alpine` | Always-green placeholder so every MR has a pipeline (see "Branch protection" below) |
+| `skill-gate:block` (suppression hygiene, same job) | `list-suppressions --root .` on every governed MR; `list-suppressions --expiring-within 30` only when the MR edits `references/audit-ignore.json` | An **already-expired** suppression fails the pipeline on *every* governed MR (the floor finding it silenced has resurfaced — see [security-suppression-runbook.md](security-suppression-runbook.md) § Expiry enforcement); a *soon-to-expire* entry blocks only the MR that touches the suppression file |
+| `skill-gate:advisory` | same audit with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` artifact + an idempotent MR comment |
+| `noop` | `echo` on `$SGT_NOOP_IMAGE` | Always-green placeholder so every MR has a pipeline (see "Branch protection" below) |
+
+Kill-switch: set the org/project CI/CD variable **`SGT_FAIL_MODE=advisory`** to
+downgrade the block job to non-blocking fleet-wide without editing the pinned
+template — the engine honors it automatically (exit 0 even on a blocking
+finding). Use it for staged rollout or to unblock the fleet during an incident;
+see [security-rollout-guide.md](security-rollout-guide.md).
 
 `--changed-only` diffs the MR's committed HEAD against its merge-base with the
 target branch (`$CI_MERGE_REQUEST_DIFF_BASE_SHA...HEAD`, a three-dot diff), so an
@@ -48,8 +55,34 @@ In `.gitlab-ci.yml`, `variables:` block:
 
 | Variable | Set to |
 |---|---|
-| `SGT_REPO` | URL of the toolkit repo on **your** GitLab host. Template placeholder: `https://REPLACE-WITH-YOUR-GITLAB-HOST/your-group/skill-governance-toolkit.git` — set this to where your org mirrors the toolkit. |
+| `SGT_REPO` | URL of the toolkit repo on **your** GitLab host. Template placeholder: `https://gitlab-ci-token:${CI_JOB_TOKEN}@REPLACE-WITH-YOUR-GITLAB-HOST/your-group/skill-governance-toolkit.git` — replace the host/group with where your org mirrors the toolkit, keeping the `gitlab-ci-token:${CI_JOB_TOKEN}@` prefix (see "Clone auth" below). |
 | `SGT_REF` | An **immutable 40-char commit SHA**, not a tag. Template placeholder: `REPLACE-WITH-40-CHAR-COMMIT-SHA`. Get the SHA of the toolkit release you want to pin with `git -C <toolkit> rev-parse HEAD`, or let `sgt ci-init --gitlab` fill it in for you (run from a toolkit checkout). |
+
+### 2a. Clone auth (private toolkit mirror)
+
+The template clones the toolkit with the per-job **`CI_JOB_TOKEN`** GitLab
+injects automatically — no PAT to provision or rotate. For a **private**
+toolkit mirror, the toolkit project must additionally allow the consuming
+repo(s) on its job-token allowlist:
+
+> toolkit project → **Settings → CI/CD → Token Access** →
+> **"Limit access to this project"** → add each marketplace repo.
+
+Without that setting the clone fails with `HTTP 404` (GitLab hides private
+projects from unauthorized tokens). On a public/internal-visibility mirror the
+token is simply ignored and no setup is needed.
+
+### 2b. Job images (egress-restricted runners)
+
+The template's job images default to public Docker Hub (`python:3.12-slim`,
+`alpine:3.20`), and the base job apt-installs `git` only when the image lacks
+it. On an air-gapped or egress-restricted instance, override as group/project
+CI/CD variables:
+
+| Variable | Default | Override with |
+|---|---|---|
+| `SGT_IMAGE` | `python:3.12-slim` | An internal-registry image with **python3 + git** preinstalled (skips the apt-get step entirely) |
+| `SGT_NOOP_IMAGE` | `alpine:3.20` | Any minimal internal image with a shell |
 
 Why a SHA, not a tag: a re-tagged release could silently change gate behaviour.
 Pin a commit your org has reviewed and approved. Bump the SHA deliberately when

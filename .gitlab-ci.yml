@@ -1,0 +1,67 @@
+# TOOLKIT'S OWN self-CI for a GitLab-hosted mirror — the GitLab twin of
+# .github/workflows/ci.yml. It audits the whole tree and runs the full
+# test/behavior suite (scripts/audit.sh, P1–P36 → all test_*.py suites) on
+# every merge request and every push to the default branch.
+#
+# This is NOT the template a consuming marketplace repo should copy — consumers
+# want the changed-only MR gate: references/ci/gitlab-ci.yml.
+#
+# Images default to public registries (Docker Hub / MCR). On an egress-restricted
+# instance, override SGT_CI_IMAGE / SGT_CI_PWSH_IMAGE as project CI/CD variables
+# pointing at your internal registry mirror.
+
+stages:
+  - validate
+
+variables:
+  # python:3.12 (non-slim) ships git — no apt-get needed at job time.
+  SGT_CI_IMAGE: "python:3.12"
+  # Needs pwsh + python3. The default installs python3 via apt at job time
+  # (requires Debian repo egress); mirror an image with both preinstalled to
+  # make the job self-contained.
+  SGT_CI_PWSH_IMAGE: "mcr.microsoft.com/powershell:lts-debian-12"
+
+.sgt_self_ci_rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+self-audit:
+  extends: .sgt_self_ci_rules
+  stage: validate
+  image: $SGT_CI_IMAGE
+  script:
+    - bash scripts/audit.sh
+    - python3 scripts/test_agent_audit.py
+    - python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
+
+# Closes the gap where the Windows installer's copy/marker/guard path — which
+# can delete user skills — never runs on a default Linux runner (the pwsh tests
+# self-skip and audit.sh P28 only warns when pwsh is absent).
+windows-parity:
+  extends: .sgt_self_ci_rules
+  stage: validate
+  image: $SGT_CI_PWSH_IMAGE
+  script:
+    - command -v python3 >/dev/null || (apt-get update -qq && apt-get install -y -qq --no-install-recommends python3 git >/dev/null)
+    - pwsh -version
+    - python3 scripts/test_install.py
+
+# MCP Docker smoke test — requires a runner with the docker executor + dind
+# service (or a shell runner with Docker). Tagged so it only schedules where
+# such a runner exists; drop the tag/rules if all your runners can build images.
+docker-smoke:
+  extends: .sgt_self_ci_rules
+  stage: validate
+  image: docker:27
+  services:
+    - docker:27-dind
+  tags:
+    - docker
+  allow_failure: true
+  script:
+    - docker build -t agent-governance-mcp:ci .
+    - printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+      | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:ci
+    - printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"audit_project","arguments":{"root":"/workspace","profile":"release-ready"}}}'
+      | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:ci

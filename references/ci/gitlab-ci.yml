@@ -31,7 +31,7 @@ stages:
 # waiting for a pipeline that never runs. This job is gated only on
 # merge_request_event (no `changes:` filter), so it always runs and always passes.
 noop:
-  image: alpine:3.20
+  image: $SGT_NOOP_IMAGE
   stage: validate
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -44,15 +44,32 @@ variables:
   # Toolkit source. Pin SGT_REF to an IMMUTABLE commit SHA (not a tag) so a
   # re-tagged release cannot silently change gate behaviour. Replace with the
   # 40-char SHA of the toolkit commit your org has reviewed and approved.
-  SGT_REPO: "https://REPLACE-WITH-YOUR-GITLAB-HOST/your-group/skill-governance-toolkit.git"
+  #
+  # Clone auth: the default URL embeds the per-job CI_JOB_TOKEN, which GitLab
+  # injects automatically — no PAT needed. For a private toolkit mirror you must
+  # ALSO allow this consumer project on the toolkit project's job-token allowlist:
+  #   toolkit project → Settings → CI/CD → Token Access →
+  #   "Limit access TO this project" → add the marketplace repo(s).
+  # (On a public/internal-visibility mirror the token is simply ignored.)
+  SGT_REPO: "https://gitlab-ci-token:${CI_JOB_TOKEN}@REPLACE-WITH-YOUR-GITLAB-HOST/your-group/skill-governance-toolkit.git"
   SGT_REF: "REPLACE-WITH-40-CHAR-COMMIT-SHA"
   SGT_DIR: "/tmp/sgt"
+  # Job images. Defaults pull from public registries (Docker Hub) — on an
+  # air-gapped or egress-restricted GitLab instance, override these as group/
+  # project CI/CD variables to point at your internal registry mirror, e.g.
+  #   SGT_IMAGE: registry.example.com/mirrors/python:3.12-slim
+  # SGT_IMAGE needs python3 + git (if git is missing the job apt-installs it,
+  # which requires Debian repo access — a mirrored image with git avoids that).
+  SGT_IMAGE: "python:3.12-slim"
+  SGT_NOOP_IMAGE: "alpine:3.20"
 
 # Shared setup: only run on merge requests that touch governed entities.
 .sgt_base:
-  image: python:3.12-slim
+  image: $SGT_IMAGE
   before_script:
-    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git >/dev/null
+    # Skipped entirely when the image already ships git (e.g. an internal
+    # mirror image) — keeps the gate self-contained on egress-restricted runners.
+    - command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq --no-install-recommends git >/dev/null)
     # Fetch then checkout the pinned SHA, and verify HEAD matches it.
     - git clone "$SGT_REPO" "$SGT_DIR"
     - git -C "$SGT_DIR" checkout -q "$SGT_REF"

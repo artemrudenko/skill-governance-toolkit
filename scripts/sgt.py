@@ -270,6 +270,12 @@ def command_ci_init(args: argparse.Namespace) -> int:
     content = re.sub(r'(SGT_REF:\s*")[^"]*(")', lambda m: m.group(1) + ref + m.group(2), content)
     repo = args.repo or _origin_url()
     if repo:
+        if platform == "gitlab" and repo.startswith("https://") and "@" not in repo:
+            # The GitLab template clones with the per-job CI_JOB_TOKEN so a
+            # private toolkit mirror needs no PAT; re-inject the auth prefix a
+            # plain https origin/--repo URL would otherwise drop. URLs that
+            # already carry userinfo (or use ssh) pass through untouched.
+            repo = "https://gitlab-ci-token:${CI_JOB_TOKEN}@" + repo[len("https://"):]
         content = re.sub(r'(SGT_REPO:\s*")[^"]*(")', lambda m: m.group(1) + repo + m.group(2), content)
 
     if args.output:

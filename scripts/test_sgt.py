@@ -237,6 +237,36 @@ class CiInitTests(unittest.TestCase):
             self.assertNotIn("REPLACE-WITH-40-CHAR-COMMIT-SHA", body)
             self.assertRegex(body, r'SGT_REF:\s*"[0-9a-f]{40}"')
 
+    def test_gitlab_repo_substitution_keeps_job_token_clone_auth(self) -> None:
+        # The template's SGT_REPO embeds gitlab-ci-token:${CI_JOB_TOKEN}@ so a
+        # private toolkit mirror clones without a PAT. When ci-init substitutes
+        # a plain https origin/--repo URL, it must re-inject that prefix —
+        # otherwise the written pipeline silently loses clone auth.
+        sha = "b" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_sgt(
+                "--root", tmp, "ci-init", "--gitlab", "--ref", sha,
+                "--repo", "https://gitlab.example.com/ai-tools/skill-governance-toolkit.git")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            body = (Path(tmp) / ".gitlab-ci.yml").read_text(encoding="utf-8")
+            self.assertIn(
+                'SGT_REPO: "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.example.com'
+                '/ai-tools/skill-governance-toolkit.git"', body)
+
+    def test_gitlab_repo_substitution_leaves_authed_and_ssh_urls_alone(self) -> None:
+        sha = "c" * 40
+        cases = [
+            "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.example.com/g/t.git",
+            "git@gitlab.example.com:g/t.git",
+        ]
+        for url in cases:
+            with tempfile.TemporaryDirectory() as tmp:
+                result = self.run_sgt("--root", tmp, "ci-init", "--gitlab",
+                                      "--ref", sha, "--repo", url)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                body = (Path(tmp) / ".gitlab-ci.yml").read_text(encoding="utf-8")
+                self.assertIn(f'SGT_REPO: "{url}"', body)
+
     def test_gitlab_pipeline_has_always_green_noop_job(self) -> None:
         # With "Pipelines must succeed" enabled, an MR touching no governed asset
         # produces no pipeline at all and blocks the merge forever. An

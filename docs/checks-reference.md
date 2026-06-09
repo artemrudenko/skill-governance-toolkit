@@ -26,9 +26,10 @@ adds the *what it detects* and *why it matters* that the JSON omits.
 
 ## Deterministic engine rules
 
-Rules span four families: `DISC*` (project-level discovery), `SKILL*`
-(per-`SKILL.md`), `SEC*` (non-skill asset content scans), and `IGNORE*`
-(suppression visibility). Severity drives the CI gate: `--fail-on high` blocks a
+Rules span eight families: `DISC*` (project-level discovery), `SKILL*`
+(per-`SKILL.md`), `SEC*` (non-skill asset content scans), `REF*` (referenced
+files), `SCR*` (referenced scripts), `MCP*` (MCP server consistency), `HOOK*`
+(hook commands), and `IGNORE*` (suppression visibility). Severity drives the CI gate: `--fail-on high` blocks a
 merge on `high`; `medium`/`low`/`info` are advisory.
 
 ### Discovery rules (`DISC*`)
@@ -180,7 +181,7 @@ apply, so a silent self-approval bypass is impossible.
 Each new rule below, with whether it is a **floor** rule (severity cannot be
 downgraded; inline markers cannot suppress it) and whether it is
 **inline-suppressible** via `<!-- sgt-ignore: RULEID reason=... -->`. Floor set:
-`SKILL001/002/009/014/015`, `SEC001/002/010/011`, `REF002`, `SCR001/002/003`, `HOOK001/002`.
+`SKILL001/002/009/014/015`, `SEC001/002/010/011`, `REF002`, `SCR001/002/003`, `MCP001`, `HOOK001/002`.
 
 | Rule | Severity | Floor | Inline-suppressible |
 |---|---|---|---|
@@ -197,6 +198,8 @@ downgraded; inline markers cannot suppress it) and whether it is
 | SCR001 | high | yes | no |
 | SCR002 | high | yes | no |
 | SCR003 | high | yes | no |
+| MCP001 | high | yes | no |
+| MCP002 | low | no | yes |
 | HOOK001 | high | yes | no |
 | HOOK002 | high | yes | no |
 | IGNORE001 | medium | no | no (it *is* the suppression-failure record) |

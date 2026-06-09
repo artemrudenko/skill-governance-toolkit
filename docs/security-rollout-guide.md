@@ -125,7 +125,7 @@ Add a `customManagers` (formerly `regexManagers`) entry to each repo's
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["^\\.gitlab-ci\\.yml$", "^\\.github/workflows/github-pr\\.yml$"],
+      "fileMatch": ["^\\.gitlab-ci\\.yml$", "^\\.github/workflows/skill-gate\\.yml$"],
       "matchStrings": ["SGT_REF:\\s*\"(?<currentDigest>[0-9a-f]{40})\""],
       "depNameTemplate": "skill-governance-toolkit",
       "packageNameTemplate": "https://github.com/your-org/skill-governance-toolkit",
@@ -140,6 +140,19 @@ Renovate watches `main` of the toolkit repo and opens a PR bumping `SGT_REF` to 
 new 40-hex `currentDigest` whenever the tracked ref advances. The `git-refs`
 datasource resolves the branch to its commit SHA, so the PR carries an immutable
 pin — never a moving tag.
+
+The `fileMatch` entries cover the two consumer gate files as the onboarding docs
+install them: `.gitlab-ci.yml` (GitLab MR gate) and
+`.github/workflows/skill-gate.yml` (the GitHub workflow `sgt ci-init --github`
+writes from `references/ci/github-pr.yml`). If your repo placed the workflow under
+a different name, adjust the pattern accordingly.
+
+**Private GitLab hosting:** when the toolkit mirror lives on an internal GitLab
+instance, point `packageNameTemplate` at that host instead of github.com —
+`"https://gitlab.example.com/your-group/skill-governance-toolkit"`. The `git-refs`
+datasource works over any reachable git remote; for a private mirror give the
+Renovate runner (e.g. the self-hosted Renovate-on-GitLab app) a `hostRules` entry
+with a read-only token for that host.
 
 **Manual approval is still required.** The Renovate PR only *proposes* the new pin;
 it does not bypass review. The CI template files (`.gitlab-ci.yml` / the gate

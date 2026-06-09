@@ -72,7 +72,7 @@ flowchart TB
 | `agents/code-reviewer.md` | `stable` | Read-only TypeScript-focused reviewer. Bash usage is limited to inspection. |
 | `scripts/doctor.py` | `stable` | Fast local health check for setup, Git state, index freshness, and local artifacts. |
 | `scripts/quickstart.py` | `stable` | Concise next-step guide and intent-to-skill decision tree. |
-| `scripts/sgt.py` | `stable` | Small CLI facade for doctor, quickstart, skills list, and self-audit. |
+| `scripts/sgt.py` | `stable` | CLI facade for the common workflows: `init`, `doctor`, `quickstart`, `skills`, `audit`, `gate`, `ci-init`, `new-skill`, `uninstall`. |
 | `scripts/sync_version.py` | `stable` | Syncs plugin manifests, `pyproject.toml`, and README pins from root `VERSION`. |
 | CLI/MCP/Docker audit engine | `preview` | Covered by tests and useful today, but tool names and rule details may still change before the first tagged release. |
 | Optional integrations | opt-in | CRG, repomix, and serena are installed only through `integration-init`; they are not baseline requirements. |
@@ -228,17 +228,23 @@ Decision guide:
 
 | Verdict | Action |
 |---|---|
-| Green, safety clear | Adopt as-is |
-| Yellow | Adopt after the top fixes |
-| Orange | Prefer a better alternative or rewrite first |
-| Red or safety gate triggered | Do not adopt until the safety issues are fixed |
+| 🟢 Green (80–100), safety gate clear | Adopt as-is |
+| 🟡 Yellow (60–79) | Adopt after the top fixes |
+| 🟠 Orange (40–59) | Prefer a better alternative or rewrite first |
+| 🔴 Red (< 40) or safety gate triggered | Do not adopt until the safety issues are fixed (the gate fires on D9 ≤ 1 for a mutating skill, or any 🔴 lexical security finding) |
 
 ---
 
 ## Use Case 2 - Create a New Skill
 
-The toolkit does not include a boilerplate-first scaffolder. Start from a
-working skill, trim it to the new purpose, then evaluate it.
+Start from the scaffolder — `sgt new-skill` generates a governance-clean
+skeleton (portable frontmatter, closed-vocab `metainfo`, phase structure) so the
+gate and `skill-evaluate` start from a passing baseline — then fill it in and
+evaluate it.
+
+```bash
+python3 scripts/sgt.py new-skill prompt-evaluate --category governance
+```
 
 ```mermaid
 flowchart TD
@@ -247,10 +253,10 @@ flowchart TD
     C --> D{Already exists?}
     D -->|Yes| E[Use existing]
     D -->|No, but similar| F[skill-compare with existing]
-    D -->|No match| G[2. Create SKILL.md by hand]
+    D -->|No match| G[2. sgt new-skill name --category vocab]
 
-    G --> H[Copy structure from any<br/>ship-quality skill, e.g. skill-find]
-    H --> I[Replace frontmatter:<br/>name, description, compatibility]
+    G --> H[Scaffolded skills/name/SKILL.md<br/>with TODO placeholders]
+    H --> I[Adjust frontmatter:<br/>description triggers, compatibility]
     I --> J[Fill body: Purpose / When to use /<br/>Phases / Hard rules]
     J --> K[3. skill-evaluate the new skill]
     K --> L{Score at least 80<br/>AND safety gate clear?}
@@ -268,9 +274,12 @@ Recommended flow:
 
 1. Run `skill-find` for the need.
 2. If a close match exists, use `skill-compare` instead of creating another skill.
-3. If no match exists, create `skills/{name}/SKILL.md`.
-4. Keep frontmatter portable: `name`, `description`, `compatibility`, `license`,
-   and `metainfo`.
+3. If no match exists, scaffold it:
+   `python3 scripts/sgt.py new-skill {name} --category {vocab}` — the skeleton
+   ships portable frontmatter (`name`, `description`, `compatibility`, `license`,
+   `metainfo`) and the phase structure with TODO placeholders.
+4. Keep the frontmatter portable while filling the TODOs — do not add
+   host-specific fields like `allowed-tools:`.
 5. Add concrete trigger phrases to `description`.
 6. Add workflow phases, hard rules, inputs, outputs, and verification.
 7. Run `skill-evaluate`.
@@ -563,6 +572,14 @@ Jobs:
 | `audit` | Shell audit, behavior tests, and release-ready audit gate |
 | `docker` | Docker build, MCP `tools/list`, and Docker `audit_project /workspace` |
 
+**Self-CI on GitLab:** for a GitLab-hosted mirror the repo root also ships
+`.gitlab-ci.yml` — the GitLab twin of `ci.yml`. It runs the full self-CI
+(`scripts/audit.sh`, the behavior tests, the release-ready gate, plus a
+PowerShell installer-parity job and an optional Docker smoke test) on every
+merge request and every push to the default branch. It is the toolkit's *own*
+CI — do not copy it into a consuming repo; consumers use the changed-only gate
+below.
+
 ### GitLab CI - Merge Request gate
 
 A copy-ready template lives at `references/ci/gitlab-ci.yml`. Copy it to the
@@ -588,6 +605,31 @@ flowchart TD
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on-new high` | Newly introduced high-severity findings fail the pipeline and block the merge (pre-existing high findings on touched legacy assets do not block) |
 | `skill-gate:advisory` | same with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` and an idempotent MR comment |
 | `noop` | `echo` on `alpine` | Always-green placeholder; guarantees every MR has a pipeline |
+
+Template essentials (keep in sync with `references/ci/gitlab-ci.yml`):
+
+- **Clone auth via `CI_JOB_TOKEN`.** `SGT_REPO` embeds the per-job token GitLab
+  injects automatically (`https://gitlab-ci-token:${CI_JOB_TOKEN}@<host>/...`)
+  — no PAT needed for the clone. For a private toolkit mirror you must also
+  allowlist the consumer project on the toolkit project's job-token allowlist:
+  toolkit project → Settings → CI/CD → Token Access → «Limit access TO this
+  project» → add the marketplace repo(s). On a public/internal-visibility
+  mirror the token is simply ignored.
+- **Image overrides for internal registries.** `SGT_IMAGE` (default
+  `python:3.12-slim`; needs python3 + git — without git the job apt-installs
+  it) and `SGT_NOOP_IMAGE` (default `alpine:3.20`) pull from Docker Hub. On an
+  air-gapped or egress-restricted instance, override both as group/project
+  CI/CD variables pointing at your internal registry mirror.
+- **Suppression hygiene in the block job.** Every governed MR runs
+  `agent_audit.py list-suppressions --root .` — an already-**expired**
+  suppression blocks, because the floor finding it silenced has resurfaced.
+  The early warning `list-suppressions --expiring-within 30` runs **only when
+  the MR itself edits `references/audit-ignore.json`** — the author touching
+  suppressions is the right owner to renew or remove them; the fleet is never
+  blocked on a third party's soon-to-expire entry.
+- **Kill-switch.** Set the org/project CI/CD variable `SGT_FAIL_MODE=advisory`
+  to downgrade the gate fleet-wide to non-blocking (exit 0 even on a blocking
+  finding) without editing the pinned template.
 
 `--changed-only` diffs committed `HEAD` against `--base` (a git ref) using a
 `base...HEAD` three-dot diff, so an author is accountable only for the committed
@@ -757,6 +799,25 @@ Common issues:
 | Per-skill tool mappings | `rules/codex.md` inside one skill | Move to repo-level `references/{tool}-tools.md` |
 | Missing fallback | `Task` without sequential fallback | Add non-subagent fallback with equivalent output |
 
+What is transformed automatically (rule ids from
+`skills/skill-build-portable/references/audit-rules.md`):
+
+| Rule | Detection | Action |
+|---|---|---|
+| F1 `allowed-tools:` | grep frontmatter | remove · add an informational note under Hard rules |
+| F2 `type:`, `status:`, `last_updated:` | grep frontmatter | remove (not in the agentskills.io spec) |
+| F4 Claude-only fields (`paths`, `hooks`, `model`, `effort`, ...) | grep frontmatter | remove · optionally preserve as a comment when `KEEP_CLAUDE_FALLBACK=true` |
+| F7 missing `compatibility:` | grep frontmatter | add |
+| B1 org-specific paths (`_audits/`, `outputs/`, `materials/raw/`) | grep body | replace with `out/...` |
+| B5 per-skill `rules/{tool}.md` directory | ls | flag for removal · merge content into repo-level `references/` |
+| B6 `Task` usage without a sequential fallback | grep body | insert a fallback note |
+
+What is NOT transformed automatically (residual concerns — review by hand):
+
+- Description > 1024 chars → needs a rewrite (mission-critical for activation).
+- Description < 80 chars → too short; expand manually.
+- Body > 500 lines → a split is recommended but never automated.
+
 Recommended workflow:
 
 ```text
@@ -798,12 +859,12 @@ CORPORATE_DIR=/path/to/corporate/skills
 
 Recommendations:
 
-| Recommendation | Meaning |
-|---|---|
-| `USE_CORPORATE` | Corporate skill covers the local need and is at least as good |
-| `KEEP_LOCAL` | Local skill has important project-specific behavior |
-| `MERGE` | Both versions have useful non-conflicting content |
-| `RULES_FILE` | Local-only content belongs in project rules, not in the shared skill |
+| Recommendation | Meaning | Phase 4 criterion |
+|---|---|---|
+| `USE_CORPORATE` | Corporate skill covers the local need and is at least as good | `LOCAL_ONLY` ≤ 1 AND corporate quality ≥ local |
+| `KEEP_LOCAL` | Local skill has important project-specific behavior | `LOCAL_ONLY` > 5 OR local quality clearly exceeds corporate |
+| `MERGE` | Both versions have useful non-conflicting content | `CORP_ONLY` ≥ 2 AND `LOCAL_ONLY` ≥ 2 AND no unresolved conflicts |
+| `RULES_FILE` | Local-only content belongs in project rules, not in the shared skill | 3+ `LOCAL_ONLY` items are project-specific context |
 
 Draft output contract:
 
@@ -934,6 +995,12 @@ cd ~/my-project
 python3 ~/tools/skill-toolkit/scripts/sgt.py init           # guided install + verify
 python3 ~/tools/skill-toolkit/scripts/sgt.py init --yes      # non-interactive (Claude + project)
 ```
+
+Hosted on a private GitLab instance? Clone from your internal host instead
+(`https://gitlab.example.com/{your-group}/skill-governance-toolkit`),
+authenticating via `glab auth login`, a PAT, or a read-only deploy token —
+everything after the clone is identical. See
+[README § Private GitLab instance](../README.md#private-gitlab-instance--hosting--auth-setup).
 
 | Command | Purpose |
 |---|---|
@@ -1076,6 +1143,15 @@ stays in the source repo), and skills resolve the install root per
 [`references/path-resolution.md`](../references/path-resolution.md) before shelling
 out — relevant for plugin and global installs where CWD is your project.
 
+### What is NOT updated automatically
+
+- External documents that referenced old skill names
+  (`skill-init` → `integration-init`, `skill-audit` → `library-audit`).
+  Find-and-replace manually in your project docs and playbooks.
+- Custom hooks / scripts that called an old name — update the references.
+
+`CHANGELOG.md` marks every renamed/removed item under **🔴 BREAKING**.
+
 ---
 
 ## Regular Maintenance
@@ -1157,8 +1233,6 @@ For now, any skill that needs an external MCP server should include a
 
 ### Other Planned Improvements
 
-- `skill-scaffold` (or a plain template generator) is intentionally absent for
-  now, to avoid boilerplate copy-paste.
 - Telemetry / usage tracking — which skills actually fire and on which triggers
   — is separate infrastructure planned for a later release.
 

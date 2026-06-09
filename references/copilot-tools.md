@@ -42,5 +42,5 @@ Skills in this repository use **Claude Code tool names** as the canonical refere
 ## Setup notes
 
 1. Copilot reads `AGENTS.md` natively (since 2025-08-28). No installation step needed.
-2. Skills are discovered from `skills/` automatically when the plugin manifest declares `"skills": "./skills/"` in `.codex-plugin/plugin.json` or via the corresponding Copilot plugin marketplace flow.
+2. Skills are auto-discovered from the workspace `skills/{name}/SKILL.md` directory (native since 2025-12-18) — Copilot needs **no plugin manifest**. Each skill's `description` field declares its trigger phrases; `.github/copilot-instructions.md` points Copilot at this mapping file.
 3. For older Copilot versions that do not support `AGENTS.md`, the file `.github/copilot-instructions.md` exists as a fallback alias.

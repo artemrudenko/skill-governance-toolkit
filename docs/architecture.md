@@ -129,8 +129,8 @@ See `AGENTS.md` § Parallelization patterns for the full rule.
   manifest schema) → major or minor bump with explicit «🔴 BREAKING»
   markers in `CHANGELOG.md`.
 - The append-with-markers install contract means upgrades NEVER destroy
-  user content outside our markers — see `docs/skill-authoring-standard.md`
-  § «User-owned vs toolkit-owned files».
+  user content outside our markers — see [§ «User-owned vs toolkit-owned
+  files»](#user-owned-vs-toolkit-owned-files) above.
 
 ## Why not multi-agent for skill management
 

@@ -93,7 +93,7 @@ flowchart TB
 | `agents/code-reviewer.md` | `stable` | Read-only TypeScript-first reviewer; Bash ограничен read-only inspection. |
 | `scripts/doctor.py` | `stable` | Быстрая локальная проверка setup, Git state, свежести индекса и локальных артефактов. |
 | `scripts/quickstart.py` | `stable` | Короткий next-step guide и карта intent → skill. |
-| `scripts/sgt.py` | `stable` | Небольшой CLI facade для doctor, quickstart, skills list и self-audit. |
+| `scripts/sgt.py` | `stable` | CLI facade для частых сценариев: `init`, `doctor`, `quickstart`, `skills`, `audit`, `gate`, `ci-init`, `new-skill`, `uninstall`. |
 | `scripts/sync_version.py` | `stable` | Синхронизирует plugin manifests, `pyproject.toml` и README pins из root `VERSION`. |
 | CLI/MCP/Docker audit engine | `preview` | Работает и покрыт тестами, но API tools/rules могут уточняться до первого tagged release. |
 | Optional integrations | opt-in | CRG/repomix/serena ставятся только через `integration-init`; не являются baseline requirement. |
@@ -247,14 +247,22 @@ sequenceDiagram
 | 🟢 Green (80–100) + Safety gate not triggered | Adopt as-is |
 | 🟡 Yellow (60–79) | Adopt после top-3 improvements |
 | 🟠 Orange (40–59) | Не adopt'ить — слишком много работы; искать альтернативу |
-| 🔴 Red (< 40) OR Safety gate triggered | Не adopt'ить, или сначала привести D9 ≥ 3 |
+| 🔴 Red (< 40) OR Safety gate triggered | Не adopt'ить, пока не устранены safety findings (gate срабатывает при D9 ≤ 1 на мутирующем скиле или любом 🔴 lexical security finding) |
 
 ---
 
 ## Use case 2 — Создание нового скила с нуля
 
-Toolkit намеренно НЕ имеет `skill-create` scaffolder'а (защита от
-boilerplate). Workflow:
+Начинай со скаффолдера — `sgt new-skill` генерирует чистый по governance
+скелет (portable frontmatter, закрытый словарь `metainfo`, структура фаз), так
+что gate и `skill-evaluate` стартуют с проходного baseline. Дальше — заполнить
+TODO и прогнать оценку:
+
+```bash
+python3 scripts/sgt.py new-skill prompt-evaluate --category governance
+```
+
+Workflow:
 
 ```mermaid
 flowchart TD
@@ -263,10 +271,10 @@ flowchart TD
     C --> D{Уже есть?}
     D -->|Да| E[Использовать existing]
     D -->|Нет, но похожий| F[skill-compare с existing]
-    D -->|Нет вовсе| G[2. Создать SKILL.md вручную]
+    D -->|Нет вовсе| G[2. sgt new-skill name --category vocab]
 
-    G --> H[Скопировать структуру<br/>из любого ship-quality skill<br/>напр. skill-find]
-    H --> I[Заменить frontmatter:<br/>name, description, compatibility]
+    G --> H[Скаффолд skills/name/SKILL.md<br/>с TODO-заглушками]
+    H --> I[Уточнить frontmatter:<br/>trigger-фразы в description, compatibility]
     I --> J[Заполнить body:<br/>Purpose / When to use / Phases /<br/>Hard rules]
     J --> K[3. skill-evaluate новый]
     K --> L{Score ≥ 80<br/>AND Safety gate clear?}
@@ -568,6 +576,14 @@ docker run --rm -i \
 оставаться зеленым. Для локального воспроизведения используй команды из
 раздела «Статус компонентов и готовность к GitHub».
 
+**Self-CI на GitLab:** для зеркала на GitLab в корне репо лежит ещё и
+`.gitlab-ci.yml` — GitLab-близнец `ci.yml`. Он гоняет полный self-CI
+(`scripts/audit.sh`, behavior tests, release-ready gate, плюс джобу
+PowerShell-паритета установщика и опциональный Docker smoke test) на каждом
+merge request и каждом push в default branch. Это CI *самого* toolkit'а — не
+копируй его в consumer-репо; потребителям нужен changed-only gate из
+варианта E ниже.
+
 ### Вариант E — GitLab CI: gate на merge request
 
 Готовый шаблон лежит в `references/ci/gitlab-ci.yml`. Скопируй его в корень
@@ -591,6 +607,31 @@ flowchart TD
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on-new high` | Впервые внесённые high-severity findings роняют pipeline и блокируют merge (уже существовавшие на затронутых legacy-ассетах не блокируют) |
 | `skill-gate:advisory` | то же с `--fail-on none --format json` + `post_mr_comment.py` | Не блокирует; публикует `skill-audit.json` и идемпотентный коммент в MR |
 | `noop` | `echo` на `alpine` | Всегда-зелёная заглушка; гарантирует pipeline для каждого MR |
+
+Ключевые механики шаблона (держи в синхроне с `references/ci/gitlab-ci.yml`):
+
+- **Auth клона через `CI_JOB_TOKEN`.** `SGT_REPO` использует per-job токен,
+  который GitLab подставляет автоматически
+  (`https://gitlab-ci-token:${CI_JOB_TOKEN}@<host>/...`) — PAT для клона не
+  нужен. Для приватного зеркала toolkit'а дополнительно добавь
+  consumer-проект в allowlist job-токена: проект toolkit → Settings → CI/CD →
+  Token Access → «Limit access TO this project» → добавить маркетплейс-репо.
+  На зеркале с public/internal visibility токен просто игнорируется.
+- **Переопределение образов для внутренних registry.** `SGT_IMAGE` (по
+  умолчанию `python:3.12-slim`; нужны python3 + git — без git джоба ставит его
+  через apt) и `SGT_NOOP_IMAGE` (по умолчанию `alpine:3.20`) тянутся из Docker
+  Hub. На air-gapped / egress-restricted инстансе переопредели обе как
+  group/project CI/CD variables, указав на внутреннее зеркало registry.
+- **Гигиена подавлений в блокирующей джобе.** На каждом governed MR
+  выполняется `agent_audit.py list-suppressions --root .` — уже
+  **просроченное** подавление блокирует: floor-finding, который оно глушило,
+  снова активен. Ранний сигнал `list-suppressions --expiring-within 30`
+  запускается **только когда сам MR правит `references/audit-ignore.json`** —
+  автор, трогающий подавления, и есть правильный владелец их продления;
+  остальной флот никогда не блокируется чужой скоро-истекающей записью.
+- **Kill-switch.** Поставь org/project CI/CD variable `SGT_FAIL_MODE=advisory`,
+  чтобы перевести gate во всём флоте в non-blocking режим (exit 0 даже при
+  блокирующем finding'е) без правки запиненного шаблона.
 
 `--changed-only` сравнивает закоммиченный `HEAD` с `--base` (git ref) через
 `base...HEAD` three-dot diff — автор отвечает только за закоммиченные сущности,
@@ -930,6 +971,12 @@ python3 ~/tools/skill-toolkit/scripts/sgt.py init           # установка
 python3 ~/tools/skill-toolkit/scripts/sgt.py init --yes      # без вопросов (Claude + project)
 ```
 
+Toolkit живёт на приватном GitLab? Клонируй с внутреннего хоста
+(`https://gitlab.example.com/{your-group}/skill-governance-toolkit`),
+авторизуясь через `glab auth login`, PAT или read-only deploy token — всё
+после клона идентично. Подробности:
+[README § Private GitLab instance](../README.md#private-gitlab-instance--hosting--auth-setup).
+
 | Команда | Назначение |
 |---|---|
 | `sgt init` | Установка с выбором host + scope, затем проверка |
@@ -1219,8 +1266,6 @@ Workaround сейчас: если пишешь skill, который требу�
 
 ### Прочие планируемые улучшения
 
-- `skill-scaffold` (или просто template generator) — пока намеренно нет
-  (защита от boilerplate-копипастов).
 - Telemetry / usage tracking — какие скилы реально срабатывают, на каких
   trigger'ах — отдельная инфраструктура.
 

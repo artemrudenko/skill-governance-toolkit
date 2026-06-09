@@ -153,7 +153,7 @@ Validate org audit-config / overlay regex patterns against a ReDoS time budget. 
 
 ```bash
 python3 scripts/agent_audit.py validate-config
-python3 scripts/agent_audit.py validate-config --config references/audit-config.example.json
+python3 scripts/agent_audit.py validate-config --config references/agent-audit-config.example.json
 ```
 
 | Flag | Values / Default | What it does | When to use |
@@ -382,7 +382,7 @@ their key flags are summarized here so the reference is complete.
 |---|---|---|
 | `filter_skills.py` | Decode the install selection over `skills/INDEX.jsonl` | `--index` (required), `--category`, `--tier`, `--skill`, `--list-categories`, `--filtered-index`, `--info-summary` |
 | `build_index.py` | Regenerate `skills/INDEX.jsonl` from `SKILL.md` frontmatter | `--skills-dir`, `--output` |
-| `post_mr_comment.py` | Post the advisory findings as an idempotent GitLab MR comment | reads CI env (`CI_*`, `PRIVATE-TOKEN`); `--dry-run` |
+| `post_mr_comment.py` | Post the advisory findings as an idempotent GitLab MR comment | reads CI env (`CI_API_V4_URL`, `CI_PROJECT_ID`, `CI_MERGE_REQUEST_IID`); token from the env var named by `--token-env` (default `GITLAB_TOKEN`), sent as the `PRIVATE-TOKEN` header; `--dry-run`; `--allow-insecure-http` (explicit opt-in — by default a non-HTTPS API URL is refused so the token never travels unencrypted) |
 | `doctor.py` | Health check (auto-detects toolkit checkout vs consumer install) | `--root`, `--mode {auto,checkout,consumer}`, `--format` |
 | `quickstart.py` | Print the next-step guide for the current directory | `--root`, `--format` |
 

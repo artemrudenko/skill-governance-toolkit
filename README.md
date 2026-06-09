@@ -247,7 +247,7 @@ cp -r AGENTS.md CLAUDE.md GEMINI.md README.md CHANGELOG.md \
 
 ## Distribution & installation — for internal team rollout
 
-You host the toolkit **once on GitHub**, then team members install per their runtime. Two distribution models below — pick one or combine.
+You host the toolkit **once** — on GitHub or on your internal **GitLab** instance — then team members install per their runtime. Two distribution models below — pick one or combine. GitHub-flavored commands are shown first; the [GitLab-hosting path](#private-gitlab-instance--hosting--auth-setup) covers the same flow for a private GitLab mirror.
 
 ### Version source of truth
 
@@ -415,6 +415,52 @@ If the toolkit lives in a private org repo:
    gemini extensions install ...@1.17.1                # Gemini
    ```
 3. **CI auto-update** — set up a CI job in each consuming project that opens a PR when the toolkit publishes a new tag. Pattern: scheduled `dependabot.yml` config pointing at the toolkit repo, or a custom workflow.
+
+### Private GitLab instance — hosting & auth setup
+
+The toolkit works the same when hosted on an internal GitLab instance (the common
+setup for corporate rollouts). The GitHub-specific pieces above map as follows:
+
+1. **Clone URL** — replace the github.com URL everywhere with your internal host:
+
+   ```bash
+   git clone https://gitlab.example.com/{your-group}/skill-governance-toolkit ~/tools/skill-toolkit
+   ```
+
+   `scripts/configure_org.sh` automates the rewrite across the checked-in docs and
+   manifests — `bash scripts/configure_org.sh --host gitlab.example.com {your-group}`
+   substitutes both the org placeholder and every hardcoded `github.com` host
+   (`--dry-run` previews the changes first).
+
+2. **Auth** — pick one:
+   - a **deploy token** (Settings → Repository → Deploy tokens, `read_repository`
+     scope) for clone-only consumers and CI mirrors:
+     `git clone https://{token-user}:{token}@gitlab.example.com/{your-group}/skill-governance-toolkit`;
+   - `glab auth login --hostname gitlab.example.com` for developers using the
+     `glab` CLI;
+   - or a personal access token (`read_repository` scope) over plain HTTPS git.
+
+   In consumer CI pipelines no token is needed at all: the shipped gate template
+   clones via `https://gitlab-ci-token:${CI_JOB_TOKEN}@<host>/...` — just allowlist
+   the consumer project on the toolkit project (Settings → CI/CD → Token Access).
+
+3. **Pin a release** — same rule as GitHub: pin an immutable commit SHA (`SGT_REF`)
+   in CI, a tag for interactive installs.
+
+4. **CI auto-update** — Dependabot is GitHub-only. On GitLab use
+   [Renovate-on-GitLab](https://docs.renovatebot.com/modules/platform/gitlab/) with
+   the `customManagers` entry from
+   [`docs/security-rollout-guide.md` § Renovate auto-bump](docs/security-rollout-guide.md#renovate-auto-bump-of-sgt_ref)
+   (point `packageNameTemplate` at your GitLab host), or a **scheduled pipeline**
+   in each consuming repo that compares `SGT_REF` against the toolkit's current
+   `main` SHA and opens an MR when it advances.
+
+5. **Consumer MR gate** — `sgt ci-init --gitlab` writes the changed-only gate
+   (`.gitlab-ci.yml` from `references/ci/gitlab-ci.yml`) into a consuming repo;
+   full walkthrough in [`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).
+   The toolkit repo itself ships a root [`.gitlab-ci.yml`](.gitlab-ci.yml) that runs
+   the full self-CI (`scripts/audit.sh` + test suites) on every MR/push of a
+   GitLab-hosted mirror — that file is the mirror's own CI, not the consumer gate.
 
 ### What ends up where after installation
 

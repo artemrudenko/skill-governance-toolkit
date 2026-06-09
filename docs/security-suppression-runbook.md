@@ -10,7 +10,7 @@ Read the [checks reference](checks-reference.md) for what each rule detects; rea
 flowchart TD
     A[gate reports a finding] --> B{is it a real issue?}
     B -->|yes| C[fix the content<br/>remove the secret / dangerous command / homoglyph]
-    B -->|no, false positive| D{floor rule?<br/>SEC001/002/010/011, SKILL001/002/009/014/015}
+    B -->|no, false positive| D{floor rule?<br/>e.g. SEC011 secret, SEC010 dangerous shell<br/>full set listed below}
     D -->|no, advisory<br/>SEC003, SEC012, …| E[inline marker at the finding site]
     D -->|yes, floor| F[central audit-ignore.json<br/>needs CODEOWNER approval]
     E --> G[merge]
@@ -20,6 +20,12 @@ flowchart TD
 
 **Default to fixing the content.** Suppression is for genuine false positives and
 sanctioned exceptions — not for silencing a real finding under deadline pressure.
+
+**Floor set** (severity cannot be downgraded; inline markers cannot suppress —
+source of truth is `SEVERITY_FLOOR` in `scripts/agent_audit.py`, mirrored in
+[checks-reference.md § Triggering examples and fixes](checks-reference.md#triggering-examples-and-fixes)):
+`SKILL001/002/009/014/015` · `SEC001/002/010/011` · `REF002` · `SCR001/002/003` ·
+`MCP001` · `HOOK001/002`. Everything else is advisory and inline-suppressible.
 
 ## Mechanism 1 — inline marker (advisory rules only)
 

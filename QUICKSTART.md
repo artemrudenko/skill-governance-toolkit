@@ -31,6 +31,11 @@ cd ~/my-project
 python3 ~/tools/sgt/scripts/sgt.py init        # guided: pick host + scope, then verifies
 ```
 
+> Hosted on a private **GitLab** instance? Same flow — clone from your internal
+> host (`git clone https://gitlab.example.com/{your-group}/skill-governance-toolkit ~/tools/sgt`),
+> authenticating via `glab auth login`, a PAT, or a read-only deploy token. See
+> [README § Private GitLab instance](README.md#private-gitlab-instance--hosting--auth-setup).
+
 Non-interactive (CI / scripted):
 ```bash
 python3 ~/tools/sgt/scripts/sgt.py init --host claude --scope project --yes
@@ -78,7 +83,7 @@ python3 scripts/build_index.py                        # 3. re-index so the insta
 
 ```bash
 sgt ci-init --github     # writes .github/workflows/skill-gate.yml (SHA auto-filled from a toolkit checkout)
-sgt ci-init --gitlab     # writes .gitlab-ci.yml
+sgt ci-init --gitlab     # writes .gitlab-ci.yml (clones the toolkit via CI_JOB_TOKEN — no PAT needed)
 ```
 > From a **project-local install** `sgt` can't auto-resolve the toolkit's pinned
 > SHA — pass `--ref <toolkit-sha>`, or run `ci-init` from your toolkit checkout

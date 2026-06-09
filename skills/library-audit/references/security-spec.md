@@ -61,17 +61,19 @@ Detect command patterns that, if executed by an agent following the skill,
 could destroy data or leak it externally. Apply to fenced code blocks (Bash,
 shell) AND inline backticked commands.
 
+> Renamed from D1–D9 in 1.18.1 to avoid colliding with the quality dimensions.
+
 | ID | Pattern | Why dangerous | Severity |
 |---|---|---|---|
-| **D1** | `rm -rf /` (with no further qualifier OR with `$VAR` that could be empty) | Catastrophic — wipes filesystem | 🔴 |
-| **D2** | `curl\s+[^\|]+\|\s*(bash\|sh\|zsh)` | Pipe-to-shell from network — supply-chain attack vector | 🔴 |
-| **D3** | `wget\s+[^\|]+\|\s*(bash\|sh)` | Same as D2 | 🔴 |
-| **D4** | `eval\s+\$\(` or `eval\s+"\$\{` | Arbitrary code execution from variable | 🔴 |
-| **D5** | `(?i)dd\s+if=/dev/(random\|urandom\|zero)\s+of=` | Disk wipe pattern | 🔴 |
-| **D6** | `:\(\)\s*\{\s*:\|:\&\s*\}\;:` | Fork bomb | 🔴 |
-| **D7** | `chmod\s+777` on paths outside `/tmp/` | World-writable on non-tmp | 🟡 |
-| **D8** | `sudo\s+rm` (any form) | Privileged delete — needs explicit user consent | 🟡 |
-| **D9** | `>\s*/dev/sda` or similar block device | Raw disk write | 🔴 |
+| **DS1** | `rm -rf /` (with no further qualifier OR with `$VAR` that could be empty) | Catastrophic — wipes filesystem | 🔴 |
+| **DS2** | `curl\s+[^\|]+\|\s*(bash\|sh\|zsh)` | Pipe-to-shell from network — supply-chain attack vector | 🔴 |
+| **DS3** | `wget\s+[^\|]+\|\s*(bash\|sh)` | Same as DS2 | 🔴 |
+| **DS4** | `eval\s+\$\(` or `eval\s+"\$\{` | Arbitrary code execution from variable | 🔴 |
+| **DS5** | `(?i)dd\s+if=/dev/(random\|urandom\|zero)\s+of=` | Disk wipe pattern | 🔴 |
+| **DS6** | `:\(\)\s*\{\s*:\|:\&\s*\}\;:` | Fork bomb | 🔴 |
+| **DS7** | `chmod\s+777` on paths outside `/tmp/` | World-writable on non-tmp | 🟡 |
+| **DS8** | `sudo\s+rm` (any form) | Privileged delete — needs explicit user consent | 🟡 |
+| **DS9** | `>\s*/dev/sda` or similar block device | Raw disk write | 🔴 |
 
 **Allowlist:** these patterns are acceptable when they appear as
 **anti-pattern examples** under a heading containing `Don't`, `Anti-pattern`,
@@ -112,7 +114,7 @@ For each finding, the audit report must include:
 
 - File path (which SKILL.md or agent file)
 - Line number of the match
-- Phase + rule identifier (S1–S10 / D1–D9 / C1–C9)
+- Phase + rule identifier (S1–S10 / DS1–DS9 / C1–C9)
 - Severity emoji (🔴 / 🟡 / 🟢)
 - Quoted snippet (truncate to 120 chars, mask middle of any matched secret
   pattern: `sk-...REDACTED...XyZ`)

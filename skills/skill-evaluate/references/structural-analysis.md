@@ -140,7 +140,7 @@ Cross-checks aligned with `library-audit` Phase 4.5 (but for a single skill):
 **Load patterns from the canonical catalog:** read `$SGT_ROOT/skills/library-audit/references/security-spec.md` — the single source of truth shared with `library-audit` Phase 5 (resolve `$SGT_ROOT` per `references/path-resolution.md`). If `library-audit` was not installed alongside `skill-evaluate`, this catalog is absent — see the SKILL.md "Phase 3.5 dependency" note (install both, or run reduced mode and log it). Apply all three pass-sets, **scoped to the one SKILL.md being evaluated**, NOT the whole library:
 
 - **Pass 3.5.1 — Secret patterns** (rule IDs S1–S10). See security-spec §Pass 5.1 for the regex catalog.
-- **Pass 3.5.2 — Dangerous shell patterns** (rule IDs D1–D9). See security-spec §Pass 5.2 for the catalog.
+- **Pass 3.5.2 — Dangerous shell patterns** (rule IDs DS1–DS9). See security-spec §Pass 5.2 for the catalog.
 - **Pass 3.5.3 — Credential file path reads** (rule IDs C1–C9). See security-spec §Pass 5.3 for the catalog.
 
 This skill body deliberately does NOT spell the patterns inline — that would (a) duplicate the canonical doc and drift over time, (b) trigger false positives when the auditor scans this very SKILL.md. All literal patterns live in security-spec.md (which is self-excluded from Phase 5 scanning).
@@ -152,7 +152,7 @@ Honor allowlists from security-spec.md (anti-pattern headings, documentation pla
 **D9 score caps from lexical findings** (applied AFTER initial D9 scoring from Phase 1):
 
 - Any 🔴 secret hit (S-rules) → D9 ≤ 2
-- Any 🔴 dangerous-shell hit (D-rules, not allowlisted) → D9 ≤ 3
+- Any 🔴 dangerous-shell hit (DS-rules, not allowlisted) → dimension D9 ≤ 3
 - Any 🟡 credential-path read (C-rules) → D9 ≤ 4
 
 Rationale: a beautifully designed skill with safety-aware sub-concerns (high initial D9) still loses points if its FILE contains a leaked credential or a destructive shell pattern. The design awareness didn't catch the implementation slip.

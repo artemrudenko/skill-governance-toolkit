@@ -3,15 +3,12 @@ name: skill-build-portable
 description: |
   Transforms a non-universal SKILL.md into a universal one that runs across Claude Code, Copilot,
   Cursor, Codex, and Gemini without per-tool forking. Audits the source skill for portability
-  violations (forbidden frontmatter fields, hardcoded org-specific paths, per-skill tool-mapping
-  files, Claude-only constructs), proposes transformations, generates the portable version,
-  and shows a side-by-side diff before writing.
+  violations, proposes transformations, generates the portable version, and shows a side-by-side
+  diff before writing.
   Use when: «make this skill portable», «universalize this skill», «convert to universal»,
   «portabilize», «refactor for cross-tool», «migrate skill to standard»,
   «strip Claude-only fields», «remove allowed-tools».
-  Output modes: preview (no write) / new-file / in-place. Preserves the skill's functional logic —
-  only changes structure, frontmatter, and platform-specific constructs. Surfaces residual
-  concerns the user must review manually.
+  Output modes: preview (no write) / new-file / in-place. Preserves functional logic.
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
 metainfo:

@@ -1,14 +1,12 @@
 ---
 name: skill-evaluate
 description: |
-  Quality evaluator for SKILL.md files. Scores any skill across 9 dimensions:
-  clarity, completeness, specificity, examples, constraints, portability, testability, discoverability, safety.
-  Safety (D9) evaluates behavioral risk awareness — blast radius, prompt injection, sensitive data,
-  authorization, rollback, idempotency. Complements `library-audit` Phase 5 (lexical secrets/dangerous shell).
+  Quality evaluator for SKILL.md files. Scores any skill across 9 dimensions (D1–D9) including
+  Safety (D9) — behavioral risk awareness: blast radius, prompt injection, rollback, idempotency.
+  Complements `library-audit` Phase 5 (lexical secrets/dangerous shell).
   Use when: «evaluate skill X», «score this skill», «review SKILL.md»,
   «is this skill production-ready», «evaluate skill for safety», before merging a new skill or after major rewrites.
-  Output: dimension table (D1–D9), top-3 specific improvements, optional rewritten version,
-  and an entry appended to `out/scores/index.jsonl`.
+  Output: dimension table, top-3 improvements, optional rewritten version, entry in `out/scores/index.jsonl`.
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
 metainfo:

@@ -1,15 +1,13 @@
 ---
 name: integration-init
 description: |
-  Interactive bootstrap for optional integrations. Asks which tools to add (code-review-graph,
-  repomix, serena, plus the Claude-only secret-guard hook), runs their native installers,
-  configures per-tool mode (MCP / CLI for CRG, initial build strategy), and injects
-  per-integration documentation into AGENTS.md and
-  agents/code-reviewer.md via paired markers — only for tools actually installed.
+  Interactive bootstrap for optional integrations (code-review-graph, repomix, serena, plus the
+  Claude-only secret-guard hook). Runs their native installers and injects per-integration
+  documentation into AGENTS.md and agents/code-reviewer.md — only for tools actually installed.
   Use when: «init», «initialize toolkit», «set up integrations», «add code-review-graph»,
   «add repomix», «add serena», «add secret-guard», «bootstrap toolkit», «configure integrations».
-  Idempotent: re-running detects current install state and syncs documentation accordingly.
-  Run with `--advise-only` for non-mutating dry preview.
+  Idempotent: re-running syncs documentation to install state. Run with `--advise-only` for
+  non-mutating dry preview.
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
 metainfo:

@@ -2,11 +2,10 @@
 name: library-audit
 description: |
   Meta-validator for an entire skill library (operates on the collection, not one skill). Runs detect-only phases for handoff contracts, trigger uniqueness, clarification policy, token budget, naming, portability, multi-tool compatibility, security baseline, and metainfo coverage.
-  Checks include `allowed-tools:`, per-skill `rules/{tool}.md`, required Task/sub-agent dispatch without sequential fallback, secrets, dangerous shell, credential paths, category/tier presence, closed-vocab drift, and deprecation consistency.
   Use when: «audit my skills», «audit the library», «library health check», «handoff audit»,
   «security audit», «secrets scan». Never edits files, never asks questions, idempotent.
-  Output: markdown report at `out/library-audit/library-audit-{date}.md` with Category roll-up table.
-  For per-skill scoring of ONE skill, use `skill-evaluate` (different scope — D1–D9 + per-file lexical scan).
+  Output: markdown report at `out/library-audit/library-audit-{date}.md`.
+  For per-skill scoring of ONE skill, use `skill-evaluate`.
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
 metainfo:
@@ -149,7 +148,7 @@ Validates anti-patterns that break SKILL.md portability across Claude Code / Cop
 Apply 3 atomic passes per `references/security-spec.md`. Scans **both** `SKILLS_DIRS` (every SKILL.md) **and** `AGENT_DIRS` (every agent .md).
 
 1. **Pass 5.1 — Secret patterns:** regex sweep for vendor credential formats (OpenAI / Anthropic / Slack / GitHub / AWS / Google) + private keys + Bearer tokens; honor documentation-placeholder allowlist. Findings **S1–S10**.
-2. **Pass 5.2 — Dangerous shell patterns:** detect `rm -rf /`, `curl | bash`, `eval`, fork bombs, disk-wipe patterns; skip anti-pattern headings. Findings **D1–D9**.
+2. **Pass 5.2 — Dangerous shell patterns:** detect `rm -rf /`, `curl | bash`, `eval`, fork bombs, disk-wipe patterns; skip anti-pattern headings. Findings **DS1–DS9**.
 3. **Pass 5.3 — Credential file path reads:** flag references to `~/.aws/credentials`, `~/.ssh/id_rsa`, `~/.gnupg/`, `.netrc`, etc.; distinguish documentation from skill behavior. Findings **C1–C9**.
 
 **Output discipline:** report MUST mask every matched secret (first 5 + last 3 chars; never print raw match). Full regex catalog, allowlists, and per-finding severity in the spec file.

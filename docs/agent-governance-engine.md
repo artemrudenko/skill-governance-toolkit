@@ -25,7 +25,7 @@ Same engine, same rules, same findings — only the **delivery** differs. Pick b
 
 **Concrete use cases → mode**
 
-- *"Block a PR/MR when a skill has a high-severity issue."* → **CLI** in CI (`audit-project . --changed-only --fail-on high`). This is what `sgt ci-init` generates.
+- *"Block a PR/MR when a skill has a high-severity issue."* → **CLI** in CI (`audit-project . --changed-only --base origin/main --fail-on-new high`). This is what `sgt ci-init` generates — a delta gate that blocks only on findings the MR **introduced**, not pre-existing debt.
 - *"Fail my local commit before I push."* → **CLI** in a pre-commit hook (`scripts/install-pre-commit-hook.sh`).
 - *"While I'm writing a skill in Cursor/Claude Desktop, have the agent audit it on demand."* → **MCP** (the agent calls `audit_skill` / `audit_project` as tools).
 - *"Score one skill and pipe the JSON into another tool."* → **CLI** (`audit-skill <path> --format json`).
@@ -62,15 +62,17 @@ Profiles:
 | `maintainability` | Full rule set, same current behavior as release-ready |
 | `release-ready` | Full rule set for pre-release audits |
 
-The JSON report contains:
+The JSON report contains (version values below are illustrative — `engine_version`
+tracks the live root `VERSION`, `rules_version` the catalog, so a real report
+shows whatever is current, never these frozen literals):
 
 ```json
 {
   "kind": "skill-audit",
   "profile": "release-ready",
   "generated_at": "2026-06-05T12:00:00Z",
-  "engine_version": "1.8.1",
-  "rules_version": "0.1.0",
+  "engine_version": "<from VERSION>",
+  "rules_version": "<from catalog>",
   "target": "/repo/skills/example/SKILL.md",
   "summary": {"total": 1, "by_severity": {"high": 1}},
   "findings": [

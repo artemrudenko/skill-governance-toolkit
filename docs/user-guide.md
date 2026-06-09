@@ -1018,7 +1018,12 @@ Tier behavior:
 Inspect the current skill index:
 
 ```bash
+# Category × tier summary of the corpus (used by the interactive installer)
 python3 scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories
+
+# Aggregate info-tier evidence (e.g. 3.8) across scored skills — the promotion view.
+# Point --index at a skill-evaluate scores index, not the corpus index.
+python3 scripts/filter_skills.py --index out/scores/index.jsonl --info-summary
 ```
 
 Where things are installed:

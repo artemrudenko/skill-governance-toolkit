@@ -1038,7 +1038,12 @@ Windows / cross-platform PowerShell users:
 Посмотреть текущую форму корпуса:
 
 ```bash
+# Сводка «категория × tier» по корпусу (используется интерактивным установщиком)
 python3 scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories
+
+# Агрегировать evidence info-уровня (например 3.8) по оценённым скиллам — вид для промоушена.
+# --index указывает на индекс оценок skill-evaluate, а не на индекс корпуса.
+python3 scripts/filter_skills.py --index out/scores/index.jsonl --info-summary
 ```
 
 **Что устанавливается куда:**
@@ -1157,7 +1162,7 @@ Track quality trend skill'ов over time.
 
 ---
 
-## Writing Style — как писать скилы
+## Writing Rules for Skills — как писать скилы
 
 Каждый SKILL.md загружается в context агента на каждом relevant turn'е.
 Концисный, моноязычный, без redundancy скил роутится точнее и стоит меньше

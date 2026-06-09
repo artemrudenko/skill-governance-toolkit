@@ -4,7 +4,7 @@ A reference implementation of the **universal skill authoring pattern** — `AGE
 
 > **In a hurry?** → [`QUICKSTART.md`](QUICKSTART.md) — install, verify, author a skill, and gate it in CI, on one page.
 >
-> **One-command setup:** `python3 <toolkit>/scripts/sgt.py init` (guided install + verify). Undo any time with `sgt uninstall`.
+> **Setup:** clone the toolkit once, then `python3 <toolkit>/scripts/sgt.py init` from your project (guided install + verify; `<toolkit>` is the clone path). Undo any time with `sgt uninstall`.
 
 **What it looks like in practice** — point the engine at a sketchy skill:
 
@@ -119,7 +119,8 @@ assets never block an unrelated change) with a tiered block/advisory policy:
   setup (env vars, pinned SHA, masked token): [`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).
 - **GitHub** → `references/ci/github-pr.yml` as `.github/workflows/skill-gate.yml`.
   Findings surface inline on the PR diff as annotations; the full JSON is uploaded
-  as an artifact.
+  as an artifact. Step-by-step setup (required checks, pinned SHA, CODEOWNERS):
+  [`docs/github-onboarding.md`](docs/github-onboarding.md).
 
 > The toolkit's own `.github/workflows/ci.yml` is **self-CI** (whole-tree audit +
 > test suite) — don't copy it as a consumer gate; use `github-pr.yml` instead.
@@ -196,9 +197,9 @@ don't have to remember every script:
 | `sgt init` | Guided install (host + scope), then verifies what landed |
 | `sgt doctor` | Local health check |
 | `sgt skills` | List installed skills |
-| `sgt audit` | Run the full self-audit |
+| `sgt audit` | Run the full self-audit (**toolkit checkout only** — `audit.sh` does not ship into an install; in a consumer project use `agent_audit.py audit-project .`) |
 | `sgt new-skill <name> --category <vocab>` | Scaffold a governance-clean `SKILL.md` |
-| `sgt ci-init --github` / `--gitlab` | Generate the changed-only PR/MR gate (SHA pre-filled) |
+| `sgt ci-init --github` / `--gitlab` | Generate the changed-only PR/MR gate (toolkit SHA pre-filled when run from a toolkit checkout; from a consumer install pass `--ref <toolkit-sha>`) |
 | `sgt uninstall [--dry-run]` | Remove toolkit-owned files; your content is preserved |
 
 ```bash
@@ -211,12 +212,14 @@ python3 scripts/sgt.py uninstall --dry-run
 ```
 
 ```bash
-cd /path/to/skill-governance-toolkit
-./install.sh --dry-run        # preview — resolves filters and target paths, writes nothing
-./install.sh                  # interactive — asks host + scope, auto-detects upgrades
+# Run the installer FROM your project (project scope installs into the current
+# directory). Running it from inside the toolkit dir would self-install and skip.
+cd ~/your-project
+/path/to/skill-governance-toolkit/install.sh --dry-run   # preview — resolves filters + target, writes nothing
+/path/to/skill-governance-toolkit/install.sh             # interactive — asks host + scope, auto-detects upgrades
 # or
-./install.ps1 -DryRun         # PowerShell preview
-./install.ps1                 # PowerShell 7+ (Windows / macOS / Linux)
+/path/to/skill-governance-toolkit/install.ps1 -DryRun    # PowerShell preview
+/path/to/skill-governance-toolkit/install.ps1            # PowerShell 7+ (Windows / macOS / Linux)
 ```
 
 For non-interactive CI use: `./install.sh --yes-default` (Claude + project scope).
@@ -408,8 +411,8 @@ If the toolkit lives in a private org repo:
    - Codex / Gemini: standard `GH_TOKEN` env var works.
 2. **Pin a release tag** for reproducibility:
    ```bash
-   /plugin install skill-governance-toolkit@1.16.1    # Claude
-   gemini extensions install ...@1.16.1                # Gemini
+   /plugin install skill-governance-toolkit@1.17.0    # Claude
+   gemini extensions install ...@1.17.0                # Gemini
    ```
 3. **CI auto-update** — set up a CI job in each consuming project that opens a PR when the toolkit publishes a new tag. Pattern: scheduled `dependabot.yml` config pointing at the toolkit repo, or a custom workflow.
 
@@ -421,7 +424,7 @@ If the toolkit lives in a private org repo:
 | Copilot | `AGENTS.md` (root) + `.github/copilot-instructions.md` | Skills auto-discovered from workspace | Via `agent` tool with `agents/` |
 | Codex CLI | `AGENTS.md` (root) | `~/.codex/skills/` or via `.codex-plugin/plugin.json` | Via `spawn_agent` with `agents/` |
 | Gemini CLI | `GEMINI.md` (which `@./AGENTS.md`) | `~/.gemini/skills/` | — (no sub-agent support) |
-| Cursor v2.2+ | `AGENTS.md` (root, native) | `./.cursor/skills/` | Via `.cursor-plugin/plugin.json` (when distributed via Cursor marketplace) |
+| Cursor v2.2+ | `AGENTS.md` (root, native) | `./.cursor/skills/` | Via the Cursor marketplace (no plugin manifest shipped — Cursor reads `AGENTS.md` + `agents/` natively) |
 
 ---
 

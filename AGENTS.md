@@ -93,10 +93,11 @@ python3 scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories
 # Aggregate info-tier evidence (e.g. 3.8) across scored skills — promotion view
 python3 scripts/filter_skills.py --index out/scores/index.jsonl --info-summary
 
-# Self-CI for the toolkit (runs the full P0–P26 suite: index freshness, metainfo
+# Self-CI for the toolkit (runs the full P1–P32 suite: index freshness, metainfo
 # coverage matrix, audit-engine behavior tests, doctor/quickstart/installer/CLI,
 # version sync, MR poster, audit config, CODEOWNERS, marker_block, sub-check
-# catalog, rationale coverage, info-summary)
+# catalog, rationale coverage, info-summary, secret-guard + backfill, ps1 syntax,
+# checkpoint state, pre-commit-hook installer, init.sh, subset AGENTS.md rewriter)
 bash scripts/audit.sh
 ```
 

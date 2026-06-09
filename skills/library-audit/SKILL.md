@@ -69,9 +69,9 @@ metainfo:
 1. **Load handoff spec:** read `references/handoff-spec.md` (Phase 1 checks).
 2. **Load budget spec:** read `references/budget-spec.md` (Phase 2 checks).
 3. **Load naming spec:** read `references/naming-spec.md` (Phase 3 + 4 checks).
-4. **Load security spec:** read `references/security-spec.md` (Phase 6 checks).
+4. **Load security spec:** read `references/security-spec.md` (Phase 5 checks).
 5. **Resolve skill directories:** default `SKILLS_DIRS = [skills/, .{tool}/skills/]`. Override via input param.
-6. **Resolve agent directories:** default `AGENT_DIRS = [agents/, .{tool}/agents/]`. Phase 6 scans these too.
+6. **Resolve agent directories:** default `AGENT_DIRS = [agents/, .{tool}/agents/]`. Phase 5 scans these too.
 
 ## Required inputs
 
@@ -98,7 +98,7 @@ Phases 1–5 are **embarrassingly parallel within phase** — per-skill checks (
 
 **Phase 6 (aggregate + report) is sequential** — depends on all prior phases.
 
-## Workflow — 5 phases
+## Workflow — 6 phases (plus 4.5 / 5.5 sub-phases)
 
 ### Phase 1 — Handoff validation
 

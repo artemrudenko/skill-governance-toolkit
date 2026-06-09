@@ -133,7 +133,7 @@ Each sub-check is detect-only; findings appear in the Phase 4 report.
 |---|---|---|
 | 3.0 — Frontmatter compliance | `name`, `description` length, permitted/forbidden fields | feeds D6/D8 findings |
 | 3.0b — Body structure | mandatory + recommended sections | feeds D1/D2 |
-| 3.1 — Skill size & density | body line count, thresholds 120/200/500 | feeds D1/D2 |
+| 3.1 — Skill size & density | body line count, thresholds 120/200/500/600 (`body_budget`/`body_critical`) | feeds D1/D2 |
 | 3.2 — Extractable content scan | proposals to move to `references/` | informational |
 | 3.3 — Agent pattern identification | ReAct / ReWOO / CodeAct / Orchestrator / Evaluator-Optimizer / procedural | informational note only (no score impact) |
 | 3.4 — Scripts efficiency | «run, don't read» pattern | feeds D6 |

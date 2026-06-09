@@ -166,27 +166,20 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          # --fail-on none so this advisory pass never changes the job result.
+          # The engine has a native `--format github` that emits GitHub workflow
+          # commands directly (with rule title= for richer inline annotations) —
+          # use it instead of re-deriving annotations from JSON, so the two output
+          # paths can never drift. `--fail-on none` keeps this advisory; the JSON
+          # artifact is emitted separately below for download.
           # An empty/unreachable base makes the engine exit non-zero (fail-closed,
           # per the --changed-only contract); `|| true` keeps the annotate step
-          # itself green while the block step above carries the real verdict.
+          # green while the block step above carries the real verdict.
+          python3 "$SGT_DIR/scripts/agent_audit.py" audit-project . \
+            --changed-only --base "origin/${GITHUB_BASE_REF}" \
+            --profile release-ready --fail-on none --format github || true
           python3 "$SGT_DIR/scripts/agent_audit.py" audit-project . \
             --changed-only --base "origin/${GITHUB_BASE_REF}" \
             --profile release-ready --fail-on none --format json > skill-audit.json || true
-          python3 - <<'PY'
-          import json, pathlib
-          data = pathlib.Path("skill-audit.json").read_text() or "{}"
-          try:
-              report = json.loads(data)
-          except json.JSONDecodeError:
-              report = {}
-          for f in report.get("findings", []):
-              level = "error" if f.get("severity") == "high" else "warning"
-              msg = str(f.get("message", "")).replace("\n", " ")
-              # GitHub workflow command — renders inline on the changed line.
-              print(f"::{level} file={f.get('file')},line={f.get('line')}::"
-                    f"[{f.get('rule_id')}] {msg}")
-          PY
 
       - name: Upload findings artifact
         if: always()

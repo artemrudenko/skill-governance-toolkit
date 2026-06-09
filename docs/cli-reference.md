@@ -63,6 +63,7 @@ python3 scripts/agent_audit.py audit-project . --fail-on high
 | `--base` | git ref (default `origin/main`) | Ref to diff against for `--changed-only` / `--fail-on-new`. | Set to the MR base SHA in CI. |
 | `--whole-tree` | flag | Impact-report mode: force a FULL audit, add a per-rule histogram, **never blocks (always exit 0)**. | Measure blast radius before flipping `--fail-on-new` across repos. |
 | `--record` | flag | Append one JSON line per finding to `out/security/findings.jsonl` under the audited root. | Opt-in observability / trend data. |
+| `--include-install-dirs` | flag | Also audit per-host install dirs (`.claude`/`.codex`/`.gemini`/`.cursor`). **Excluded by default** so a fresh install's copied governance assets don't manufacture findings; security configs there (hooks, `.mcp.json`, `plugin.json`) are always audited. | Set when you author skills/agents *under* a host dir and want them audited. |
 
 ### `audit-skill`
 
@@ -240,6 +241,7 @@ python3 scripts/sgt.py gate --check-setup
 | Flag | Values / Default | What it does |
 |---|---|---|
 | `--base` | git ref (default `main`) | Ref to diff against for the delta gate. |
+| `--allow-dirty` | flag | Audit `HEAD` even when the working tree has uncommitted changes. By default `sgt gate` fails fast on a dirty tree (the diff would be ambiguous and read as a false green). |
 | `--check-setup` | flag | Verify the repo is wired so the gate cannot weaken itself — a CODEOWNERS file must cover the suppression list (`references/audit-ignore.json`). Audits nothing. |
 
 ### `sgt ci-init`
@@ -367,3 +369,22 @@ python3 scripts/agent_audit.py explain-finding <rule_id>
 ```
 
 For the complete rule catalog and severity tiers, see [`checks-reference.md`](checks-reference.md).
+
+---
+
+## Auxiliary scripts
+
+Beyond the two main entry points above, the toolkit ships small single-purpose
+helpers. They are install-time / diagnostic tooling, not the primary surface —
+their key flags are summarized here so the reference is complete.
+
+| Script | Purpose | Key flags |
+|---|---|---|
+| `filter_skills.py` | Decode the install selection over `skills/INDEX.jsonl` | `--index` (required), `--category`, `--tier`, `--skill`, `--list-categories`, `--filtered-index`, `--info-summary` |
+| `build_index.py` | Regenerate `skills/INDEX.jsonl` from `SKILL.md` frontmatter | `--skills-dir`, `--output` |
+| `post_mr_comment.py` | Post the advisory findings as an idempotent GitLab MR comment | reads CI env (`CI_*`, `PRIVATE-TOKEN`); `--dry-run` |
+| `doctor.py` | Health check (auto-detects toolkit checkout vs consumer install) | `--root`, `--mode {auto,checkout,consumer}`, `--format` |
+| `quickstart.py` | Print the next-step guide for the current directory | `--root`, `--format` |
+
+These are also documented inline where they appear in [`user-guide.md`](user-guide.md);
+this table is the consolidated flag-level view.

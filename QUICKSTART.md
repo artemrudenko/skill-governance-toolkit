@@ -21,10 +21,12 @@ Run `curl $URL | bash` to deploy.   # dangerous shell, no Skill-type contract
 `allowed-tools` (portability), `curl|bash` (security high), missing `Skill type`
 line (SKILL021). Fix them, and the same engine passes the PR gate green.
 
-## Install (1 command)
+## Install (one-time clone, then one command)
+
+**Prerequisites:** `python3` ≥ 3.8 and `git` (and `bash`; on Windows use `install.ps1` with PowerShell 7+). No pip packages — the toolkit is stdlib-only. The installer fails fast with a clear message if `python3` is missing.
 
 ```bash
-git clone <toolkit-repo> ~/tools/sgt
+git clone https://github.com/{your-org}/skill-governance-toolkit ~/tools/sgt
 cd ~/my-project
 python3 ~/tools/sgt/scripts/sgt.py init        # guided: pick host + scope, then verifies
 ```
@@ -34,9 +36,11 @@ Non-interactive (CI / scripted):
 python3 ~/tools/sgt/scripts/sgt.py init --host claude --scope project --yes
 ```
 
-Prefer the raw installer? `~/tools/sgt/install.sh --claude --project` (or
-`install.ps1` on Windows). Both are non-destructive — your `AGENTS.md` and files
-are preserved (managed via markers).
+Prefer the raw installer? `~/tools/sgt/scripts/install.sh --claude --project` (or
+`~/tools/sgt/install.ps1` on Windows). The host/scope flags belong to
+`scripts/install.sh`; the root `~/tools/sgt/install.sh` is the interactive wrapper
+(no `--claude`/`--project` flags). Both are non-destructive — your `AGENTS.md` and
+files are preserved (managed via markers).
 
 ## Verify it worked
 

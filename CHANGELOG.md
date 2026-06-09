@@ -13,6 +13,46 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.17.1] — 2026-06-09 — skill logical-review fixes
+
+Closes the confirmed findings from an adversarially-verified logical review of all
+six meta-skills (the deterministic engine audit was already clean — 0 findings). No
+engine behavior change; fixes are in skill procedures, the marker contract, and
+report templates.
+
+### Fixed
+- **integration-init marker cleanup silently no-op'd (major).** `agents/code-reviewer.md`
+  uses the `handoff:{tool}` marker family, but `init.sh` removed `integration:{tool}`
+  from it; and `SKILL.md` documented `marker_block.py remove` for the `skill-init:`
+  family, whose `{id}: BEGIN` grammar cannot match it (verified empirically: exits 0,
+  removes nothing). Fixed the per-file prefix, corrected the docs to direct block
+  deletion, and made the deselection test deterministic — which surfaced two latent
+  `init.sh` bugs now fixed: an `${installed[*]}` unbound-variable crash under `set -u`
+  (bash 3.2) and a missing fail-fast for an unknown `--with` value.
+- **skill-evaluate D9 safety gate (major).** The authoritative Phase 2 site omitted the
+  "OR any 🔴 lexical security finding" branch; a 🔴 secret caps D9 ≤ 2 (not ≤ 1), so a
+  leaked credential slipped the gate while the Hard rules + template forced Red. Phase 2
+  now includes the branch and resolves after Phase 3.5.
+- **library-audit dropped metainfo from the report (major).** Phase 5.5 (incl. 🔴 M1–M3)
+  had no row in the output template Phase 6 mandates, so its findings never reached the
+  roll-up or Overall verdict. Added metainfo to the template + `audit_dimensions`;
+  SKILL.md now says 7 categories.
+- **skill-find fabricated a quality score (major).** It rendered and gated on a quality
+  score no phase produced. New Phase 1d sources cached scores from
+  `out/scores/index.jsonl` (by `skill_name`, latest `date`); absent → `n/a`, never guessed.
+- **skill-compare Phase 4 was non-deterministic (major).** The four recommendations
+  overlapped with no tiebreak and had uncovered gaps. Now: exactly one match → use it;
+  several → list ranked (most-specific first) + stop; none → report + closest suggestion
+  + stop (honoring the never-prompt policy). `MODE=compare-only` is no longer
+  self-contradictory — both modes run Phases 1–3; `compare-only` skips Phases 4–5.
+- **Stale `security-spec.md` Pass numbering (minor).** Headings were `Pass 6.x` (from when
+  Security was Phase 6) while both citers said `5.x`; renamed the spec to `5.1/5.2/5.3`.
+- **skill-build-portable gate precondition (minor).** Phase 4 dropped the "🔴 transformation
+  queued" precondition vs the Hard-rules policy (errs safe); restored for consistency.
+- **Documented crg `install --no-mcp` (CLI mode)** in `integrations.md`.
+
+---
+
 ## [1.17.0] — 2026-06-09 — first-run UX + coverage gaps closed (post-review)
 
 Addresses the confirmed findings from two rounds of parallel role-based critical

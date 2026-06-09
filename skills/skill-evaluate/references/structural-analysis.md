@@ -77,6 +77,13 @@ critical **600**. Recommended authoring target: **≤ 200** lines.
 | 501 – 600 | Over budget (`body_budget`) — 🟡 |
 | > 600 | Critical (`body_critical`) — 🔴 split now |
 
+**Why these numbers.** `≤ 120` = lean enough that nothing needs extracting. `≤ 200`
+= the authoring target: past it, mid-body instruction adherence starts to fall on
+several hosts, so detail belongs in `references/` (loaded on demand) rather than
+the body (loaded every turn). `500` / `600` are the gate budget/critical lines and
+are config-driven (above) — the `120` / `200` here are non-enforced authoring
+guidance, not gate thresholds.
+
 ## 3.2 — Scan for extractable content
 
 Identify content that belongs in `references/` rather than the core:
@@ -184,6 +191,8 @@ the SKILL.md body (frontmatter excluded). Detect-only; findings cap D1.
 | ≥ 2 🟡 hits across 3.6.2–3.6.4 | D1 ≤ 4 |
 
 Rationale: D1 (Clarity) ultimately asks «can a fresh reader follow this skill?» — a skill that is multilingual, filler-heavy, or repeats itself answers «no» regardless of how clearly the phases are individually written.
+
+**Threshold rationale (3.6.2 / 3.6.4).** These are **calibrated heuristics, not hard limits** — tune them if a corpus proves them wrong. Filler `≥3 → 🟡 / ≥6 → 🔴`: one or two stock phrases are noise tolerance; three signals a habit, six signals prose that should be rewritten. Long-prose `>5 sentences`: a single paragraph past ~5 sentences is where context-routing reliably starts skimming. They live here (LLM-applied, soft signals feeding D1) rather than in the gate config because they require judgement, not a deterministic count — unlike the body-length budget, which is a hard gate threshold and IS config-driven.
 
 Findings land in the Phase 4 output's **«Writing quality»** section, separately from the D1 score — both signals matter. See [AGENTS.md → Writing Style](../../../AGENTS.md#writing-style) for the project-level guidelines that inform these checks.
 

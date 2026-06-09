@@ -133,6 +133,12 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
   so on a host lacking those tools the plan silently dropped repomix/serena — defeating the point
   of advise/dry-run (print the full plan regardless of installed prereqs). Both guards are now
   advise/dry-aware; a new `test_init` case asserts all three plans print under a pipx/npm-free PATH.
+- **`build_index.py` parser now has isolated unit tests (P36).** The hand-rolled YAML-subset parser
+  (`_parse_yaml_lines` / `_coerce`) the whole INDEX.jsonl pipeline depends on was covered only
+  indirectly by the P8 round-trip against real fixtures. New `test_build_index.py` (11 cases) locks
+  the fragile branches — block scalars, the deep 6-space `requires.mcp` list, scalar-vs-list
+  `category`, flow-style lists (incl. the documented quoted-comma limitation), `write_index`
+  round-trip — and is wired into `audit.sh` as **P36**.
 
 ---
 

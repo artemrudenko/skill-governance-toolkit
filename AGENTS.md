@@ -93,13 +93,14 @@ python3 scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories
 # Aggregate info-tier evidence (e.g. 3.8) across scored skills — promotion view
 python3 scripts/filter_skills.py --index out/scores/index.jsonl --info-summary
 
-# Self-CI for the toolkit (runs the full P1–P35 suite: index freshness, metainfo
+# Self-CI for the toolkit (runs the full P1–P36 suite: index freshness, metainfo
 # coverage matrix, audit-engine behavior tests, doctor/quickstart/installer/CLI,
 # version sync, MR poster, audit config, CODEOWNERS (incl. the enforcement plane),
 # marker_block, sub-check catalog, rationale coverage, info-summary, secret-guard
 # + backfill, ps1 syntax + content parity, checkpoint state, pre-commit-hook
-# installer, init.sh, subset AGENTS.md rewriter, onboarding SHA pinning, and
-# self-CI phase-range consistency). P35 asserts this very range stays in sync.
+# installer, init.sh, subset AGENTS.md rewriter, onboarding SHA pinning,
+# self-CI phase-range consistency, and build_index parser unit tests). P35
+# asserts this very range stays in sync.
 bash scripts/audit.sh
 ```
 

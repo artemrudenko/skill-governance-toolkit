@@ -44,6 +44,7 @@
 #   P33 — cli-reference flag coverage (argparse ⊆ docs)
 #   P34 — onboarding ci-init uses a toolkit-scoped SHA (not the consumer's HEAD)
 #   P35 — documented self-CI phase range (AGENTS.md) matches audit.sh
+#   P36 — build_index.py parser unit tests (block scalars, requires.mcp, flow lists)
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -732,6 +733,19 @@ elif [[ "$doc_phase" != "$max_phase" ]]; then
   fail "AGENTS.md self-CI range P1–P$doc_phase != audit.sh highest phase P$max_phase"
 else
   pass "AGENTS.md documents P1–P$max_phase, matching audit.sh"
+fi
+
+# ── P36: build_index.py parser unit tests ────────────────────────────────────
+# build_index owns the hand-rolled YAML-subset parser the whole INDEX.jsonl
+# pipeline depends on. P8 round-trips it against real SKILL.md fixtures; this
+# locks the fragile branches (block scalars, 6-space requires.mcp, flow lists)
+# with isolated contract tests.
+
+phase "P36 — build_index.py parser unit tests"
+if python3 "$ROOT/scripts/test_build_index.py" >/dev/null 2>&1; then
+  pass "build_index parser + write_index round-trip tests pass"
+else
+  fail "build_index parser tests failed — run: python3 scripts/test_build_index.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

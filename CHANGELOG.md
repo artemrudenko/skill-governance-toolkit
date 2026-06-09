@@ -13,6 +13,29 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.14.1] — 2026-06-09 — narrow false-positive-prone gate detections
+
+False-positive reduction in three advisory gate rules — narrowed detection only,
+no new blocking surface (non-breaking; rules catalog ids and severities unchanged).
+False positives erode trust in a gate faster than anything; each narrowing ships
+with a triggering fixture + a near-miss fixture (TDD).
+
+### Fixed
+- **SKILL018** now fires on actual sub-agent **dispatch** (backticked `Task`,
+  "Task tool", `Task(`, "sub-agent", "dispatch … agent/task"), not the bare word
+  "Task" in prose (`## Task breakdown`, "the first task").
+- **SKILL019** matches only unbounded-scope claims ("do anything", "handle
+  everything", "be a universal agent", "handle any request"). Dropped "always
+  handle" and "all tasks", which fired on scoped prose like "always handle errors"
+  or "handle all rows in the batch". (Also fixed a self-match on "universal Agent
+  Skills standard".)
+- **SKILL020** chain detection keeps directional/relational prose ("runs after the",
+  "replaces the", "hands off to") and drops the bare nouns ("handoff", "predecessor",
+  "next skill") that flagged any skill merely *discussing* handoffs as if it were
+  chained.
+
+---
+
 ## [1.14.0] — 2026-06-09 — single source of truth for thresholds + rationale coverage
 
 A consistency/rationality pass from a full cross-corpus rule review. Removes

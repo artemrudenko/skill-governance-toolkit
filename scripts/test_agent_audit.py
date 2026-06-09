@@ -139,6 +139,57 @@ class AgentAuditBehaviorTests(unittest.TestCase):
             rule_ids = {item["rule_id"] for item in report["findings"]}
             self.assertNotIn("SKILL012", rule_ids, "SKILL012 should be retired (When-to-use is optional)")
 
+    def _rule_ids_for_body(self, body: str) -> set[str]:
+        """Audit a minimal valid skill carrying `body`; return the fired rule ids."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skills" / "fixture"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\n"
+                "name: fixture\n"
+                'description: "Fixture skill. Use when testing a specific detector. Not for other things."\n'
+                "compatibility: all\n"
+                "license: MIT\n"
+                "metainfo:\n"
+                "  category: [testing]\n"
+                "  tier: stable\n"
+                "---\n\n"
+                "# Fixture\n\n**Purpose:** isolate one detector.\n\n"
+                "> **Skill type:** Detect-only\n\n"
+                "## Workflow\n\nRun the validation step to verify the result.\n\n" + body + "\n",
+                encoding="utf-8",
+            )
+            result = self.run_cli("audit-project", tmp, "--format", "json")
+            report = json.loads(result.stdout)
+            return {item["rule_id"] for item in report["findings"]}
+
+    # ── SKILL018: sub-agent dispatch must be USED, not merely mentioned ──────────
+    def test_skill018_not_flagged_on_plain_task_word(self) -> None:
+        ids = self._rule_ids_for_body("## Task breakdown\n\nEach task is a step. The first task runs the linter.")
+        self.assertNotIn("SKILL018", ids, "plain 'task' prose must not trigger sub-agent SKILL018")
+
+    def test_skill018_flagged_on_real_dispatch_without_fallback(self) -> None:
+        ids = self._rule_ids_for_body("Dispatch the code-reviewer via the `Task` tool to review the diff.")
+        self.assertIn("SKILL018", ids, "real Task-tool dispatch without fallback must still fire SKILL018")
+
+    # ── SKILL019: overbroad scope, not defensive 'always handle X' prose ─────────
+    def test_skill019_not_flagged_on_defensive_always_handle(self) -> None:
+        ids = self._rule_ids_for_body("Always handle errors before returning. Handle all rows in the batch.")
+        self.assertNotIn("SKILL019", ids, "scoped 'always handle X' must not trigger overbroad-scope SKILL019")
+
+    def test_skill019_flagged_on_universal_agent(self) -> None:
+        ids = self._rule_ids_for_body("This is a universal agent that can do anything you need.")
+        self.assertIn("SKILL019", ids, "genuine catch-all scope language must still fire SKILL019")
+
+    # ── SKILL020: chained skill, not a skill that merely discusses handoffs ──────
+    def test_skill020_not_flagged_on_meta_discussion(self) -> None:
+        ids = self._rule_ids_for_body("This audit validates handoff contracts and predecessor/successor sections across skills.")
+        self.assertNotIn("SKILL020", ids, "discussing handoffs must not mark a skill as chained")
+
+    def test_skill020_flagged_on_real_chain(self) -> None:
+        ids = self._rule_ids_for_body("This skill runs after the planner and hands off to the executor skill.")
+        self.assertIn("SKILL020", ids, "a genuinely chained skill without run-order contract must fire SKILL020")
+
     def test_mcp_errors_are_sanitized_by_default(self) -> None:
         responses = self.run_mcp(
             [

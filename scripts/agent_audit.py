@@ -489,10 +489,13 @@ def is_mutating_skill(body: str) -> bool:
 
 
 # Workflow-relationship prose: the skill describes running before/after a peer,
-# hands off, or replaces/is-replaced. Case-insensitive; used as a SKILL020 chain signal.
+# hands off TO one, or replaces/is-replaced. Directional/relational phrasing only —
+# the bare nouns "handoff"/"predecessor"/"successor"/"next skill" were dropped
+# because a skill that merely *discusses* handoffs (a meta-skill, docs) is not
+# itself chained. Case-insensitive; SKILL020 chain signal.
 _CHAIN_BODY_RE = re.compile(
-    r"\b(predecessor|successor|hand[\s-]?off|hands? off|next skill|previous skill|"
-    r"runs? (?:after|before) the|replaces the|replaced by)\b",
+    r"\b(runs? (?:after|before) the|replaces the|replaced by|hands? off to|"
+    r"this skill'?s (?:predecessor|successor))\b",
     re.I,
 )
 
@@ -789,12 +792,19 @@ def audit_skill(path: str | Path, profile: str = "release-ready", root: str | Pa
             finding("SKILL017", skill_path, line_for_offset(text, text.find(body) + match.start()), "Hardcoded local user path detected.", "Replace local paths with repo-relative paths or input parameters.")
         )
 
-    if re.search(r"\bTask\b", body) and not re.search(r"\b(fallback|linear|sequential|inline)\b", body, re.I):
+    # SKILL018 fires on actual sub-agent DISPATCH (backticked `Task`, "Task tool",
+    # `Task(`, "sub-agent", or "dispatch … agent/task"), not the bare word "Task"
+    # in prose ("## Task breakdown", "the first task"). Mention ≠ requirement.
+    dispatch_pattern = r"`Task`|\bTask tool\b|\bTask\(|\bsub-?agents?\b|\bdispatch\w*\b[^.\n]{0,30}\b(?:agent|task)"
+    if re.search(dispatch_pattern, body, re.I) and not re.search(r"\b(fallback|linear|sequential|inline)\b", body, re.I):
         findings.append(
-            finding("SKILL018", skill_path, line_for_body_regex(text, body, r"\bTask\b"), "`Task` or sub-agent dispatch appears without a sequential fallback.", "Document the linear/manual fallback and ensure sub-agent dispatch is optional, not required for correctness.")
+            finding("SKILL018", skill_path, line_for_body_regex(text, body, dispatch_pattern, re.I), "`Task` or sub-agent dispatch appears without a sequential fallback.", "Document the linear/manual fallback and ensure sub-agent dispatch is optional, not required for correctness.")
         )
 
-    overbroad_pattern = r"\b(do anything|handle everything|all tasks|be an? universal agent|always handle|handle any request)\b"
+    # Overbroad = unbounded scope claims, NOT scoped defensive prose like "always
+    # handle errors" or "handle all rows in the batch". Dropped "always handle" /
+    # "all tasks" (too many legitimate scoped uses).
+    overbroad_pattern = r"\b(do anything|do everything|handle everything|handle anything|be an? universal agent|handle any (?:request|task)|any and all (?:tasks|requests))\b"
     if re.search(overbroad_pattern, body, re.I):
         findings.append(
             finding("SKILL019", skill_path, line_for_body_regex(text, body, overbroad_pattern, re.I), "Overbroad scope language detected.", "Narrow the workflow and define skip criteria.")

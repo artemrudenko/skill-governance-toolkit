@@ -59,7 +59,7 @@ merge on `high`; `medium`/`low`/`info` are advisory.
 | SKILL016 | medium | External content (web, email, project docs) trusted without verification | Untrusted input treated as instructions enables prompt injection |
 | SKILL017 | medium | Hardcoded home path or org-specific location | Absolute/org paths break portability across machines and teams |
 | SKILL018 | medium | `Task` / sub-agent dispatch with no documented sequential fallback | Hosts differ on sub-agent support; dispatch must be optional, not required for correctness |
-| SKILL019 | medium | Overbroad scope language ("scan all", universal-agent phrasing) | Skills should be narrow workflows, not catch-all agents |
+| SKILL019 | medium | Unbounded-scope language ("do anything", "handle everything", "be a universal agent") — not scoped prose like "always handle errors" | Skills should be narrow workflows, not catch-all agents |
 | SKILL020 | low | Skill signals a workflow chain (handoffs, replacement, or before/after prose) but documents no `## Predecessor` / `## Successor` | Chained skills need a run-order contract so orchestrators know sequence; standalone skills are exempt |
 | SKILL021 | medium | Missing `Skill type` declaration | Users need to know whether a skill is detect-only or mutating before trusting it |
 | SKILL022 | medium | User prompt language without clarification policy, or prompt language contradicting `never asks` | Interactive behavior must be bounded so non-interactive and CI flows do not hang or guess |

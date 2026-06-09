@@ -184,7 +184,7 @@ Apply 3 atomic passes per `references/security-spec.md`. Scans **both** `SKILLS_
 Compose per-skill records `{skill, phase, rule, severity, evidence}`, apply `STRICTNESS` overrides, compute per-category counts and verdict (🟢 healthy = 0 🔴 ∧ 🟡 ≤ 1; 🟡 attention = 0 🔴 ∧ 🟡 ≥ 2; 🔴 action required = any 🔴). Report has three layers:
 
 1. **Layer 1 — Category roll-up** (always present): 10-second decision table, one row per category + Overall.
-2. **Layer 2 — Per-category 4-part block** (`detailed` mode): for each of the 6 categories — even 🟢 ones — emit *What we check / What we found / Why it matters / How to fix*.
+2. **Layer 2 — Per-category 4-part block** (`detailed` mode): for each of the 7 categories (incl. Metainfo coverage P5.5) — even 🟢 ones — emit *What we check / What we found / Why it matters / How to fix*.
 3. **Layer 3 — Recommendations** (always present): impact-ordered remediation list.
 
 **Full output template — exact tables, worked example for «Token budget», report frontmatter schema — lives in `assets/output-template-detailed.md`. Read that file when producing the report.**

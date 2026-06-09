@@ -13,7 +13,7 @@ section below shows the exact format and a worked example.
 
 ```yaml
 type: audit-report
-audit_dimensions: [handoff, budget, naming, portability, multi-tool-compat, security]
+audit_dimensions: [handoff, budget, naming, portability, multi-tool-compat, security, metainfo]
 generated: {YYYY-MM-DD}
 library_size: {N skills}
 agents_scanned: {N agents}
@@ -36,7 +36,8 @@ Always present (every verbosity). One row per category + Overall row at bottom.
 | Portability tag (P4) | 6 | 0 | 0 | 🟢 healthy | All carry `compatibility:`. |
 | Multi-tool compat (P4.5) | 5 | 1 | 0 | 🟢 healthy | skill-build-portable Task call without sequential fallback note (line 132). |
 | Security (P5) | 6 | 0 | 0 | 🟢 healthy | No secrets, dangerous shell, or credential-path reads. |
-| **Overall** | — | — | — | **🔴** | Budget category requires action. |
+| Metainfo coverage (P5.5) | 5 | 0 | 1 | 🔴 action required | 1 skill missing the `metainfo` block (M1) — excluded from default install. |
+| **Overall** | — | — | — | **🔴** | Budget + metainfo categories require action. |
 ```
 
 The «One-line why» column MUST cite the most material finding — file:line or
@@ -152,9 +153,10 @@ No action — naming hygiene is healthy. Re-check after every new skill
 addition.
 ```
 
-(Repeat the block pattern for the 4 remaining categories — Handoff,
-Portability tag, Multi-tool compat, Security. Even clean ones get «What we
-check / Why it matters».)
+(Repeat the block pattern for the 5 remaining categories — Handoff,
+Portability tag, Multi-tool compat, Security, Metainfo coverage. Even clean
+ones get «What we check / Why it matters». The Metainfo coverage matrix
+(category × tier) is always emitted, even at 0 findings.)
 
 ---
 

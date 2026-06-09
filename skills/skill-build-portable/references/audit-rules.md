@@ -36,7 +36,7 @@ Severity legend: 🔴 blocker (must apply) · 🟡 warning (recommended) · 🟢
 | Rule | Detection | Severity | Transformation |
 |---|---|---|---|
 | **S1** Body > 500 lines | line count | 🟡 | Suggest splitting; do not auto-split |
-| **S2** Missing canonical `## When to use` section | header search | 🟡 | Skeleton inserted with placeholders for the four sub-sections |
+| **S2** `description` lacks activation/exclusion scope | description inspection | 🟢 advisory | Suggest strengthening the **description** (Use-when / Not-for clauses); do NOT insert a body `## When to use` — it is optional (rules 0.5.0) |
 | **S3** Missing `## Predecessor` / `## Successor` | header search | 🟢 informational | Suggest adding handoff documentation |
 
 ---

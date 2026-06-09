@@ -45,13 +45,16 @@ land in the Phase 4 report and may cap specific D-scores.
 Mandatory:
 - `# {Skill Name}` H1 heading
 - `**Purpose:**` — 1–2 sentence business context
-- `## When to use` section with the four canonical subsections:
-  - `**Always:**`
-  - `**ESPECIALLY when:**`
-  - `**Skip / Don't use for:**`
-  - `**Don't skip when:**`
 
-If missing or has alternative headers → flag 🟡 Major. Suggest renaming.
+**`## When to use` / `## When not to use` are OPTIONAL (policy, since rules 0.5.0).**
+Activation is driven by the frontmatter `description` (the routing surface);
+exclusion triggers belong there, and hard rules in `AGENTS.md`. A **missing** body
+activation section is **not** a finding — do not flag it, do not suggest adding it.
+**If present**, the `## When to use` section *should* use the four canonical
+subsections (`**Always:**` / `**ESPECIALLY when:**` / `**Skip / Don't use for:**` /
+`**Don't skip when:**`) so [3.7](#37--activation-coherence-this-skill) can check its
+coherence with the description — non-canonical headers on a present section →
+🟡 Minor (rename), never Major.
 
 Recommended sections (each missing → 🟡 Minor):
 - `## Required Inputs` (table)
@@ -224,7 +227,7 @@ Rationale: D8 (Discoverability) asks «will the right need activate this skill, 
 | Executable **Phase-0 gate** (a check that fails fast with a message) | ✅ no finding | — (a gate *does* something at the moment of decision; it cannot be skipped) |
 | **In-flow branch** conditional read at its point of use («on the fast path, skip if diff touches migrations») | ✅ no finding | — (read in the execution flow where it applies) |
 
-**Scope-out — do NOT conflict with the structure checks.** The canonical activation sections are the **sanctioned** in-body home for negative scope: `## When to use` and all its subsections (including `**Skip / Don't use for:**` and `**Don't skip when:**`) and `## When not to use`. These are **required** by [3.0b](#30b--body-structure), rewarded by the gate rule `SKILL012`, inserted by `skill-build-portable` S2, and coherence-checked by [3.7](#37--activation-coherence-this-skill). **3.8 never flags content inside them** — flagging a mandated section would pit one check against another. 3.8 fires only on prohibitions **outside** these sections.
+**Scope-out — do NOT conflict with the structure checks.** The canonical activation sections are the **sanctioned** (optional, since rules 0.5.0) in-body home for negative scope: `## When to use` and all its subsections (including `**Skip / Don't use for:**` and `**Don't skip when:**`) and `## When not to use`. When present, their structure is governed by [3.0b](#30b--body-structure) and their coherence with the description by [3.7](#37--activation-coherence-this-skill). **3.8 never flags content inside them** — flagging a sanctioned section would pit one check against another. 3.8 fires only on prohibitions **outside** these sections.
 
 **Defer to 3.7.** A `Skip` / `When not to use` line that *contradicts* the `description`'s positive scope is 3.7's concern (caps D8) — 3.8 does **not** double-flag it. 3.8 is about *placement of a stray prohibition*, not coherence.
 

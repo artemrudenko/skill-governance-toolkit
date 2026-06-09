@@ -13,6 +13,7 @@ name: {entity}-{action}[-{qualifier}]
 description: |
   {1–2 sentence WHAT}
   Use when: «trigger 1», «trigger 2», «trigger 3».
+  Not for: «{neighbour case}» — use {sibling skill}.   # exclusion triggers live HERE
   Output: {what the skill produces}.
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
@@ -32,7 +33,7 @@ metainfo:
 ## Purpose
 {1–2 sentence business value}
 
-## When to use
+## When to use   <!-- OPTIONAL (since rules 0.5.0). Activation is driven by `description`. -->
 **Always:**
 - {trigger 1}
 
@@ -45,7 +46,7 @@ metainfo:
 **Don't skip when:**
 - {counter-rationalization}
 
-## When not to use
+## When not to use   <!-- OPTIONAL — refines `description` after activation; 3.7 checks coherence -->
 {1–2 lines naming the wrong-tool case explicitly — defends against misactivation}
 
 ## Predecessor / Successor
@@ -99,13 +100,14 @@ Anti-pattern: a passive prose «do not use this skill if…» sitting in a mid-b
 `## Notes`. `skill-evaluate` 3.8 surfaces these as `info` findings and names the
 layer to move each to. The robust body-level «don't» is a gate, not a sentence.
 
-**This does NOT mean «remove the body's activation sections».** The canonical
-`## When to use` (with `**Skip / Don't use for:**`) and `## When not to use` are
-still **required** (3.0b) and are the *sanctioned* in-body refinement of scope —
-`description` routes activation, those sections narrow it after activation, and
-3.7 checks the two agree. 3.8 only concerns a **stray** prohibition placed
-*outside* those sanctioned sections; it never flags — and never asks you to
-remove — the activation sections the standard mandates.
+**Canonical home for exclusion triggers = `description` (frontmatter).** Since
+rules 0.5.0 the body `## When to use` / `## When not to use` sections are
+**optional**, not required — nothing mandates or auto-inserts them. If you do keep
+them, they are a *sanctioned* in-body refinement: `description` routes activation,
+those sections narrow it afterwards, and 3.7 checks the two agree. 3.8 only
+concerns a **stray** prohibition placed *outside* those sanctioned sections — it
+never flags content inside them, and never asks you to add them. A standalone hard
+rule that must always hold goes in `AGENTS.md` / `CLAUDE.md`, not a skill body.
 
 ## metainfo block (required since 1.8.0)
 

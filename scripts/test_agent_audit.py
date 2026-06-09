@@ -118,6 +118,27 @@ class AgentAuditBehaviorTests(unittest.TestCase):
         report = json.loads(result.stdout)
         self.assertTrue(report["summary"]["passed"])
 
+    def test_missing_when_to_use_section_is_not_flagged(self) -> None:
+        """Policy: body `## When to use` is optional — exclusion triggers belong in
+        `description`. A skill without the section must NOT produce SKILL012."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skills" / "no-wtu"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\n"
+                "name: no-wtu\n"
+                'description: "Do a thing. Use when the user asks to do the thing. Not for other things."\n'
+                "---\n\n"
+                "# No When To Use\n\n"
+                "**Purpose:** demonstrate that the activation section is optional.\n\n"
+                "## Workflow\n\nRun the validation step to verify completion.\n",
+                encoding="utf-8",
+            )
+            result = self.run_cli("audit-project", tmp, "--format", "json")
+            report = json.loads(result.stdout)
+            rule_ids = {item["rule_id"] for item in report["findings"]}
+            self.assertNotIn("SKILL012", rule_ids, "SKILL012 should be retired (When-to-use is optional)")
+
     def test_mcp_errors_are_sanitized_by_default(self) -> None:
         responses = self.run_mcp(
             [

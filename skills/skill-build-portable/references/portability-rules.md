@@ -175,27 +175,25 @@ Grep for claims like «works everywhere», «portable across tools», «universa
 
 Surface as a residual concern. Do NOT auto-split — splitting requires semantic decisions only the skill author can make. Suggest: «extract Phase N detail → `references/{topic}.md`».
 
-### S2 — Missing canonical `## When to use` (🟡)
+### S2 — Activation scope lives in `description` (advisory, since rules 0.5.0)
 
-If body has no `## When to use` section with the four canonical sub-sections (`Always` / `ESPECIALLY when` / `Skip` / `Don't skip when`), insert a skeleton:
+**Do NOT insert a `## When to use` skeleton.** The body activation section is
+**optional** — activation is driven by the frontmatter `description`, where
+positive triggers and exclusion scope belong; hard rules belong in `AGENTS.md`.
+Auto-inserting a body section here would contradict that policy and re-introduce
+the fragile, low-salience prohibitions that `skill-evaluate` 3.8 flags.
 
-```markdown
-## When to use
+Instead, inspect the `description`. If it lacks clear activation triggers or
+exclusion scope (e.g. no «Use when…», no «Not for… — use Y»), surface an
+**advisory** suggestion to strengthen the *description* — never to add a body
+section:
 
-**Always:**
-<!-- Fill in trigger phrases and primary use cases. -->
+> S2 (advisory): `description` has no explicit exclusion scope. Consider adding a
+> «Not for X — use Y» clause so the right need activates this skill and only the
+> right need. (Body `## When to use` is optional; do not add one to satisfy this.)
 
-**ESPECIALLY when:**
-<!-- Fill in high-impact cases that prevent rationalization-away. -->
-
-**Skip / Don't use for:**
-<!-- Fill in neighbor-skill disambiguation. -->
-
-**Don't skip when:**
-<!-- Fill in counter-rationalization for skill underuse. -->
-```
-
-Insert above the first `## Phase 0` or `## Required Inputs` section. If neither exists, insert immediately after the first H1 + Purpose block.
+If a `## When to use` section already exists, leave it; `skill-evaluate` 3.0b/3.7
+govern its structure and coherence.
 
 ### S3 — Missing `## Predecessor` / `## Successor` (🟢 informational)
 

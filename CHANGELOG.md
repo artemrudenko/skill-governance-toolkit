@@ -13,6 +13,44 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.13.0] — 2026-06-09 — info severity lane + optional activation sections
+
+Adds a zero-impact `info` reporting lane for R&D-grade checks and its first
+resident (3.8 negative-rule placement), and **relaxes the body activation
+sections to optional** — activation is driven by the frontmatter `description`,
+exclusion triggers live there, and standalone hard rules go in `AGENTS.md`.
+Rules catalog bumped `0.4.0 → 0.5.0`.
+
+### Added
+- **`info` severity (skill-evaluate, Surface B).** Info findings record to a new
+  `info_flags` JSONL field and a collapsed «Info (no action required)» report
+  section. They **never** cap a dimension, Score, tier, or the safety gate — a
+  promotion stage for checks that need evidence before they enforce. Contract and
+  promotion path: [`docs/extending-checks.md` § Info / experimental lane](docs/extending-checks.md#info--experimental-lane).
+- **3.8 — Negative-rule placement (info).** Surfaces passive prose prohibitions
+  placed *outside* the canonical activation sections that would be more reliable
+  in `description` (activation) or `AGENTS.md` (safety/execution). Scoped out of
+  the sanctioned `## When to use` / `## When not to use` sections, and defers
+  coherence to 3.7 — no check-vs-check conflict.
+- **Self-CI phase P24.** `test_skill_evaluate_catalog.py` guards catalog↔section
+  sync, the info-never-caps contract, and the 3.8 scope-out boundary.
+
+### Changed
+- **Body `## When to use` / `## When not to use` are now OPTIONAL.** `description`
+  is the canonical home for activation and exclusion triggers. `skill-evaluate`
+  3.0b no longer flags a missing section (present sections still structure- and
+  coherence-checked by 3.0b/3.7). `skill-build-portable` S2 **no longer inserts**
+  a skeleton — it advises strengthening the `description` instead. Authoring
+  standard skeleton marks the sections optional.
+
+### Removed
+- **Gate rule `SKILL012`** ("Missing `## When to use` section", advisory `low`) —
+  retired in rules `0.5.0`. Non-breaking for pipelines (it never blocked; removal
+  only removes a finding). Tooling that keys on the `SKILL012` id should drop it.
+  See [checks-reference.md § Retired rules](docs/checks-reference.md#retired-rules).
+
+---
+
 ## [1.12.0] — 2026-06-09 — asset-security suite
 
 Extends the deterministic engine from skill-structure checks to a **content

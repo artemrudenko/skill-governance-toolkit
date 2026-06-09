@@ -53,7 +53,6 @@ merge on `high`; `medium`/`low`/`info` are advisory.
 | SKILL009 | high | `allowed-tools:` present | Enforced by some hosts, ignored by others → silent cross-platform divergence |
 | SKILL010 | medium | Claude-only / host-only frontmatter field | Tool-specific keys weaken the portability claim |
 | SKILL011 | medium | Body longer than the line budget | Long bodies should push detail into `references/`, `scripts/`, `assets/` |
-| SKILL012 | low | No "When to use" / activation section | Explicit activation + skip criteria reduce accidental triggering |
 | SKILL013 | medium | No verification guidance | Skills should state how to confirm completion or quality |
 | SKILL014 | high | Destructive shell, approval bypass, or unsafe git (`rm -rf`, `--force`, `reset --hard`) | Skills must not normalize dangerous operations into the agent's behavior |
 | SKILL015 | high | Embedded secret or a path toward credentials | Skills must never carry tokens or steer agents at credential stores |
@@ -705,3 +704,9 @@ a **🔴 BREAKING** entry with upgrade notes naming the affected rule(s) and the
 recommended advisory window. The `rules_version` stamped in every report ties a
 verdict back to the exact catalog, so an adopter can confirm which lifecycle stage
 a given block ran against.
+
+### Retired rules
+
+| Rule | Retired in | Why |
+|---|---|---|
+| `SKILL012` — Missing `## When to use` section | rules 0.5.0 | The body activation section is now **optional**. Activation is driven by the frontmatter `description` (the routing surface); exclusion triggers belong there, and hard rules in `AGENTS.md`. A missing body section is no longer a finding. Non-breaking for pipelines (it was advisory `low`, never blocked); tooling keying on the id should drop it. |

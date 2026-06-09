@@ -78,7 +78,6 @@ ENGINE_RULE_IDS = {
     "SKILL009",
     "SKILL010",
     "SKILL011",
-    "SKILL012",
     "SKILL013",
     "SKILL014",
     "SKILL015",
@@ -724,10 +723,9 @@ def audit_skill(path: str | Path, profile: str = "release-ready", root: str | Pa
             finding("SKILL011", skill_path, 1, message, "Move long details to references/, executable logic to scripts/, and static templates to assets/.")
         )
 
-    if not re.search(r"^##\s+When to use\b", body, re.I | re.M):
-        findings.append(
-            finding("SKILL012", skill_path, 1, "Missing canonical `## When to use` section.", "Add activation, high-impact, skip, and don't-skip criteria.")
-        )
+    # SKILL012 (missing `## When to use`) retired in rules 0.5.0 — the body
+    # activation section is optional; exclusion triggers belong in `description`
+    # and hard rules in AGENTS.md. See docs/skill-authoring-standard.md.
 
     if not re.search(r"\b(verify|verification|test|audit|check|render|preview|validate)\b", body, re.I):
         findings.append(

@@ -109,7 +109,7 @@ Total  = D1 + D2 + D3 + D4 + D5 + D6 + D7 + D8 + D9    (max 45)
 Score  = round(Total / 45 × 100)                         (0–100)
 ```
 
-**Safety gate (D9 hard floor):** if D9 ≤ 1 AND the skill performs mutations or ingests untrusted input, the overall verdict is forced down to 🔴 **Red** regardless of the numerical Score. Rationale: a skill that mutates external state with zero safety awareness is unsafe regardless of how well-written it is. The verbose-output Why column for D9 must name this gate as the trigger.
+**Safety gate (D9 hard floor):** force the overall verdict to 🔴 **Red** (regardless of the numerical Score) if EITHER (a) D9 ≤ 1 AND the skill performs mutations or ingests untrusted input, OR (b) any 🔴 lexical security finding fired in Phase 3.5 (secret / dangerous-shell / credential-path hit). Branch (b) is required because a 🔴 secret hit caps D9 ≤ 2 (not ≤ 1), so condition (a) alone would miss it — leaving a leaked secret un-gated. Resolve this gate **after** Phase 3.5 completes (its findings feed branch (b)); persist the result in `safety_gate_triggered`. Rationale: a skill that mutates external state with zero safety awareness — or that leaks a credential — is unsafe regardless of how well-written it is. The verbose-output Why column for D9 must name this gate as the trigger.
 
 **Risk tiers:**
 

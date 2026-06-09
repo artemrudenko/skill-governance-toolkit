@@ -49,10 +49,20 @@ cp references/ci/github-pr.yml .github/workflows/skill-gate.yml
 | `SGT_REPO` | Clone URL of your toolkit mirror, e.g. `https://github.com/your-org/skill-governance-toolkit.git` |
 | `SGT_REF` | An **immutable 40-char commit SHA** (never a tag) so a re-tagged release can't silently change gate behaviour |
 
-Generate the workflow with the SHA already pinned via the facade:
+Generate the workflow with the SHA already pinned via the facade. Run this
+**from a toolkit checkout** — `ci-init` fills in that checkout's HEAD SHA for you:
 
 ```bash
-python3 scripts/sgt.py ci-init --github --ref "$(git rev-parse HEAD)" --output .github/workflows/skill-gate.yml
+# from inside the toolkit repo:
+python3 scripts/sgt.py ci-init --github --output .github/workflows/skill-gate.yml
+```
+
+From a consumer install (no toolkit checkout on hand) pass the toolkit's SHA
+explicitly — `git -C <toolkit> rev-parse HEAD`, **not** a bare `git rev-parse
+HEAD`, which would resolve *your* project's HEAD and break the gate on every PR:
+
+```bash
+python3 scripts/sgt.py ci-init --github --ref "$(git -C /path/to/toolkit rev-parse HEAD)" --output .github/workflows/skill-gate.yml
 ```
 
 ### 3. (Optional) Kill-switch variable

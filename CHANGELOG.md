@@ -102,6 +102,13 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
   a consolidated "Auxiliary scripts" flag table (`filter_skills`/`build_index`/`post_mr_comment`/
   `doctor`/`quickstart`). Onboarding wording no longer hides the one-time `clone`/`cd` as "1 command".
 
+### Fixed (post-review round 3 — three majors)
+- **GitHub onboarding no longer documents a gate-breaking SHA (major).** `docs/github-onboarding.md`
+  showed `ci-init --github --ref "$(git rev-parse HEAD)"` — a bare consumer-side `rev-parse`
+  that resolves the *user's* HEAD, the exact failure the 1.17.0 engine fix prevents. It now
+  shows the toolkit-checkout auto-fill form and a `git -C <toolkit> rev-parse HEAD` consumer
+  form. New self-CI **P34** fails any onboarding `--ref` command that omits `git -C`.
+
 ---
 
 ## [1.16.1] — 2026-06-09 — body-length threshold drift fixed + guarded

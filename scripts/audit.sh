@@ -42,6 +42,7 @@
 #   P31 — init.sh integration-bootstrap behavior
 #   P32 — generate_subset_agents_md.py subset rewriter behavior
 #   P33 — cli-reference flag coverage (argparse ⊆ docs)
+#   P34 — onboarding ci-init uses a toolkit-scoped SHA (not the consumer's HEAD)
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -669,6 +670,28 @@ if python3 "$ROOT/scripts/test_cli_reference_coverage.py" >/dev/null 2>&1; then
   pass "every main-CLI flag is documented in cli-reference.md"
 else
   fail "cli-reference flag drift — run: python3 scripts/test_cli_reference_coverage.py"
+fi
+
+# ── P34: consumer onboarding ci-init pins a toolkit-scoped SHA ────────────────
+# A bare `$(git rev-parse HEAD)` in a CONSUMER onboarding doc resolves the
+# consumer's HEAD, not the toolkit's — the generated gate then checks out the
+# wrong SHA and hard-fails on every PR. The correct forms are `git -C <toolkit>`
+# or running `ci-init` from a toolkit checkout (SHA auto-filled).
+
+phase "P34 — onboarding ci-init uses a toolkit-scoped SHA (not consumer HEAD)"
+onboarding_bad=""
+for doc in "$ROOT"/docs/github-onboarding.md "$ROOT"/docs/gitlab-onboarding.md; do
+  [[ -f "$doc" ]] || continue
+  # Only command lines that feed --ref a HEAD SHA matter; explanatory prose may
+  # legitimately NAME the bare-HEAD antipattern to warn against it.
+  if grep -nE -- '--ref.*rev-parse HEAD' "$doc" | grep -vq 'git -C'; then
+    onboarding_bad+=" $(basename "$doc")"
+  fi
+done
+if [[ -n "$onboarding_bad" ]]; then
+  fail "onboarding doc resolves the consumer's HEAD for --ref (breaks the gate):$onboarding_bad"
+else
+  pass "onboarding ci-init examples pin a toolkit-scoped SHA"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

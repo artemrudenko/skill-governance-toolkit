@@ -13,6 +13,24 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.15.0] — 2026-06-09 — info-lane evidence aggregation
+
+Closes the info-lane loop introduced in 1.13.0: info-tier checks (e.g. 3.8) write
+`info_flags.*` to `out/scores/index.jsonl`, and there is now a way to aggregate
+that evidence across a corpus — without it, the lane was write-only and could
+never inform a promote/retire decision.
+
+### Added
+- **`filter_skills.py --info-summary`.** Point `--index` at a skill-evaluate scores
+  index (`out/scores/index.jsonl`); prints `info\t<flag>\t<total>\t<skills_affected>`
+  rows — total fires and how many skills each info flag touched. The promotion
+  view for info-tier checks.
+- **Self-CI phase P26** (`test_filter_skills.py`) covering the aggregator.
+- **Promotion path wired in `docs/extending-checks.md`** — the Info / experimental
+  lane now points at `--info-summary` as the evidence step before promote/retire.
+
+---
+
 ## [1.14.1] — 2026-06-09 — narrow false-positive-prone gate detections
 
 False-positive reduction in three advisory gate rules — narrowed detection only,

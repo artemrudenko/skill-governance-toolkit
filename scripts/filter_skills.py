@@ -21,6 +21,10 @@ Diagnostic modes:
   --list-categories    Print 'category\\tcount' rows. Used by --interactive in install.sh.
   --filtered-index     Print a fresh INDEX.jsonl containing only the filtered subset
                        (used so the destination skill-find sees only what's installed).
+  --info-summary       Aggregate `info_flags.*` across a skill-evaluate scores index
+                       (point --index at out/scores/index.jsonl). Prints
+                       'info\\t<flag>\\t<total>\\t<skills_affected>' rows — the evidence
+                       view for info-tier checks (e.g. 3.8) before promotion.
 """
 from __future__ import annotations
 
@@ -93,9 +97,28 @@ def main() -> int:
     g = p.add_mutually_exclusive_group()
     g.add_argument("--list-categories", action="store_true", help="Print 'category\\tcount' summary and exit")
     g.add_argument("--filtered-index", action="store_true", help="Print filtered INDEX.jsonl to stdout")
+    g.add_argument("--info-summary", action="store_true", help="Aggregate info_flags.* from a scores index and exit")
     args = p.parse_args()
 
     entries = load_index(args.index)
+
+    if args.info_summary:
+        # Sum each info_flags key across the scores index; track how many skills
+        # had a non-zero count. This is the evidence view for info-tier checks.
+        totals: Counter[str] = Counter()
+        affected: Counter[str] = Counter()
+        for e in entries:
+            flags = e.get("info_flags") or {}
+            if not isinstance(flags, dict):
+                continue
+            for key, value in flags.items():
+                count = value if isinstance(value, int) else 0
+                totals[key] += count
+                if count > 0:
+                    affected[key] += 1
+        for key in sorted(totals):
+            print(f"info\t{key}\t{totals[key]}\t{affected[key]}")
+        return 0
 
     if args.list_categories:
         c: Counter[str] = Counter()

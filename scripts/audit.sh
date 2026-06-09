@@ -34,6 +34,7 @@
 #   P23 — CI template path coverage ⊇ engine-governed asset types
 #   P24 — skill-evaluate sub-check catalog consistency (sync + info contract)
 #   P25 — gate-rule rationale coverage (why + checks-reference entry)
+#   P26 — filter_skills --info-summary aggregation
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -548,6 +549,17 @@ if python3 "$ROOT/scripts/test_rationale_coverage.py" >/dev/null 2>&1; then
   pass "every gate rule has a why and a checks-reference entry"
 else
   fail "rationale coverage gap — run: python3 scripts/test_rationale_coverage.py"
+fi
+
+# ── P26: filter_skills info-summary aggregator ───────────────────────────────
+# Closes the info-lane loop: aggregates info_flags.* across the scores index so
+# info-tier checks (3.8) can accrue evidence before promotion.
+
+phase "P26 — filter_skills --info-summary aggregation"
+if python3 "$ROOT/scripts/test_filter_skills.py" >/dev/null 2>&1; then
+  pass "info-summary aggregation behaves"
+else
+  fail "filter_skills info-summary tests failed — run: python3 scripts/test_filter_skills.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

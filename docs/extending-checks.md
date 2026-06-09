@@ -149,6 +149,17 @@ info  →  advisory / capping        (promote: evidence shows it catches real de
 info  →  retire                     (demote: it fires on noise, never actionable)
 ```
 
+**Accrue the evidence** — don't promote on a hunch. The `info_flags.*` written to
+`out/scores/index.jsonl` aggregate across a corpus with:
+
+```bash
+python3 scripts/filter_skills.py --index out/scores/index.jsonl --info-summary
+# info<TAB>negative_rule_placement<TAB>{total fires}<TAB>{skills affected}
+```
+
+A high total across many skills that, on inspection, are real defects → promote.
+A flag that rarely fires or fires on false signals → retire.
+
 Promotion = raise the check's output severity (info → a dimension cap), add the
 cap-wiring in `references/structural-analysis.md`, and move its JSONL field out of
 `info_flags`. Without a planned exit the «Info» section grows and stops being

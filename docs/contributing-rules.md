@@ -4,6 +4,10 @@ How an adopter proposes a new **organization-specific** governance rule for the
 deterministic engine, ships it safely (advisory-first), and earns promotion to a
 stable, possibly floor-level, rule.
 
+> Not sure a deterministic engine rule is even the right home? Start at
+> [extending-checks.md](extending-checks.md) — the decision tree for gate rules vs
+> LLM-scored skill checks. This page covers the **engine-rule** branch.
+
 The toolkit splits **policy data** (configurable, no fork) from **detection
 algorithms** (code, reviewed). Most org rules are policy data: a new dangerous
 pattern, a new secret shape, a new env-exfil signature. Those ship through the

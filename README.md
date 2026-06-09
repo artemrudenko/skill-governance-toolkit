@@ -153,6 +153,7 @@ dangerous instructions / secrets (`SEC010`–`SEC012`), hidden/bidi characters
 findings an MR *introduces* (`--fail-on-new`). Author and operator docs:
 
 - [`docs/cli-reference.md`](docs/cli-reference.md) — complete `agent_audit.py` + `sgt` subcommand / flag / env-var / exit-code reference.
+- [`docs/extending-checks.md`](docs/extending-checks.md) — decision tree for adding / removing / tuning a check: deterministic gate vs LLM-scored skill.
 - [`docs/gate-for-authors.md`](docs/gate-for-authors.md) — one-page author entry point (linked from every MR comment).
 - [`docs/security-suppression-runbook.md`](docs/security-suppression-runbook.md) — false positives, inline vs central suppression, SLA + break-glass.
 - [`docs/security-rollout-guide.md`](docs/security-rollout-guide.md) — enable the suite over an existing library without an avalanche.
@@ -578,6 +579,7 @@ For the full architectural reasoning — including anti-patterns like `allowed-t
 │   ├── user-guide.ru.md               ← Russian user guide with workflows + mermaid diagrams
 │   ├── agent-governance-engine.md        ← CLI/MCP/Docker audit engine guide
 │   ├── checks-reference.md            ← every governance check + rationale (engine rules + LLM dims)
+│   ├── extending-checks.md            ← decision tree: where a new check goes (gate vs LLM skill)
 │   ├── architecture.md                ← three-layer architecture, install contract, parallelization
 │   ├── skill-authoring-standard.md    ← canonical SKILL.md skeleton
 │   ├── contributing-rules.md          ← propose an org governance rule (advisory-first + stability marker)

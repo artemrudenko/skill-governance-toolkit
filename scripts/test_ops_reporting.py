@@ -4,6 +4,7 @@ OPS10 findings history + report-trends, OPS11 list-suppressions, OPS12 --whole-t
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -19,13 +20,19 @@ FUTURE = "2999-01-01"
 PAST = "2000-01-01"
 
 
-def _run_cli(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+def _run_cli(
+    *args: str, cwd: Path | None = None, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    run_env = None
+    if env is not None:
+        run_env = {**os.environ, **env}
     return subprocess.run(
         [PYTHON, str(ROOT / "scripts" / "agent_audit.py"), *args],
         cwd=str(cwd or ROOT),
         text=True,
         capture_output=True,
         check=False,
+        env=run_env,
     )
 
 
@@ -58,6 +65,23 @@ class ListSuppressionsTests(unittest.TestCase):
             rule_ids = {e["rule_id"] for e in data["suppressions"]}
             self.assertEqual(rule_ids, {"SEC003", "SEC011"})
             self.assertTrue(any(e["expired"] for e in data["suppressions"]))
+
+    def test_advisory_kill_switch_downgrades_expired_to_zero(self):
+        # SGT_FAIL_MODE=advisory is the fleet-wide kill-switch: list-suppressions
+        # must stop blocking on expired entries, matching the audit-project gate
+        # and the runbook promise that "every pipeline immediately stops blocking".
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _write_ignore_doc(root, [
+                {"rule_id": "SEC003", "path": "a.md", "reason": "old waiver", "expires": PAST},
+            ])
+            res = _run_cli("list-suppressions", "--root", str(root), "--format", "json",
+                           env={"SGT_FAIL_MODE": "advisory"})
+            self.assertEqual(res.returncode, 0, res.stderr)
+            # The report still reports the expired entry — it just stops blocking.
+            data = json.loads(res.stdout)
+            self.assertTrue(any(e["expired"] for e in data["suppressions"]))
+            self.assertIn("advisory", res.stderr.lower())
 
     def test_only_future_entry_no_window_exits_zero(self):
         with tempfile.TemporaryDirectory() as td:

@@ -1,6 +1,6 @@
 [project]
 name = "skill-governance-toolkit"
-version = "1.15.0"
+version = "1.16.0"
 description = "Portable governance toolkit for AGENTS.md and SKILL.md skill libraries."
 readme = "README.md"
 requires-python = ">=3.10"

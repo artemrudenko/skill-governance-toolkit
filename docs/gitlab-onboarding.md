@@ -11,13 +11,15 @@ MCP/plugin manifests, …) is audited by the toolkit's deterministic engine
 
 | Job | Command | Effect |
 |---|---|---|
-| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --profile release-ready --fail-on high` | High-severity findings (secrets, dangerous shell, broken frontmatter, `allowed-tools`) **fail the pipeline → block the merge** |
+| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --profile release-ready --fail-on-new high` | **Newly introduced** high-severity findings (secrets, dangerous shell, broken frontmatter, `allowed-tools`) **fail the pipeline → block the merge**; pre-existing high findings on touched legacy assets do not block |
 | `skill-gate:advisory` | same with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` artifact + an idempotent MR comment |
 | `noop` | `echo` on `alpine` | Always-green placeholder so every MR has a pipeline (see "Branch protection" below) |
 
-`--changed-only` diffs the working tree against the MR base with a three-dot
-diff, so an author is accountable only for the assets their MR touches — not for
-legacy assets already in the marketplace.
+`--changed-only` diffs the MR's committed HEAD against its merge-base with the
+target branch (`$CI_MERGE_REQUEST_DIFF_BASE_SHA...HEAD`, a three-dot diff), so an
+author is accountable only for the committed assets their MR touches — not for
+legacy assets already in the marketplace. Uncommitted working-tree edits are not
+in scope; the gate audits what the MR introduces.
 
 ## Files involved
 
@@ -77,7 +79,11 @@ GitLab auto-provides the rest: `CI_API_V4_URL`, `CI_PROJECT_ID`,
   CI ignores is a silent coverage gap. Current list: `skills/**`, `agents/**`,
   `commands/**`, `prompts/**`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`,
   `.github/copilot-instructions.md`, `gemini-extension.json`, `**/.mcp.json`,
-  `**/mcp.json`, `**/plugin.json`, `references/agent-audit-rules.json`.
+  `**/mcp.json`, `**/plugin.json`, `.claude/settings.json`,
+  `.claude/settings.local.json`, `hooks/**`, `references/agent-audit-rules.json`,
+  `references/audit-ignore.json` (suppression control-plane), and
+  `references/audit-config.*.json` (so the "config overlay is ignored" warning
+  fires). Keep it in sync with `references/ci/gitlab-ci.yml` `rules:changes`.
 - **`GIT_DEPTH: 0`** is required so the MR merge-base commit is reachable for
   the diff. Do not lower it.
 

@@ -13,6 +13,40 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.16.0] — 2026-06-09 — gate honesty: dirty-tree guard + full kill-switch
+
+Two correctness fixes to the gate's local-vs-CI parity and the fleet kill-switch,
+plus doc alignment. No new rules; no severity changes.
+
+### Fixed
+- **`sgt gate` fails fast on a dirty working tree.** The gate audits committed
+  `HEAD` only (the engine diffs `base...HEAD`), so an uncommitted change was
+  invisible — a local run before `git commit` could print a false green that the
+  team reads as "safe to push". `sgt gate` now refuses on a dirty tree with a
+  "commit or stash first" message. `--allow-dirty` opts out and audits `HEAD`
+  anyway. CI is unaffected (it checks out a clean commit).
+- **`SGT_FAIL_MODE=advisory` now silences `list-suppressions` too.** The
+  fleet-wide kill-switch only covered `audit-project`/`audit-skill`; an expired
+  suppression still exited non-zero, so a pipeline running `list-suppressions`
+  before the audit (both CI templates do) kept blocking despite the runbook's
+  promise that "every pipeline immediately stops blocking". All blocking exit
+  paths now route through one `_kill_switch_active()` helper.
+
+### Changed
+- **Docs aligned with actual gate behavior.** `user-guide` (en/ru) and
+  `gitlab-onboarding` now say the block job uses `--fail-on-new high` (not
+  `--fail-on high`) and that `--changed-only` diffs committed `HEAD` against the
+  base (`base...HEAD`), not the working tree. The GitLab onboarding tracked-path
+  list is re-synced with `references/ci/gitlab-ci.yml` `rules:changes` (adds
+  `.claude/settings*.json`, `hooks/**`, `references/audit-ignore.json`,
+  `references/audit-config.*.json`).
+- **Corrected the 1.12.0 `MCP001` note.** It described inline-code `mcp__` tokens
+  as ignored; the shipped behavior masks only fenced blocks — inline-code spans
+  count as genuine usage. CHANGELOG entry and the `scan_mcp_consistency` docstring
+  now match the code.
+
+---
+
 ## [1.15.0] — 2026-06-09 — info-lane evidence aggregation
 
 Closes the info-lane loop introduced in 1.13.0: info-tier checks (e.g. 3.8) write
@@ -158,8 +192,10 @@ Rules catalog bumped `0.1.0 → 0.4.0`.
 - **MCP tool↔server consistency (`MCP001`/`MCP002`).** A skill using `mcp__server__*`
   must declare the server in `metainfo.requires.mcp` (or the org `allow_mcp_servers`
   allowlist); used-but-undeclared is `MCP001` (high), declared-but-unused is `MCP002`
-  (low). `mcp__` tokens inside fenced/inline code or detection-context lines are
-  ignored. MCP server `command + args` are also joined and dangerous-scanned so a
+  (low). `mcp__` tokens inside **fenced** code blocks or on detection-context
+  lines are ignored; **inline-code** spans stay visible, because a tool name in
+  backticks (`mcp__github__search`) is a genuine usage. MCP server
+  `command + args` are also joined and dangerous-scanned so a
   payload split across argv elements is caught.
 - **Hook-command audit (`HOOK001`/`HOOK002`).** `.claude/settings*.json`, `plugin.json`
   `hooks` blocks, and `hooks/*` scripts are a new governed `hook` asset type; each

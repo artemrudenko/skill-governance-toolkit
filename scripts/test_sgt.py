@@ -330,6 +330,42 @@ class GateTests(unittest.TestCase):
         result = self.run_sgt("--root", str(ROOT), "gate", "--check-setup")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def _init_git_repo(self, root: Path) -> None:
+        env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+        run = lambda *a: subprocess.run(["git", "-C", str(root), *a],
+                                        capture_output=True, text=True,
+                                        env={**__import__("os").environ, **env})
+        run("init", "-q")
+        (root / "AGENTS.md").write_text("# clean\n", encoding="utf-8")
+        run("add", "-A")
+        run("commit", "-qm", "base")
+
+    def test_gate_fails_fast_on_dirty_working_tree(self) -> None:
+        # A local `sgt gate` audits committed HEAD only (base...HEAD). An
+        # uncommitted change is invisible, so a dirty tree must fail-fast rather
+        # than print a false green that the user reads as "safe to push".
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            # Introduce an uncommitted edit.
+            (root / "AGENTS.md").write_text("# dirty edit\n", encoding="utf-8")
+            result = self.run_sgt("--root", str(root), "gate", "--base", "HEAD", cwd=root)
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            combined = (result.stdout + result.stderr).lower()
+            self.assertIn("uncommitted", combined)
+
+    def test_gate_allow_dirty_bypasses_the_guard(self) -> None:
+        # --allow-dirty is the documented escape hatch: it audits HEAD anyway.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            (root / "AGENTS.md").write_text("# dirty edit\n", encoding="utf-8")
+            result = self.run_sgt("--root", str(root), "gate", "--base", "HEAD",
+                                  "--allow-dirty", cwd=root)
+            # HEAD is clean of findings → gate passes (exit 0), guard skipped.
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

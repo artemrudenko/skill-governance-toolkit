@@ -588,13 +588,16 @@ flowchart TD
 
 | Job | Команда | Эффект |
 |---|---|---|
-| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on high` | High-severity findings роняют pipeline и блокируют merge |
+| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on-new high` | Впервые внесённые high-severity findings роняют pipeline и блокируют merge (уже существовавшие на затронутых legacy-ассетах не блокируют) |
 | `skill-gate:advisory` | то же с `--fail-on none --format json` + `post_mr_comment.py` | Не блокирует; публикует `skill-audit.json` и идемпотентный коммент в MR |
 | `noop` | `echo` на `alpine` | Всегда-зелёная заглушка; гарантирует pipeline для каждого MR |
 
-`--changed-only` сравнивает рабочее дерево с `--base` (git ref) через three-dot
-diff — автор отвечает только за изменённые в его MR сущности. Шаблон ставит
-`GIT_DEPTH: 0`, чтобы базовый коммит был доступен.
+`--changed-only` сравнивает закоммиченный `HEAD` с `--base` (git ref) через
+`base...HEAD` three-dot diff — автор отвечает только за закоммиченные сущности,
+которые внёс его MR. Незакоммиченные правки рабочего дерева в scope не попадают.
+Шаблон ставит `GIT_DEPTH: 0`, чтобы базовый коммит был доступен. Локальный запуск
+через `sgt gate` по той же причине падает на «грязном» дереве — сначала
+закоммить или сделай stash, либо передай `--allow-dirty`, чтобы проверить `HEAD`.
 
 Gate-джобы запускаются только на MR, затрагивающих governed-ассет
 (`rules:changes`). Если включить в GitLab **«Pipelines must succeed»**, MR без

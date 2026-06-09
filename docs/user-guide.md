@@ -585,13 +585,16 @@ flowchart TD
 
 | Job | Command | Effect |
 |---|---|---|
-| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on high` | High-severity findings fail the pipeline and block the merge |
+| `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --fail-on-new high` | Newly introduced high-severity findings fail the pipeline and block the merge (pre-existing high findings on touched legacy assets do not block) |
 | `skill-gate:advisory` | same with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` and an idempotent MR comment |
 | `noop` | `echo` on `alpine` | Always-green placeholder; guarantees every MR has a pipeline |
 
-`--changed-only` diffs the working tree against `--base` (a git ref) using a
-three-dot diff, so an author is accountable only for the entities their MR
-touches. The template sets `GIT_DEPTH: 0` so the merge-base commit is reachable.
+`--changed-only` diffs committed `HEAD` against `--base` (a git ref) using a
+`base...HEAD` three-dot diff, so an author is accountable only for the committed
+entities their MR touches. Uncommitted working-tree edits are not in scope. The
+template sets `GIT_DEPTH: 0` so the merge-base commit is reachable. Running the
+gate locally via `sgt gate` fails fast on a dirty tree for this reason — commit
+or stash first, or pass `--allow-dirty` to audit `HEAD` anyway.
 
 The gate jobs run only on MRs that touch a governed asset (`rules:changes`). If
 you enable GitLab's **"Pipelines must succeed"**, an MR that touches no governed

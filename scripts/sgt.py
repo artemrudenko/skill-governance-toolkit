@@ -510,6 +510,19 @@ def _gate_check_setup(root: Path) -> int:
     return 0
 
 
+def _working_tree_dirty(root: Path) -> bool:
+    """True if the git working tree at `root` has uncommitted changes (staged,
+    unstaged, or untracked — gitignored paths excluded by porcelain). Returns
+    False when `root` is not a git repo, so non-git callers are never blocked."""
+    proc = subprocess.run(
+        ["git", "-C", str(root), "status", "--porcelain"],
+        text=True, capture_output=True, check=False,
+    )
+    if proc.returncode != 0:
+        return False
+    return bool(proc.stdout.strip())
+
+
 def command_gate(args: argparse.Namespace) -> int:
     root = args.root.expanduser().resolve()
     if args.check_setup:
@@ -518,6 +531,19 @@ def command_gate(args: argparse.Namespace) -> int:
     engine = SGT_ROOT / "scripts" / "agent_audit.py"
     if not engine.exists():
         print(f"sgt gate: engine not found at {engine}", file=sys.stderr)
+        return 1
+
+    # The gate audits committed HEAD only (the engine diffs `base...HEAD`), so an
+    # uncommitted change is invisible. Fail-fast on a dirty tree rather than print
+    # a false green the user reads as "safe to push". `--allow-dirty` opts out.
+    if not args.allow_dirty and _working_tree_dirty(root):
+        print(
+            "sgt gate: working tree has uncommitted changes.\n"
+            "  The gate audits committed HEAD only (base...HEAD diff), so these\n"
+            "  changes would NOT be checked — a pass here would be misleading.\n"
+            "  Commit or stash first, or pass --allow-dirty to audit HEAD anyway.",
+            file=sys.stderr,
+        )
         return 1
 
     # Exactly the CI block job: changed-only delta gate against --base, blocking
@@ -724,6 +750,9 @@ def build_parser() -> argparse.ArgumentParser:
         "gate", help="Reproduce the CI block verdict locally (changed-only delta gate).")
     gate.add_argument("--base", default="main",
                       help="Git ref to diff against for the delta gate (default: main).")
+    gate.add_argument("--allow-dirty", action="store_true",
+                      help="Audit committed HEAD even with uncommitted changes "
+                           "(default: fail-fast on a dirty tree).")
     gate.add_argument("--check-setup", action="store_true",
                       help="Verify this repo is wired for the gate (CODEOWNERS covers "
                            "the suppression list); audit nothing.")

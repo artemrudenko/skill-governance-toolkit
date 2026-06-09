@@ -1022,9 +1022,10 @@ def scan_mcp_consistency(body: str, frontmatter: dict[str, Any], path: Path) -> 
 
     MCP001 (high, floor): an `mcp__<server>__` tool is USED in the body but its
     server is not DECLARED (neither in `metainfo.requires.mcp` nor the org
-    `allowlists.mcp_servers`). False-positive guards: tokens inside fenced/inline
-    code spans are masked out, and a token on a detection-context line (detect/scan/
-    denylist/pattern…) is not counted as usage.
+    `allowlists.mcp_servers`). False-positive guards: tokens inside FENCED code
+    blocks (multi-line examples) are masked out, but INLINE-code spans stay visible
+    — a tool name in backticks (`mcp__github__search`) is a genuine usage. A token
+    on a detection-context line (detect/scan/denylist/pattern…) is not counted.
 
     MCP002 (low): a server declared in `requires.mcp` is never used. Org-allowlist
     servers are exempt — an unused org-allowlisted server is intentional infra, not a
@@ -2417,18 +2418,28 @@ def emit(data: dict[str, Any], fmt: str) -> None:
             print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def _gate_exit_code(blocked: bool) -> int:
-    """Map a gate-block decision to an exit code, honoring the SGT_FAIL_MODE kill-switch.
+def _kill_switch_active() -> bool:
+    """`SGT_FAIL_MODE=advisory` is the fleet-wide kill-switch: it forces a
+    non-blocking exit even when findings OR expired suppressions meet the blocking
+    threshold. The audit still runs and reports; only the exit code is downgraded.
+    Default (`enforce` or unset) keeps blocking behavior. Every blocking exit path
+    (audit gates AND list-suppressions hygiene) routes through this so a single
+    variable silences the whole fleet, as the security runbook promises."""
+    if os.environ.get("SGT_FAIL_MODE", "enforce") == "advisory":
+        print("SGT_FAIL_MODE=advisory: not blocking despite blocking findings/suppressions.",
+              file=sys.stderr)
+        return True
+    return False
 
-    `SGT_FAIL_MODE=advisory` (a fleet-wide kill-switch) forces a non-blocking exit 0
-    even when findings meet the threshold — the audit still ran and reported. Default
-    (`enforce` or unset) keeps the blocking behavior."""
+
+def _gate_exit_code(blocked: bool, blocked_code: int = 1) -> int:
+    """Map a gate-block decision to an exit code, honoring the kill-switch.
+
+    `blocked_code` is the non-advisory blocking exit: 1 for audit gates,
+    2 for list-suppressions hygiene (which reserves 2 for "expired waiver")."""
     if not blocked:
         return 0
-    if os.environ.get("SGT_FAIL_MODE", "enforce") == "advisory":
-        print("SGT_FAIL_MODE=advisory: not blocking despite findings at/above threshold.", file=sys.stderr)
-        return 0
-    return 1
+    return 0 if _kill_switch_active() else blocked_code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -2569,7 +2580,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "list-suppressions":
             report = list_suppressions_report(args.root, expiring_within=args.expiring_within)
             emit(report, args.format)
-            return 2 if report["blocked"] else 0
+            return _gate_exit_code(report["blocked"], blocked_code=2)
         elif args.command == "report-trends":
             emit(report_trends(args.root), args.format)
         elif args.command == "explain-rule":

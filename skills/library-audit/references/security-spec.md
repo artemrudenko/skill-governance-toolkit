@@ -25,7 +25,7 @@ false positives when a spec elsewhere references the patterns by name.
 
 ---
 
-## Pass 6.1 — Secret patterns
+## Pass 5.1 — Secret patterns
 
 Regex catalog for common credential formats. False-positive rate is low
 because each pattern matches a vendor-specific shape.
@@ -55,7 +55,7 @@ not a finding.
 
 ---
 
-## Pass 6.2 — Dangerous shell patterns
+## Pass 5.2 — Dangerous shell patterns
 
 Detect command patterns that, if executed by an agent following the skill,
 could destroy data or leak it externally. Apply to fenced code blocks (Bash,
@@ -81,7 +81,7 @@ self-flagging.
 
 ---
 
-## Pass 6.3 — Credential file path references
+## Pass 5.3 — Credential file path references
 
 Skills should never read files at well-known credential paths — those are
 the user's secrets, not the skill's concern.

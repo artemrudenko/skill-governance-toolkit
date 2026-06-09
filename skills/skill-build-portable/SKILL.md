@@ -115,8 +115,9 @@ If `OUTPUT_MODE=preview` → **stop here**, no file written.
 
 ### Phase 4 — Confirm + write
 
-If `OUTPUT_MODE=in-place` and `FORCE=false`, run the single clarification
-confirmation gate now, after the user has seen the diff. Use `AskUserQuestion`
+If `OUTPUT_MODE=in-place`, `FORCE=false`, and at least one 🔴 transformation is
+queued, run the single clarification confirmation gate now, after the user has
+seen the diff (this matches the Hard-rules clarification policy). Use `AskUserQuestion`
 only on hosts that provide it; otherwise ask plainly in chat. Display the target
 path, backup path, and transformation count. If the user declines, stop with no write.
 

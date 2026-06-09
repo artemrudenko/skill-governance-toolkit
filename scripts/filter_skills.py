@@ -68,6 +68,10 @@ def apply_filters(
     for e in entries:
         mi = e.get("metainfo") or {}
         cats = mi.get("category") or []
+        if isinstance(cats, str):
+            # legacy/hand-edited scalar — set("governance") would intersect by
+            # CHARACTER and silently drop the skill from every --category install
+            cats = [cats]
         tier = mi.get("tier", "unknown")
 
         if skill_list is not None:

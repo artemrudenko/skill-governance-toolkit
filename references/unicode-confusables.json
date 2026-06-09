@@ -1,5 +1,5 @@
 {
-  "_comment": "Non-Latin codepoints that visually confuse with Latin letters. Hex string -> Latin look-alike. Focused on the highest-value Cyrillic and Greek homoglyphs used in typosquat/phishing.",
+  "_comment": "Non-Latin codepoints that visually confuse with Latin letters. Hex string -> Latin look-alike. Covers the highest-value Cyrillic, Greek, Armenian and Cherokee homoglyphs used in typosquat/phishing. NOT exhaustive (the full Unicode confusables.txt is ~6k entries); fullwidth Latin forms are handled separately by NFKC normalization before the dangerous-pattern scan.",
   "confusables": {
     "0430": "a", "0435": "e", "043E": "o", "0440": "p", "0441": "c", "0445": "x",
     "0443": "y", "0456": "i", "0455": "s", "04BB": "h", "0501": "d", "0458": "j",
@@ -9,6 +9,11 @@
     "0391": "A", "0392": "B", "0395": "E", "0397": "H", "039F": "O", "03A1": "P",
     "03A4": "T", "0399": "I", "039A": "K", "039C": "M", "039D": "N", "03A7": "X",
     "0396": "Z", "03A5": "Y", "03BF": "o", "03B1": "a", "03B9": "i", "03BD": "v",
-    "03C1": "p", "03C5": "u", "03C7": "x"
+    "03C1": "p", "03C5": "u", "03C7": "x",
+    "03B5": "e", "03B7": "n", "03BA": "k", "03C4": "t",
+    "0585": "o", "0570": "h", "057D": "u", "0578": "n", "0580": "r",
+    "0555": "O", "054D": "U",
+    "13AA": "A", "13A0": "D", "13AC": "E", "13BB": "H", "13C7": "M",
+    "13D2": "R", "13DF": "C", "13B3": "W", "13F4": "B"
   }
 }

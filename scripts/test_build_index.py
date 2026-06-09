@@ -103,6 +103,29 @@ class FrontmatterTests(unittest.TestCase):
         self.assertEqual(fm, {"name": "x"})
 
 
+class ScalarCategoryNormalizationTests(unittest.TestCase):
+    def test_scalar_category_emitted_as_list(self) -> None:
+        # `category: governance` (scalar) passes the audit engine, but a scalar
+        # in INDEX.jsonl makes filter_skills intersect by CHARACTER and doctor
+        # count letters. The canonical writer must normalize it to a list.
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "skills" / "demo-audit"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\n"
+                "name: demo-audit\n"
+                "description: demo skill for index tests\n"
+                "metainfo:\n"
+                "  category: governance\n"
+                "  tier: preview\n"
+                "---\n"
+                "body\n",
+                encoding="utf-8",
+            )
+            entries = build_index.build_index(Path(tmp) / "skills")
+            self.assertEqual(entries[0]["metainfo"]["category"], ["governance"])
+
+
 class WriteIndexRoundTripTests(unittest.TestCase):
     def test_jsonl_round_trip(self) -> None:
         entries = [

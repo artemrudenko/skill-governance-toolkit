@@ -252,6 +252,12 @@ def build_index(skills_dir: Path) -> list[dict[str, Any]]:
         # rather than silently installing skills with unclear stability.
         if "metainfo" in fm and isinstance(fm["metainfo"], dict):
             entry["metainfo"] = fm["metainfo"]
+            # `category: governance` (scalar) is accepted by the audit engine;
+            # normalize to a list here so every INDEX consumer (filter_skills,
+            # doctor, install.sh) sees one shape.
+            cat = entry["metainfo"].get("category")
+            if isinstance(cat, str):
+                entry["metainfo"]["category"] = [cat]
         else:
             entry["metainfo"] = {"category": [], "tier": "unknown"}
             print(f"  ! {skill_path.parent.name}: no metainfo block (will be excluded by default install)", file=sys.stderr)

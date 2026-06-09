@@ -155,16 +155,28 @@ class AgentAsset:
 
 
 DANGEROUS_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
-    ("rm -rf", re.compile(r"\brm\s+-rf\s+(?:/(?:\s|$)|\$[A-Za-z_][A-Za-z0-9_]*\b)"), "Avoid destructive deletion examples or require explicit confirmation."),
+    # Flags may come in any order/case and split across tokens (-rf / -fr / -r -f);
+    # targets cover root, system top-level dirs, the home dir, and unquoted $VARs.
+    # Deliberately NOT matched (false-positive budget): relative paths, /tmp,
+    # and quoted "$VAR" cleanup idioms — this is a tripwire, not a boundary.
+    ("rm -rf", re.compile(
+        r"\brm\s+"
+        r"(?=(?:-[-A-Za-z]+\s+)*-[A-Za-z]*[rR])"
+        r"(?=(?:-[-A-Za-z]+\s+)*-[A-Za-z]*[fF])"
+        r"(?:-[-A-Za-z]+\s+)+"
+        r"(?:/(?:\s|$)"
+        r"|/(?:etc|usr|var|home|Users|boot|bin|sbin|lib|lib64|opt|root|srv|System)(?:/\S*)?(?:\s|$)"
+        r"|~(?:/\S*)?(?:\s|$)"
+        r"|\$\{?[A-Za-z_][A-Za-z0-9_]*\b)"), "Avoid destructive deletion examples or require explicit confirmation."),
     ("sudo rm", re.compile(r"\bsudo\s+rm\b"), "Avoid privileged delete commands unless scoped and explicitly approved."),
-    ("chmod 777", re.compile(r"\bchmod\s+777\s+(?!/tmp\b)"), "Avoid world-writable permission guidance outside /tmp."),
-    ("curl pipe shell", re.compile(r"\b(curl|wget)\b[^\n|]{0,120}\|\s*(sh|bash)\b"), "Avoid pipe-to-shell installers."),
+    ("chmod 777", re.compile(r"\bchmod\s+(?:-[-A-Za-z]+\s+)*0?777\s+(?!/tmp\b)"), "Avoid world-writable permission guidance outside /tmp."),
+    ("curl pipe shell", re.compile(r"\b(curl|wget)\b[^\n|]{0,120}\|\s*(?:sudo\s+)?(sh|bash|zsh|dash|ksh|fish)\b"), "Avoid pipe-to-shell installers."),
     ("eval argv", re.compile(r"\beval\s+(?:[\"']?\$@|\$\(|\"\$\{)"), "Avoid eval on user-controlled input."),
     ("disk wipe", re.compile(r"\bdd\s+if=/dev/(?:random|urandom|zero)\s+of=", re.I), "Avoid disk-wipe command patterns."),
     ("fork bomb", re.compile(r":\(\)\s*\{\s*:\|:\s*&\s*\}\s*;?\s*:"), "Do not include executable fork-bomb patterns."),
     ("block device write", re.compile(r">\s*/dev/(?:sd[a-z]|nvme\d+n\d+|disk\d+)"), "Avoid raw block-device writes."),
     ("git reset hard", re.compile(r"\bgit\s+reset\s+--hard\b"), "Do not normalize destructive git reset."),
-    ("force push", re.compile(r"\bgit\s+push\b[^\n]{0,80}\s--force\b"), "Avoid force push unless user explicitly approves."),
+    ("force push", re.compile(r"\bgit\s+push\b[^\n]{0,80}\s(?:--force|-f)\b"), "Avoid force push unless user explicitly approves."),
     ("approval bypass", re.compile(r"\b(bypass|skip|circumvent)\b[^\n]{0,80}\b(approval|sandbox|permission)s?\b", re.I), "Do not instruct agents to bypass approvals or sandboxes."),
 ]
 
@@ -1714,7 +1726,25 @@ def changed_files_from_git(base: str, root: str | Path = ".") -> set[str]:
     )
     if proc.returncode != 0:
         raise ValueError(f"git diff against base '{base}' failed; verify the ref exists and the repo is fetched.")
-    return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+    paths = {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+    # git emits paths relative to the REPO TOPLEVEL. When the audit root is a
+    # subdirectory of the repo, map them to audit-root-relative (and drop paths
+    # outside the root) — otherwise the scope intersection with discovered
+    # assets is empty and a --changed-only gate goes silently green.
+    top_proc = subprocess.run(
+        ["git", "-C", str(root_path), "rev-parse", "--show-toplevel"],
+        text=True, capture_output=True, check=False,
+    )
+    if top_proc.returncode == 0 and top_proc.stdout.strip():
+        toplevel = Path(top_proc.stdout.strip()).resolve()
+        if toplevel != root_path:
+            try:
+                prefix = root_path.relative_to(toplevel).as_posix() + "/"
+            except ValueError:
+                prefix = None
+            if prefix:
+                paths = {p[len(prefix):] for p in paths if p.startswith(prefix)}
+    return paths
 
 
 def finding_key(f: dict) -> tuple:

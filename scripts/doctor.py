@@ -157,7 +157,10 @@ def check_index_structure(root: Path) -> Check:
             missing_metainfo.append(name)
             continue
         counts_by_tier[str(metainfo.get("tier", "unknown"))] += 1
-        for category in metainfo.get("category") or []:
+        categories = metainfo.get("category") or []
+        if isinstance(categories, str):
+            categories = [categories]  # scalar would be counted letter-by-letter
+        for category in categories:
             counts_by_category[str(category)] += 1
 
     if entries and not missing_metainfo and not missing_disk_paths:

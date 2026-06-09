@@ -100,6 +100,23 @@ class ApplyFiltersTests(unittest.TestCase):
         self.assertIn('"name":"preview-disc"', "".join(lines))
         self.assertNotIn("exp-test", "".join(lines))
 
+    def test_scalar_category_treated_as_single_category(self) -> None:
+        # Legacy or hand-edited INDEX lines may carry `category` as a scalar
+        # string. set("governance") intersects by CHARACTER, silently dropping
+        # the skill from every --category install — normalize instead.
+        index = Path(tempfile.mkdtemp()) / "INDEX.jsonl"
+        index.write_text(
+            '{"name":"scalar-cat","path":"skills/scalar-cat/SKILL.md",'
+            '"metainfo":{"category":"governance","tier":"stable"}}\n',
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [PYTHON, str(SCRIPT), "--index", str(index), "--category", "governance"],
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("scalar-cat", result.stdout)
+
     def test_missing_index_exits_nonzero(self) -> None:
         result = subprocess.run(
             [PYTHON, str(SCRIPT), "--index", "/no/such/INDEX.jsonl"],

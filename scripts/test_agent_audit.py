@@ -467,6 +467,32 @@ class AgentAuditBehaviorTests(unittest.TestCase):
             self.assertIn(new_skill, changed)
             self.assertNotIn("keep.txt", changed)
 
+    def test_changed_files_from_git_maps_paths_when_root_is_repo_subdir(self) -> None:
+        # git diff --name-only returns paths relative to the REPO TOPLEVEL,
+        # while the audit scopes by paths relative to the AUDIT ROOT. When the
+        # audited project lives in a subdirectory of the repo the two must be
+        # mapped — otherwise the intersection is empty and --changed-only
+        # silently audits nothing (exit 0, false-green gate).
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            self._git(repo, "init")
+            self._git(repo, "config", "user.email", "ci@example.com")
+            self._git(repo, "config", "user.name", "ci")
+            sub = repo / "marketplace"
+            sub.mkdir()
+            (sub / "keep.txt").write_text("base\n", encoding="utf-8")
+            self._git(repo, "add", "-A")
+            self._git(repo, "commit", "-m", "base")
+            rel = self._make_bad_skill(sub, "new")
+            (repo / "outside.txt").write_text("changed too\n", encoding="utf-8")
+            self._git(repo, "add", "-A")
+            self._git(repo, "commit", "-m", "add skill in subdir")
+
+            changed = agent_audit.changed_files_from_git("HEAD~1", sub)
+
+            self.assertIn(rel, changed)          # audit-root-relative, not repo-relative
+            self.assertNotIn("outside.txt", changed)  # outside the audit root → out of scope
+
     def test_cli_changed_only_scopes_to_git_diff(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

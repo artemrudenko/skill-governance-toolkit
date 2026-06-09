@@ -14,6 +14,34 @@ frontmatter, `allowed-tools:`, dangerous shell or unsafe git, inline secrets,
 hidden/bidi/invisible characters, and dangerous instructions or secrets in a
 non-skill asset. Full catalog: [checks-reference.md](checks-reference.md).
 
+## Two checks, two moments — the gate is only half the story
+
+A **green gate does not mean "good skill."** The deterministic engine that runs on
+your MR checks **safety and structure** — it has no opinion on *quality*. Quality
+(is it clear? specific triggers? enough examples?) is scored by the **LLM-run
+`skill-evaluate`**, which you run **locally while authoring** — it never runs in
+the MR gate (an LLM's judgment is non-deterministic and must not block a merge).
+
+```text
+Authoring (you, locally)                  MR / CI (automatic)
+────────────────────────────             ────────────────────────────
+skill-evaluate  (LLM)          ─push──▶   sgt gate / agent_audit.py (deterministic)
+• quality: D1–D9                          • safety: SEC / REF / SCR / MCP / HOOK
+• clarity, examples, triggers             • structure: frontmatter, naming, budgets
+• non-deterministic — for authoring       • reproducible — blocks the merge
+```
+
+| | `skill-evaluate` (local, LLM) | The MR gate (CLI, deterministic) |
+|---|---|---|
+| Runs | you invoke it while writing | automatically on every MR |
+| Answers | "is this a *good* skill?" (D1–D9) | "is this *safe and well-formed*?" |
+| Blocks merge? | no | yes (on new high-severity findings) |
+
+**So:** run `skill-evaluate` on your `SKILL.md` *before* you push for quality; the
+gate then independently enforces safety/structure on the MR. The two are
+complementary — neither replaces the other. Quality scoring details:
+[user-guide.md § Use Case 1–2](user-guide.md).
+
 ## The 3 ways to resolve a finding
 
 1. **Fix the content** (default). Remove the secret, scope the dangerous command,
@@ -26,9 +54,8 @@ non-skill asset. Full catalog: [checks-reference.md](checks-reference.md).
    tracked. Add an entry to `references/audit-ignore.json` with a `reason` and a
    recommended `expires`. It needs **CODEOWNER approval** — you cannot self-approve.
 
-Not sure which? Run `sgt explain-finding` is not a thing — use the engine:
-`python3 scripts/agent_audit.py explain-finding <RULEID>` prints the fix and the
-correct suppression path. Details and break-glass:
+Not sure which? Run `python3 scripts/agent_audit.py explain-finding <RULEID>` — it
+prints the fix and the correct suppression path for that rule. Details and break-glass:
 [security-suppression-runbook.md](security-suppression-runbook.md).
 
 ## Language of findings

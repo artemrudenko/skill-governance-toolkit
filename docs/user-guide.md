@@ -699,6 +699,27 @@ python3 scripts/agent_audit.py audit-project . --fail-on high --format github
 SGT_FAIL_MODE=advisory python3 scripts/agent_audit.py audit-project . --fail-on high
 ```
 
+### Two checks, two moments — quality vs the gate
+
+The deterministic gate above checks **safety and structure** only; it has no
+opinion on *quality*. Quality (D1–D9: clarity, examples, specific triggers) is
+scored by the **LLM-run `skill-evaluate`** (Use Cases 1–2), which you run **locally
+while authoring** — it never runs in the MR gate, because an LLM's judgment is
+non-deterministic and must not block a merge.
+
+```text
+Authoring (you, locally)                  MR / CI (automatic)
+────────────────────────────             ────────────────────────────
+skill-evaluate  (LLM)          ─push──▶   sgt gate / agent_audit.py (deterministic)
+• quality: D1–D9                          • safety: SEC / REF / SCR / MCP / HOOK
+• clarity, examples, triggers             • structure: frontmatter, naming, budgets
+• non-deterministic — for authoring       • reproducible — blocks the merge
+```
+
+A green MR therefore means "safe and well-formed", **not** "high-quality" — run
+`skill-evaluate` before you push for the quality half. The two are complementary;
+neither replaces the other. Full CLI reference: [cli-reference.md](cli-reference.md).
+
 ---
 
 ## Use Case 5 - Make a Skill Portable

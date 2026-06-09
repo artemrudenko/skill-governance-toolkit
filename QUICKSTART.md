@@ -94,6 +94,11 @@ Blocked by a false positive? See [`docs/gate-for-authors.md`](docs/gate-for-auth
 (linked from every MR comment) — fix, inline-suppress an advisory rule, or
 request a CODEOWNER-gated central suppression.
 
+The gate checks **safety + structure** only — it has no opinion on *quality*. For
+quality (clarity, examples, D1–D9), run the LLM-based `skill-evaluate` **locally
+while authoring**; it never runs in the MR gate. A green MR ≠ a high-quality skill.
+See [`docs/gate-for-authors.md` § Two checks, two moments](docs/gate-for-authors.md).
+
 **CLI vs MCP vs Docker?** The audit engine is one engine in three forms: **CLI**
 for CI/local (default), **MCP** for an agent to audit while you edit, **Docker**
 for sandboxed/reproducible runs. Decision guide:

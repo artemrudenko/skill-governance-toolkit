@@ -44,6 +44,43 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+class FrontmatterBlockListTests(unittest.TestCase):
+    """The frontmatter parser must round-trip BOTH flow- and block-style
+    `metainfo.requires.mcp`. Block-style previously parsed to None, which then
+    tripped a false MCP001 for a server the author had actually declared."""
+
+    def test_block_style_requires_mcp_parses_to_list(self) -> None:
+        text = (
+            "---\n"
+            "name: x\n"
+            "description: " + ("a" * 90) + "\n"
+            "metainfo:\n"
+            "  requires:\n"
+            "    mcp:\n"
+            "      - github\n"
+            "      - serena\n"
+            "  tier: preview\n"
+            "---\n\nbody\n"
+        )
+        fm = build_index.parse_frontmatter(text)
+        self.assertEqual(fm["metainfo"]["requires"]["mcp"], ["github", "serena"])
+        # A sibling key after the block list must still parse (block consumption
+        # must stop at the next 2-space key, not swallow it).
+        self.assertEqual(fm["metainfo"]["tier"], "preview")
+
+    def test_flow_style_requires_mcp_still_parses(self) -> None:
+        text = (
+            "---\n"
+            "name: x\n"
+            "metainfo:\n"
+            "  requires:\n"
+            "    mcp: [github, serena]\n"
+            "---\n\nbody\n"
+        )
+        fm = build_index.parse_frontmatter(text)
+        self.assertEqual(fm["metainfo"]["requires"]["mcp"], ["github", "serena"])
+
+
 class DryRunTests(unittest.TestCase):
     def test_dry_run_reports_missing_and_leaves_file_unchanged(self) -> None:
         with tempfile.TemporaryDirectory() as d:

@@ -373,8 +373,23 @@ class McpConsistencyTests(_CacheSafe):
         f = agent_audit.scan_mcp_consistency(body, {"metainfo": {"requires": {"mcp": []}}}, Path("skills/x/SKILL.md"))
         self.assertNotIn("MCP001", {x.rule_id for x in f})
 
-    def test_mcp_token_in_inline_code_not_flagged(self):
-        body = "Mention `mcp__github__search` inline only."
+    def test_mcp_token_in_inline_code_IS_flagged(self):
+        # A tool name in backticks is a real usage in skill instructions — keep
+        # inline code visible to MCP detection so a legitimate usage is not a
+        # false negative. (Fenced blocks are still masked; see the test below.)
+        body = "Use `mcp__github__search`."
+        f = agent_audit.scan_mcp_consistency(body, {"metainfo": {"requires": {"mcp": []}}}, Path("skills/x/SKILL.md"))
+        self.assertIn("MCP001", {x.rule_id for x in f})
+
+    def test_mcp_token_inline_in_fenced_block_not_flagged(self):
+        # The SAME token inside a fenced block is documentation, not usage.
+        body = "Example:\n```\nUse `mcp__github__search`.\n```\n"
+        f = agent_audit.scan_mcp_consistency(body, {"metainfo": {"requires": {"mcp": []}}}, Path("skills/x/SKILL.md"))
+        self.assertNotIn("MCP001", {x.rule_id for x in f})
+
+    def test_mcp_token_in_backticks_on_detection_line_not_flagged(self):
+        # Detection-context guard still applies even with inline code visible.
+        body = "Denylist any `mcp__github__` token in scan mode."
         f = agent_audit.scan_mcp_consistency(body, {"metainfo": {"requires": {"mcp": []}}}, Path("skills/x/SKILL.md"))
         self.assertNotIn("MCP001", {x.rule_id for x in f})
 
@@ -436,6 +451,33 @@ class McpMetainfoValidationTests(_CacheSafe):
         ids = {f["rule_id"] for f in report["findings"]}
         # `requires` must not be rejected as unknown/invalid metainfo (no SKILL008 on it).
         self.assertNotIn("MCP001", ids)  # github declared in requires.mcp
+
+    def test_block_style_requires_mcp_does_not_trip_mcp001(self):
+        # Block-style requires.mcp (`- github`) must round-trip to the declared
+        # server set just like flow-style, so a real usage does NOT false-trip MCP001.
+        import tempfile
+        skill = (
+            "---\n"
+            "name: x\n"
+            "description: " + ("a" * 90) + "\n"
+            "compatibility: [claude]\n"
+            "license: MIT\n"
+            "metainfo:\n"
+            "  category: [governance]\n"
+            "  tier: preview\n"
+            "  requires:\n"
+            "    mcp:\n"
+            "      - github\n"
+            "---\n\n"
+            "## When to use\nBody. Run mcp__github__search. verify.\n"
+            "> **Skill type:** Detect-only\n"
+        )
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "SKILL.md"
+            p.write_text(skill, encoding="utf-8")
+            report = agent_audit.audit_skill(p)
+        ids = {f["rule_id"] for f in report["findings"]}
+        self.assertNotIn("MCP001", ids)  # github declared block-style in requires.mcp
 
 
 class HookAssetTypeTests(_CacheSafe):

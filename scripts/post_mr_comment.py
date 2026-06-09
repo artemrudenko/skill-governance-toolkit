@@ -34,12 +34,24 @@ AUTHOR_GUIDE = "docs/gate-for-authors.md"
 
 # Severity-floor rule ids — these can ONLY be suppressed via the CODEOWNER-gated
 # references/audit-ignore.json (the F3 invariant: an inline marker must never
-# suppress a floor rule). This is a hardcoded copy of the engine's SEVERITY_FLOOR
-# (agent_audit.py) so the poster stays standalone (no engine import). KEEP IN SYNC
-# with agent_audit.SEVERITY_FLOOR — the engine is the source of truth.
-FLOOR_RULES = frozenset(
-    {"SEC001", "SEC002", "SEC010", "SEC011", "SKILL001", "SKILL002", "SKILL009", "SKILL014", "SKILL015"}
-)
+# suppress a floor rule). The engine's SEVERITY_FLOOR (agent_audit.py) is the
+# source of truth; derive from it so the two can never silently diverge (a stale
+# copy would hint at an inline marker the engine refuses to honor for a floor rule).
+# Fall back to a hardcoded mirror only if the engine is unimportable (poster run in
+# isolation, no sibling on sys.path) — the gate must still publish.
+try:
+    from agent_audit import SEVERITY_FLOOR
+
+    FLOOR_RULES = frozenset(SEVERITY_FLOOR)
+except Exception:  # noqa: BLE001 — degrade gracefully when run standalone
+    FLOOR_RULES = frozenset(
+        {
+            "SEC001", "SEC002", "SEC010", "SEC011",
+            "SKILL001", "SKILL002", "SKILL009", "SKILL014", "SKILL015",
+            "REF002", "SCR001", "SCR002", "SCR003",
+            "MCP001", "HOOK001", "HOOK002",
+        }
+    )
 
 
 def _suppress_hint(rule_id: Any) -> str:

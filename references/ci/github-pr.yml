@@ -43,6 +43,10 @@ on:
       - ".claude/settings.local.json"
       - "hooks/**"
       - "references/agent-audit-rules.json"
+      # Control-plane data: a suppression-only or config-overlay PR must still get
+      # a gate verdict (otherwise it silently weakens the gate ungated).
+      - "references/audit-ignore.json"
+      - "references/audit-config.*.json"
 
 permissions:
   contents: read
@@ -83,6 +87,16 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin \
             "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+
+      - name: Suppression hygiene (blocks on expired/expiring suppressions)
+        # A suppression-only PR (editing audit-ignore.json) has no changed asset to
+        # audit, so this is its real verdict. Exits non-zero on any expired
+        # suppression or one expiring within 30 days. `.` is the audited consumer
+        # root, where audit-ignore.json lives (loaded via _load_ignore_doc, not
+        # $SGT_DIR — the pinned toolkit mirror holds only the catalog + overlays).
+        run: |
+          python3 "$SGT_DIR/scripts/agent_audit.py" list-suppressions \
+            --root . --expiring-within 30
 
       - name: Block on newly introduced high-severity findings (changed assets only)
         # SGT_FAIL_MODE=advisory (set as an org/repo Actions variable) downgrades

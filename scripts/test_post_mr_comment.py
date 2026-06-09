@@ -11,6 +11,7 @@ import unittest
 from contextlib import contextmanager
 from pathlib import Path
 
+import agent_audit
 import post_mr_comment
 
 
@@ -137,6 +138,26 @@ class PostMrCommentTests(unittest.TestCase):
         self.assertIn("references/audit-ignore.json", body)
         self.assertIn("CODEOWNER", body)
         self.assertNotIn("sgt-ignore: SEC011", body)
+
+    def test_floor_rules_match_engine_source_of_truth(self) -> None:
+        # The poster derives its floor set from the engine's SEVERITY_FLOOR. If the
+        # two ever diverge (e.g. the engine adds a floor rule the poster doesn't
+        # mirror), the poster would hint at an inline marker the engine refuses to
+        # honor for that floor rule — a misleading author-facing hint. Fail loudly.
+        self.assertEqual(set(post_mr_comment.FLOOR_RULES), set(agent_audit.SEVERITY_FLOOR))
+
+    def test_engine_added_floor_rule_gets_central_hint_not_inline_marker(self) -> None:
+        # MCP001/REF002/SCR001/HOOK001 are floor rules the old hardcoded list
+        # missed. Their suppression hint must point at the central CODEOWNER-gated
+        # file, never the inline `sgt-ignore` marker.
+        for rule_id in ("MCP001", "REF002", "SCR001", "HOOK001"):
+            report = _report([
+                {"rule_id": rule_id, "severity": "high", "file": "x.md", "line": 1,
+                 "message": "floor finding", "suggestion": "fix it."},
+            ])
+            body = post_mr_comment.render_comment(report)
+            self.assertIn("references/audit-ignore.json", body)
+            self.assertNotIn(f"sgt-ignore: {rule_id}", body)
 
     def test_advisory_finding_shows_inline_marker(self) -> None:
         report = _report([

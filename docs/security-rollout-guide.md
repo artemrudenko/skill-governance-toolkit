@@ -150,6 +150,20 @@ stops the gate from weakening itself. Pair the Renovate bump with an
 review the [CHANGELOG](../CHANGELOG.md) entry (severity escalations / floor
 additions are marked **🔴 BREAKING**) before approving.
 
+### Where config overlays live (not the audited repo)
+
+Config overlays (`audit-config.*.json`) load from the **toolkit catalog directory**
+— the directory holding `agent-audit-rules.json`, resolvable via
+`AGENT_GOVERNANCE_RULES_PATH`. In CI the gate runs from the SHA-pinned toolkit
+mirror (`$SGT_DIR`), so overlays are governed there, not in the consumer repo: an
+overlay placed in the audited tree never loads. This is intentional — an overlay in
+the audited tree would let a merge request self-weaken its own gate. Only the
+suppression list (`references/audit-ignore.json`) loads from the audited consumer
+root (so authors can request suppressions), and it is gated by
+[`CODEOWNERS`](../CODEOWNERS). The `sgt ci-init` CODEOWNERS stub therefore gates
+only `audit-ignore.json` + the CI gate file in the consumer repo, not the catalog
+or overlays.
+
 ### Runbooks
 
 - Kill-switch (fast mitigation when a bumped pin misbehaves):

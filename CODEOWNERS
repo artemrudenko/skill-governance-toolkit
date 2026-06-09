@@ -30,8 +30,9 @@
 /scripts/agent_audit.py                     @skill-governance-owners
 /scripts/agent_governance_mcp.py            @skill-governance-owners
 
-# --- CI gate template (who can change enforcement) ---
+# --- CI gate templates (who can change enforcement) ---
 /references/ci/gitlab-ci.yml                @skill-governance-owners
+/references/ci/github-pr.yml                @skill-governance-owners
 
 # --- Security baseline + the checks reference ---
 /skills/library-audit/references/security-spec.md  @skill-governance-owners

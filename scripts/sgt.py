@@ -281,8 +281,9 @@ def command_ci_init(args: argparse.Namespace) -> int:
     ci_gate_rel = str(rel).replace("\\", "/")
     if codeowners_path.exists():
         notes.append("CODEOWNERS already present — left untouched; ensure it covers "
-                     "references/audit-ignore.json, references/agent-audit-rules.json, "
-                     f"references/audit-config.*.json, and {ci_gate_rel}.")
+                     f"references/audit-ignore.json and {ci_gate_rel}. The rule "
+                     "catalog + config overlays live in the SHA-pinned toolkit mirror "
+                     "and are governed there, not in this repo.")
     else:
         codeowners_path.write_text(_codeowners_stub(ci_gate_rel), encoding="utf-8")
         written.append("CODEOWNERS")
@@ -315,25 +316,29 @@ def command_ci_init(args: argparse.Namespace) -> int:
 
 
 def _codeowners_stub(ci_gate_rel: str) -> str:
-    """A starter CODEOWNERS covering the governance control plane.
-
-    The author who edits a skill must not be able to also silence its own
-    finding — so the suppression list, the rule catalog, the audit-config glob,
-    and the CI gate are all owned by a separate security group.
+    """A starter CODEOWNERS covering the governance control plane present IN the
+    consumer repo: the suppression list (loaded from the consumer root) and the CI
+    gate. The rule catalog + config overlays are NOT gated here — they live in the
+    SHA-pinned toolkit mirror and are governed there, so an MR in this repo cannot
+    weaken its own gate by editing them (the engine never loads them from here).
     """
     return f"""# CODEOWNERS — separation of duties for the governance control plane.
 #
-# TODO: set your @security-group below. Changes to the suppression list, the
-# rule catalog, the audit config, and the CI gate must be reviewed by this
-# group — not by the same author who edits a skill in the same change. Enforced
-# only when branch protection requires code-owner approval.
+# TODO: set your @security-group below. Changes to the suppression list and the
+# CI gate must be reviewed by this group — not by the same author who edits a
+# skill in the same change. Enforced only when branch protection requires
+# code-owner approval.
 
 # --- Suppression list (who can SILENCE a finding) ---
+# audit-ignore.json loads from THIS repo's root (the audited tree), so gate it
+# here — otherwise an author could self-approve silencing their own finding.
 /references/audit-ignore.json        @security-group
 
-# --- Audit policy + config the engine trusts ---
-/references/agent-audit-rules.json   @security-group
-/references/audit-config.*.json      @security-group
+# NOTE: the rule catalog (agent-audit-rules.json) + config overlays
+# (audit-config.*.json) are NOT gated here. They live in the SHA-pinned toolkit
+# mirror ($SGT_REF) and are governed there, not in this repo — the gate runs from
+# the pinned toolkit dir and never loads them from the audited tree. Keeping them
+# out of the audited tree also means an MR cannot self-weaken its own gate.
 
 # --- CI gate (who can change enforcement) ---
 /{ci_gate_rel}                        @security-group

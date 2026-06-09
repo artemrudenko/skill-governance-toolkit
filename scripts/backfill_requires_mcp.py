@@ -38,8 +38,10 @@ _declared_mcp_servers = agent_audit._declared_mcp_servers
 
 def used_servers(body: str) -> set[str]:
     """MCP servers genuinely USED in the body (matching MCP001's extraction):
-    tokens inside fenced/inline code are masked, detection-context lines skipped."""
-    masked = _mask_code_spans(body)
+    tokens inside FENCED code are masked, inline-code (backticks) counts as usage,
+    detection-context lines skipped. Mirror MCP001 exactly — an extraction mismatch
+    would backfill the wrong server set."""
+    masked = _mask_code_spans(body, mask_inline=False)
     out: set[str] = set()
     for m in _MCP_TOKEN_RE.finditer(masked):
         line = agent_audit.line_text_for_offset(masked, m.start())

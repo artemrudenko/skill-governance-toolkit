@@ -79,6 +79,10 @@ variables:
         - ".claude/settings.local.json"
         - "hooks/**"
         - "references/agent-audit-rules.json"
+        # Control-plane data: a suppression-only or config-overlay MR must still
+        # get a gate verdict (otherwise it silently weakens the gate ungated).
+        - "references/audit-ignore.json"
+        - "references/audit-config.*.json"
 
 # Blocking gate: NEWLY introduced high-severity findings (secrets, dangerous
 # shell, broken frontmatter, allowed-tools) fail the pipeline and block the
@@ -90,6 +94,14 @@ skill-gate:block:
   extends: .sgt_base
   stage: validate
   script:
+    # Suppression hygiene: a suppression-only MR (editing audit-ignore.json) has no
+    # changed asset to audit, so this is its real verdict. Exits non-zero on any
+    # expired suppression or one expiring within 30 days — blocks merging a stale
+    # or about-to-expire silencing of a finding. `.` is the audited consumer root,
+    # where audit-ignore.json lives (loaded via _load_ignore_doc, not $SGT_DIR).
+    - >
+      python3 "$SGT_DIR/scripts/agent_audit.py" list-suppressions
+      --root . --expiring-within 30
     - >
       python3 "$SGT_DIR/scripts/agent_audit.py" audit-project .
       --changed-only --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"

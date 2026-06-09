@@ -613,6 +613,15 @@ later files override scalars and dicts, and union list values. Each overlay may 
 a bare config object or a `{"config": {…}}` wrapper. Absent overlays leave behavior
 unchanged; a malformed overlay is rejected at load with a clear error.
 
+**Where overlays load from:** config overlays are read from the **toolkit catalog
+directory** — the directory holding `agent-audit-rules.json`, resolvable via
+`AGENT_GOVERNANCE_RULES_PATH` — NOT the audited consumer repo. In CI the gate runs
+from the SHA-pinned toolkit mirror (`$SGT_DIR`), so an overlay placed in the
+audited tree never loads. This is deliberate: an overlay in the audited tree would
+let a merge request self-weaken its own gate. (The suppression list,
+`audit-ignore.json`, is the exception — it loads from the audited consumer root so
+authors can request suppressions, gated by CODEOWNERS.)
+
 A ready-to-copy, validated example lives at
 [`references/agent-audit-config.example.json`](../references/agent-audit-config.example.json).
 

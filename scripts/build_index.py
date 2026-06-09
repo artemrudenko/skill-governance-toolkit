@@ -111,8 +111,30 @@ def _parse_yaml_lines(lines: list[str]) -> dict[str, Any]:
                                     i += 1
                                 elif deep.startswith("    ") and not deep.startswith("     "):
                                     dk, _, dv = deep[4:].partition(":")
-                                    sub_map[dk.strip()] = _coerce(dv.strip())
-                                    i += 1
+                                    dk = dk.strip()
+                                    dv = dv.strip()
+                                    if dv == "":
+                                        # A 4-space key with no inline value: peek for a
+                                        # 6-space block-style list beneath it (e.g.
+                                        # metainfo.requires.mcp written as `- item` lines).
+                                        # Without this, the list items were skipped and the
+                                        # key parsed to None — block-style requires.mcp then
+                                        # round-tripped to None and tripped a false MCP001.
+                                        deep_items: list[Any] = []
+                                        i += 1
+                                        while i < len(lines):
+                                            item_line = lines[i]
+                                            if item_line.startswith("      -") or item_line.startswith("    \t-"):
+                                                deep_items.append(_coerce(item_line.split("-", 1)[1].strip()))
+                                                i += 1
+                                            elif item_line.strip() == "":
+                                                i += 1
+                                            else:
+                                                break
+                                        sub_map[dk] = deep_items if deep_items else None
+                                    else:
+                                        sub_map[dk] = _coerce(dv)
+                                        i += 1
                                 elif deep.strip() == "":
                                     i += 1
                                 else:

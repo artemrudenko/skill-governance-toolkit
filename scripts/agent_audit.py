@@ -918,14 +918,20 @@ _FENCED_CODE_RE = re.compile(r"```.*?```", re.S)
 _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 
 
-def _mask_code_spans(text: str) -> str:
-    """Replace fenced + inline code spans with same-length blanks (newlines kept).
-    Keeps offsets stable so line numbers and detection-context lines still resolve,
-    while erasing `mcp__...` tokens that live only inside code examples."""
+def _mask_code_spans(text: str, *, mask_inline: bool = True) -> str:
+    """Replace code spans with same-length blanks (newlines kept) so offsets stay
+    stable for line-number/detection-context resolution.
+
+    Always masks FENCED blocks (```...``` — multi-line examples). `mask_inline`
+    controls inline-code spans (`...`): the secret/danger scans mask them (a token
+    in backticks is documentation), but MCP detection keeps them VISIBLE — real
+    skill instructions write a tool name in backticks (`mcp__github__search`) as a
+    genuine usage, so masking inline code there caused an MCP001 false negative."""
     def _blank(m: re.Match[str]) -> str:
         return "".join("\n" if ch == "\n" else " " for ch in m.group(0))
     masked = _FENCED_CODE_RE.sub(_blank, text)
-    masked = _INLINE_CODE_RE.sub(_blank, masked)
+    if mask_inline:
+        masked = _INLINE_CODE_RE.sub(_blank, masked)
     return masked
 
 
@@ -959,7 +965,10 @@ def scan_mcp_consistency(body: str, frontmatter: dict[str, Any], path: Path) -> 
     servers are exempt — an unused org-allowlisted server is intentional infra, not a
     skill defect."""
     cfg = load_config()
-    masked = _mask_code_spans(body)
+    # Mask FENCED blocks only — keep inline-code visible. A tool name written in
+    # backticks (`mcp__github__search`) is a real usage; the detection-context
+    # per-line guard below still exempts denylist/scan/pattern lines.
+    masked = _mask_code_spans(body, mask_inline=False)
 
     used: set[str] = set()
     for m in _MCP_TOKEN_RE.finditer(masked):

@@ -194,8 +194,26 @@ def command_new_skill(args: argparse.Namespace) -> int:
     return 0
 
 
+# Dev-only files that exist ONLY in the toolkit's own source tree, never in a
+# consumer install (per runtime-manifest.txt). Their presence is how we know
+# SGT_ROOT is the toolkit checkout and not the user's project. Mirrors
+# doctor.CHECKOUT_MARKERS.
+_TOOLKIT_CHECKOUT_MARKERS = ("scripts/audit.sh", "pyproject.toml")
+
+
+def _sgt_root_is_toolkit_checkout() -> bool:
+    """True only when SGT_ROOT is the toolkit's own source tree. In a consumer
+    install SGT_ROOT is the install dir inside the USER's project, whose git HEAD
+    and origin belong to the user — pinning those into a generated gate makes every
+    PR clone a SHA absent from the toolkit mirror, so the gate fails on every PR."""
+    return all((SGT_ROOT / marker).exists() for marker in _TOOLKIT_CHECKOUT_MARKERS)
+
+
 def _current_head_sha() -> str | None:
-    """The toolkit's own HEAD commit — the immutable ref a consumer should pin."""
+    """The toolkit's own HEAD commit — the immutable ref a consumer should pin.
+    Returns None outside a toolkit checkout so we never pin the consumer's HEAD."""
+    if not _sgt_root_is_toolkit_checkout():
+        return None
     try:
         out = subprocess.run(
             ["git", "-C", str(SGT_ROOT), "rev-parse", "HEAD"],
@@ -208,6 +226,10 @@ def _current_head_sha() -> str | None:
 
 
 def _origin_url() -> str | None:
+    """The toolkit's origin — only trusted inside a checkout, for the same reason
+    as _current_head_sha (a consumer's origin is the user's repo, not the toolkit)."""
+    if not _sgt_root_is_toolkit_checkout():
+        return None
     try:
         out = subprocess.run(
             ["git", "-C", str(SGT_ROOT), "remote", "get-url", "origin"],
@@ -232,8 +254,13 @@ def command_ci_init(args: argparse.Namespace) -> int:
 
     ref = args.ref or _current_head_sha()
     if not ref:
-        print("sgt ci-init: could not resolve the toolkit HEAD SHA; pass --ref <40-char-sha>.",
-              file=sys.stderr)
+        print(
+            "sgt ci-init: cannot auto-resolve the toolkit's pinned SHA from a consumer\n"
+            "  install (only the toolkit's own checkout exposes it — pinning this project's\n"
+            "  HEAD would make every PR clone a SHA absent from the toolkit mirror).\n"
+            "  Pass --ref <40-char-sha> of the toolkit release you want every PR to pin.",
+            file=sys.stderr,
+        )
         return 1
     if not re.fullmatch(r"[0-9a-f]{40}", ref):
         print(f"sgt ci-init: --ref must be a 40-char commit SHA, got '{ref}'.", file=sys.stderr)
@@ -427,7 +454,10 @@ def _plan_install_dir(base: Path, skill_names: set[str], script_names: list[str]
     if idx.exists():
         files.append(idx)
 
-    for sub in ("agents", "references", "commands"):
+    # docs/ included: the installer copies toolkit docs into the project and
+    # records them in docs/.sgt-owned, so uninstall removes exactly our docs and
+    # never the user's — honoring "removes ONLY toolkit-owned files".
+    for sub in ("agents", "references", "commands", "docs"):
         owned = _owned_entries(base / sub)
         for rel in owned:
             p = base / sub / rel
@@ -523,10 +553,29 @@ def _working_tree_dirty(root: Path) -> bool:
     return bool(proc.stdout.strip())
 
 
+def _detect_default_base(root: Path) -> str:
+    """The repo's default branch (e.g. main/master), so `sgt gate` works on a
+    non-`main` repo without forcing `--base`. Falls back to 'main' if origin/HEAD
+    is unset (no remote, fresh clone)."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "origin/HEAD"],
+            text=True, capture_output=True, check=False,
+        )
+        ref = out.stdout.strip()  # e.g. "origin/master"
+        if out.returncode == 0 and "/" in ref:
+            return ref.split("/", 1)[1]
+    except OSError:
+        pass
+    return "main"
+
+
 def command_gate(args: argparse.Namespace) -> int:
     root = args.root.expanduser().resolve()
     if args.check_setup:
         return _gate_check_setup(root)
+
+    base = args.base or _detect_default_base(root)
 
     engine = SGT_ROOT / "scripts" / "agent_audit.py"
     if not engine.exists():
@@ -549,7 +598,7 @@ def command_gate(args: argparse.Namespace) -> int:
     # Exactly the CI block job: changed-only delta gate against --base, blocking
     # only on newly INTRODUCED high findings. Propagate the engine's exit code.
     cmd = [sys.executable, str(engine), "audit-project", str(root),
-           "--changed-only", "--base", args.base, "--fail-on-new", "high",
+           "--changed-only", "--base", base, "--fail-on-new", "high",
            "--format", "text"]
     return subprocess.run(cmd, cwd=root, check=False).returncode
 
@@ -599,7 +648,7 @@ def command_uninstall(args: argparse.Namespace) -> int:
             print(f"  · would remove skill dir {d}")
         for f in all_files:
             print(f"  · would remove {f}")
-        print("  Note: docs/ copies and any user files are left untouched.")
+        print("  Note: toolkit-owned docs/ (tracked in docs/.sgt-owned) are removed; your own files are untouched.")
         return 0
 
     if not args.yes and sys.stdin.isatty():
@@ -622,7 +671,7 @@ def command_uninstall(args: argparse.Namespace) -> int:
     _prune_empty_dirs(sorted(candidate_parents, key=lambda p: len(p.parts), reverse=True))
 
     print(f"✓ uninstalled {total} toolkit-owned item(s). Your own files were preserved.")
-    print("  (docs/ copies, if any, were left in place — remove them manually if unwanted.)")
+    print("  (toolkit-owned docs/ tracked in docs/.sgt-owned were removed; user docs left in place.)")
     return 0
 
 
@@ -748,8 +797,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     gate = subcommands.add_parser(
         "gate", help="Reproduce the CI block verdict locally (changed-only delta gate).")
-    gate.add_argument("--base", default="main",
-                      help="Git ref to diff against for the delta gate (default: main).")
+    gate.add_argument("--base", default=None,
+                      help="Git ref to diff against for the delta gate "
+                           "(default: auto-detected default branch via origin/HEAD, else main).")
     gate.add_argument("--allow-dirty", action="store_true",
                       help="Audit committed HEAD even with uncommitted changes "
                            "(default: fail-fast on a dirty tree).")

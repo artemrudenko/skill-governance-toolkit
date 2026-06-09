@@ -128,6 +128,8 @@ class UninstallTests(unittest.TestCase):
         (target / "references" / "my-note.md").write_text("USER NOTE", encoding="utf-8")
         (target / "skills" / "my-own-skill").mkdir(parents=True, exist_ok=True)
         (target / "skills" / "my-own-skill" / "SKILL.md").write_text("USER SKILL", encoding="utf-8")
+        (target / "docs").mkdir(parents=True, exist_ok=True)
+        (target / "docs" / "my-doc.md").write_text("USER DOC", encoding="utf-8")
 
     def test_uninstall_removes_toolkit_keeps_user(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -137,6 +139,7 @@ class UninstallTests(unittest.TestCase):
             # Sanity: toolkit content landed.
             self.assertTrue((target / "skills" / "skill-find").exists())
             self.assertTrue((target / "references" / "copilot-tools.md").exists())
+            self.assertTrue((target / "docs" / "architecture.md").exists(), "toolkit doc not installed")
             self.assertIn("skill-governance-toolkit: BEGIN",
                           (target / "AGENTS.md").read_text(encoding="utf-8"))
 
@@ -153,6 +156,11 @@ class UninstallTests(unittest.TestCase):
                             "user skill deleted by uninstall")
             self.assertTrue((target / "references" / "my-note.md").exists(),
                             "user reference deleted by uninstall")
+            # Toolkit-owned docs removed; user's own doc preserved.
+            self.assertFalse((target / "docs" / "architecture.md").exists(),
+                             "toolkit doc not removed by uninstall")
+            self.assertTrue((target / "docs" / "my-doc.md").exists(),
+                            "user doc deleted by uninstall")
             agents_md = (target / "AGENTS.md").read_text(encoding="utf-8")
             self.assertIn("KEEP THIS LINE", agents_md, "user content lost from AGENTS.md")
             self.assertNotIn("skill-governance-toolkit: BEGIN", agents_md, "marker block not removed")
@@ -291,6 +299,45 @@ class CiInitTests(unittest.TestCase):
             # Neither pre-existing file is overwritten.
             self.assertIn("KEEP", ignore.read_text(encoding="utf-8"))
             self.assertEqual(codeowners.read_text(encoding="utf-8"), "# my own owners\n")
+
+
+class CiInitConsumerShaTests(unittest.TestCase):
+    """Regression guard: ci-init must never pin the CONSUMER's git HEAD. In a
+    consumer install SGT_ROOT is the user's project, so a naive `git rev-parse HEAD`
+    there pins a SHA absent from the toolkit mirror → the generated gate fails on
+    every PR."""
+
+    @staticmethod
+    def _git(repo: Path, *args: str) -> None:
+        subprocess.run(
+            ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+            check=True, capture_output=True,
+        )
+
+    def test_head_not_pinned_outside_toolkit_checkout(self) -> None:
+        import sgt
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = Path(tmp)
+            # A consumer install dir that IS a git repo with a commit (the trap),
+            # but lacks the toolkit's dev-only checkout markers.
+            self._git(consumer, "init", "-q")
+            (consumer / "file.txt").write_text("x", encoding="utf-8")
+            self._git(consumer, "add", "-A")
+            self._git(consumer, "commit", "-qm", "consumer commit")
+            original = sgt.SGT_ROOT
+            sgt.SGT_ROOT = consumer
+            try:
+                self.assertFalse(sgt._sgt_root_is_toolkit_checkout())
+                self.assertIsNone(sgt._current_head_sha(), "must not pin the consumer's HEAD")
+                self.assertIsNone(sgt._origin_url(), "must not pin the consumer's origin")
+            finally:
+                sgt.SGT_ROOT = original
+
+    def test_head_resolves_inside_real_toolkit_checkout(self) -> None:
+        import sgt
+        # The real checkout (SGT_ROOT) has the markers and resolves a 40-char SHA.
+        self.assertTrue(sgt._sgt_root_is_toolkit_checkout())
+        self.assertRegex(sgt._current_head_sha() or "", r"^[0-9a-f]{40}$")
 
 
 class GateTests(unittest.TestCase):

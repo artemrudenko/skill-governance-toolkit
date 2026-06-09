@@ -39,6 +39,15 @@ set -euo pipefail
 
 # ── Prereq check ───────────────────────────────────────────────────────────────
 
+# python3 is required for the skill-subset filter, the marker-block writer, and
+# the index emitter. Fail fast with a clear message BEFORE touching the target,
+# rather than aborting mid-install with a raw "python3: command not found".
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Error: python3 is required but was not found on PATH." >&2
+  echo "  Install Python 3.8+ (e.g. 'brew install python3' / 'apt install python3') and re-run." >&2
+  exit 1
+fi
+
 if command -v rsync >/dev/null 2>&1; then
   COPY_TOOL="rsync"
 else
@@ -507,6 +516,10 @@ ensure_docs_copied() {
   fi
   echo "── Copying docs/ with conflict-rename (preserves user docs) ──"
   mkdir -p "$TARGET_PROJECT/docs"
+  # Track which doc files WE own (placed or content-identical, plus conflict
+  # copies) in a .sgt-owned sidecar, so `sgt uninstall` removes exactly these and
+  # never the user's own docs. Rebuilt each run — mirrors _copy_owned_tree.
+  local owned=()
   local our_file dest_file base
   for our_file in "$SOURCE"/docs/*.md; do
     [[ -f "$our_file" ]] || continue
@@ -514,16 +527,22 @@ ensure_docs_copied() {
     dest_file="$TARGET_PROJECT/docs/$base"
     if [[ ! -f "$dest_file" ]]; then
       cp "$our_file" "$dest_file"
+      owned+=("$base")
       echo "  · placed docs/$base"
     elif cmp -s "$our_file" "$dest_file"; then
+      owned+=("$base")
       echo "  · docs/$base unchanged (content matches)"
     else
-      # Conflict — rename OUR file, never touch user's
+      # Conflict — rename OUR file, never touch user's; we own the renamed copy.
       local renamed="${base%.md}.skill-governance-toolkit.md"
       cp "$our_file" "$TARGET_PROJECT/docs/$renamed"
+      owned+=("$renamed")
       echo "  ⚠ conflict: user has differing docs/$base — saved ours as docs/$renamed"
     fi
   done
+  if [[ ${#owned[@]} -gt 0 ]]; then
+    printf '%s\n' "${owned[@]}" > "$TARGET_PROJECT/docs/.sgt-owned"
+  fi
 }
 
 # ── Ensure project root canonical dirs (only for --project scope) ────────────
@@ -698,11 +717,17 @@ echo
 echo "Done."
 echo
 echo "Verify install:"
-echo "  · Claude Code:    invoke skill-find or any skill by trigger phrase"
-echo "  · Copilot:        Open file in TARGET_PROJECT — AGENTS.md is read natively"
-echo "  · Codex CLI:      codex plugins list"
-echo "  · Gemini CLI:     gemini extensions list"
-echo "  · Cursor v2.2+:   AGENTS.md auto-loaded from project root"
+# Only print guidance for the host(s) actually installed — a single-host install
+# should not advise `codex plugins list` etc. for runtimes it never touched.
+for target in "${TARGETS[@]}"; do
+  case "$target" in
+    claude)  echo "  · Claude Code:    invoke skill-find or any skill by trigger phrase" ;;
+    copilot) echo "  · Copilot:        Open a file in TARGET_PROJECT — AGENTS.md is read natively" ;;
+    codex)   echo "  · Codex CLI:      codex plugins list" ;;
+    gemini)  echo "  · Gemini CLI:     gemini extensions list" ;;
+    cursor)  echo "  · Cursor v2.2+:   AGENTS.md auto-loaded from project root" ;;
+  esac
+done
 
 if [[ "$INSTALL_MODE" == "fresh" ]]; then
   echo

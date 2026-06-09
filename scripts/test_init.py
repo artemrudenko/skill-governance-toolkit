@@ -31,6 +31,19 @@ CRG documentation block.
 User content stays.
 """
 
+# code-reviewer.md uses the `handoff:{tool}` inner-marker family (NOT
+# `integration:{tool}` like AGENTS.md). Deselection cleanup must remove this too.
+CODE_REVIEWER_WITH_HANDOFF = """# reviewer
+
+<!-- skill-init: handoffs BEGIN -->
+<!-- skill-init: handoff:crg BEGIN -->
+crg handoff stanza.
+<!-- skill-init: handoff:crg END -->
+<!-- skill-init: handoffs END -->
+
+Reviewer body stays.
+"""
+
 
 class InitShTests(unittest.TestCase):
     def _skeleton(self, agents: str = AGENTS_WITH_CRG_BLOCK) -> Path:
@@ -40,7 +53,7 @@ class InitShTests(unittest.TestCase):
         shutil.copy(INIT, repo / "scripts" / "init.sh")
         (repo / "AGENTS.md").write_text(agents, encoding="utf-8")
         (repo / "agents").mkdir()
-        (repo / "agents" / "code-reviewer.md").write_text("# reviewer\n", encoding="utf-8")
+        (repo / "agents" / "code-reviewer.md").write_text(CODE_REVIEWER_WITH_HANDOFF, encoding="utf-8")
         return repo
 
     def _run(self, repo: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess[str]:
@@ -97,20 +110,35 @@ class InitShTests(unittest.TestCase):
         self.assertNotIn("Traceback", result.stdout + result.stderr)
 
     def test_removes_deselected_tool_block(self) -> None:
-        # In a real run, marker blocks for tools NOT installed are removed. With
-        # no installer (pipx/npm/uvx) on PATH every tool fails its preflight and is
-        # treated as deselected, so the crg block is cleaned out — user content and
-        # the outer markers are preserved. Skips where installers exist (the real
-        # install would attempt network work).
-        if any(shutil.which(t) for t in ("pipx", "npm", "uvx")):
-            self.skipTest("an integration installer is on PATH; removal path would attempt a real install")
+        # Marker blocks for tools NOT installed are removed. We force the
+        # deselection path deterministically with a minimal PATH that lacks every
+        # installer (pipx/npm/uvx), so crg fails its preflight and is treated as
+        # deselected — its blocks are cleaned out of BOTH files while user content
+        # and the outer markers are preserved. AGENTS.md uses integration:{tool};
+        # code-reviewer.md uses handoff:{tool} — both families must be removed.
         repo = self._skeleton()
-        result = self._run(repo, "--with", "crg")
+        bindir = repo / "_minbin"
+        bindir.mkdir()
+        for tool in ("bash", "env", "cat", "head", "tr", "dirname", "basename",
+                     "python3", "sed", "grep", "mkdir", "rm", "mktemp", "sort", "printf"):
+            src = shutil.which(tool)
+            if src:
+                os.symlink(src, bindir / tool)
+        for installer in ("pipx", "npm", "uvx"):
+            self.assertIsNone(shutil.which(installer, path=str(bindir)))
+        env = dict(os.environ)
+        env["PATH"] = str(bindir)
+        result = self._run(repo, "--with", "crg", env=env)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         agents = (repo / "AGENTS.md").read_text(encoding="utf-8")
         self.assertNotIn("integration:crg BEGIN", agents, "deselected crg block not removed")
         self.assertIn("integrations BEGIN", agents, "outer marker must be preserved")
         self.assertIn("User content stays.", agents, "user content must be preserved")
+        # code-reviewer.md uses the handoff:{tool} family — its block must also go.
+        reviewer = (repo / "agents" / "code-reviewer.md").read_text(encoding="utf-8")
+        self.assertNotIn("handoff:crg BEGIN", reviewer, "deselected crg handoff block not removed from code-reviewer.md")
+        self.assertIn("handoffs BEGIN", reviewer, "outer handoffs marker must be preserved")
+        self.assertIn("Reviewer body stays.", reviewer, "reviewer user content must be preserved")
 
 
 if __name__ == "__main__":

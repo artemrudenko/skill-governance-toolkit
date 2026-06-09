@@ -106,7 +106,7 @@ Per-tool install command sequences (CRG variants, repomix, serena) → [`referen
 
 ### Phase 4 — Inject documentation (only for installed integrations)
 
-For each **successfully verified** integration (see Phase 5 verify-before-inject in Hard rules), insert a marker block into `AGENTS.md` (outer marker `<!-- skill-init: integrations BEGIN/END -->`) and `agents/code-reviewer.md` (outer marker `<!-- skill-init: handoffs BEGIN/END -->`). Inner per-integration markers `<!-- skill-init: integration:{tool} BEGIN/END -->` are append-or-update or remove (if deselected on re-run). Use `marker_block.py` (atomic write) for all edits.
+For each **successfully verified** integration (see Phase 5 verify-before-inject in Hard rules), insert a marker block into `AGENTS.md` (outer marker `<!-- skill-init: integrations BEGIN/END -->`) and `agents/code-reviewer.md` (outer marker `<!-- skill-init: handoffs BEGIN/END -->`). The inner per-integration marker differs per file: `<!-- skill-init: integration:{tool} BEGIN/END -->` in `AGENTS.md`, and `<!-- skill-init: handoff:{tool} BEGIN/END -->` in `code-reviewer.md`. Append-or-update on install, remove on deselect. Edit these blocks directly (atomic write) — `marker_block.py` manages only the outer installer block (`<!-- {marker_id}: BEGIN/END -->` grammar), not the `skill-init:` marker family.
 
 Full per-tool marker-block templates (AGENTS.md + code-reviewer handoffs, CRG / repomix / serena) → [`references/integrations.md`](references/integrations.md) §Documentation block template / §Handoff template.
 
@@ -149,7 +149,7 @@ Highest-risk skill for partial completion: a network failure mid-install can lea
 - ❌ Never auto-install in `--advise-only` mode.
 - ❌ Never overwrite user-customized content outside paired markers. Content inside toolkit-managed markers is owned by this skill and may be replaced on re-run; users customize outside markers.
 - ✅ **Verify-before-inject:** after `pipx install` / `npm install` etc., MUST run a verification command (e.g. `which {tool}` or `{tool} --version`). ONLY if verification passes, inject the per-tool documentation block. If verification fails, log the failure AND skip the doc injection for that tool.
-- ✅ **Rollback for marker-block writes:** if a Phase 4 injection fails partway, the `marker_block.py` tool ensures atomic write — partial state is impossible. If a tool needs to be uninstalled, run `marker_block.py remove --file AGENTS.md --marker-id skill-init:integration:{tool}` to undo the block.
+- ✅ **Rollback for marker-block writes:** edits are atomic, so partial state is impossible. To uninstall a tool's docs, delete its block from BOTH files: the `<!-- skill-init: integration:{tool} BEGIN -->`…`END` block in `AGENTS.md`, and the `<!-- skill-init: handoff:{tool} BEGIN -->`…`END` block in `agents/code-reviewer.md`. (Do NOT use `marker_block.py remove` for these — its `{marker_id}: BEGIN` grammar cannot match the `skill-init:` marker family and silently no-ops. The bash fallback `scripts/init.sh` removes them on deselect.)
 - ✅ **`--advise-only` mode** emits commands to stdout for user copy-paste; runs NO installers, injects NO docs. For locked-down environments where the skill cannot execute installers.
 - ✅ Idempotent — re-running with no changes produces no diff.
 - ✅ Re-running with a tool deselected removes its blocks from both files.

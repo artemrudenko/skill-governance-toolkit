@@ -283,8 +283,9 @@ remove_marker_block() {
 import sys, re
 path, marker_id = sys.argv[1], sys.argv[2]
 text = open(path).read()
-begin = f"<!-- skill-init: integration:{marker_id} BEGIN -->"
-end   = f"<!-- skill-init: integration:{marker_id} END -->"
+# marker_id already carries its family prefix (integration:{tool} / handoff:{tool}).
+begin = f"<!-- skill-init: {marker_id} BEGIN -->"
+end   = f"<!-- skill-init: {marker_id} END -->"
 pattern = re.compile(r'\n*' + re.escape(begin) + r'.*?' + re.escape(end) + r'\n*', re.DOTALL)
 new = pattern.sub('\n', text)
 if new != text:
@@ -304,6 +305,15 @@ main() {
       interactive_crg_config
     fi
   fi
+
+  # Fail-fast on an unknown --with value instead of silently no-op'ing it later
+  # (the install loop would just print "Unknown tool" and exit 0).
+  for tool in "${SELECTED[@]}"; do
+    case "$tool" in
+      crg|repomix|serena) ;;
+      *) say "  ✗ Unknown integration '$tool' (valid: crg, repomix, serena)" >&2; exit 1 ;;
+    esac
+  done
 
   say ""
   say "── Plan ──"
@@ -340,9 +350,12 @@ main() {
     say ""
     say "── Marker-block cleanup (deselected tools only) ──"
     for tool in crg repomix serena; do
-      if [[ ! " ${installed[*]} " =~ " $tool " ]]; then
-        remove_marker_block "$AGENTS_MD" "$tool"
-        remove_marker_block "$CODE_REVIEWER_MD" "$tool"
+      # `${installed[*]:-}` guards the empty-array case under `set -u` (bash 3.2).
+      if [[ ! " ${installed[*]:-} " =~ " $tool " ]]; then
+        # AGENTS.md uses the integration:{tool} inner marker; code-reviewer.md
+        # uses handoff:{tool} — pass each its own family or removal silently no-ops.
+        remove_marker_block "$AGENTS_MD" "integration:$tool"
+        remove_marker_block "$CODE_REVIEWER_MD" "handoff:$tool"
       fi
     done
     if [[ ${#installed[@]} -gt 0 ]]; then

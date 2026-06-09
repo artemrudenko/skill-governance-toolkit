@@ -27,9 +27,10 @@ Default AI code review reads each touched file plus each imported file in full. 
 
 After install:
 ```bash
-code-review-graph install                              # auto-detects platform
+code-review-graph install                              # auto-detects platform (MCP mode)
 # OR explicit:
 code-review-graph install --platform claude-code       # one of: codex / claude-code / cursor / windsurf / zed / continue / opencode / antigravity / qwen / qoder / kiro / copilot / copilot-cli / gemini-cli
+code-review-graph install --no-mcp                     # CLI mode: rules injection instead of an MCP server (matches init.sh --use-cli)
 ```
 
 This writes MCP config or rules injection into the host's expected location. Restart the editor afterward.

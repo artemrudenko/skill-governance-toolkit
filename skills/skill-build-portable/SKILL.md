@@ -74,7 +74,7 @@ This skill is the **counterpart** of:
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `SKILL_TARGET` | string | required | Skill name (e.g. `research-build`) or full path to `SKILL.md` |
-| `OUTPUT_MODE` | enum: `preview` / `new-file` / `in-place` | `preview` | `preview` — print diff only, no write; `new-file` — write to `{path}.portable.md` next to source; `in-place` — overwrite source (creates `.bak`) |
+| `OUTPUT_MODE` | enum: `preview` / `new-file` / `in-place` | `preview` | `preview` — print diff only, no write; `new-file` — write to `{source_dir}/SKILL.portable.md` next to source; `in-place` — overwrite source (creates `.bak`) |
 | `TARGET_RUNTIMES` | list | `[claude, copilot, cursor, codex, gemini]` | Which runtimes the output should support. If a subset (e.g. `[claude, copilot]`), some restrictions relax |
 | `KEEP_CLAUDE_FALLBACK` | boolean | `false` | If `true`, Claude-only frontmatter fields are preserved as comments with explanation rather than removed |
 | `FORCE` | boolean | `false` | If true, skip the final confirmation gate after previewing the diff. Only applies to `OUTPUT_MODE=in-place`; preview is still mandatory. |
@@ -109,7 +109,7 @@ If the list contains any 🔴 **and** `OUTPUT_MODE=in-place`, mark the write as 
 
 Apply transformations in memory and render the full diff report — see [`references/output-template.md`](references/output-template.md) for the canonical skeleton (header · transformations applied · unified diff · residual concerns · post-transform checklist).
 
-Transformation order: frontmatter rewrite (F1–F7) → body substitutions (B1–B4, B6–B7) → adjacent directory notes (B5) → skeleton inserts (S2). **Never** touch phase content, decision logic, or output formats — semantic preservation is mandatory.
+Transformation order: frontmatter rewrite (F1–F7) → body substitutions (B1–B4, B6–B7) → adjacent directory notes (B5) → activation-scope advisory (S2 — advisory note only, never inserts a body section). **Never** touch phase content, decision logic, or output formats — semantic preservation is mandatory.
 
 If `OUTPUT_MODE=preview` → **stop here**, no file written.
 
@@ -128,9 +128,10 @@ Refuse to write if the transformation list is empty («already portable»).
 
 ### Phase 5 — Verify portability (re-audit the output)
 
-Re-run Phase 1 on the freshly written file. Expected result: **zero findings**. Any
-remaining 🔴/🟡 → flag in the diff report's «Residual concerns» section and instruct
-the user to re-run or fix manually. This phase is what makes the skill **idempotent**:
+Re-run Phase 1 on the freshly written file. Expected result: **zero findings other
+than documented flag-only rules (F6 / B5 / S1), which must reappear under «Residual
+concerns»**. Any other remaining 🔴/🟡 → flag in the diff report's «Residual concerns»
+section and instruct the user to re-run or fix manually. This phase is what makes the skill **idempotent**:
 running it twice on the same file must produce zero changes the second time.
 
 ---

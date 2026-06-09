@@ -10,7 +10,7 @@ Check for the host AI runtime — first match wins, order matters (most specific
 
 | Runtime | Detection signal |
 |---|---|
-| Claude Code | `which claude-code` succeeds, OR `~/.claude/` directory exists, OR `$CLAUDE_CODE_*` env vars set |
+| Claude Code | `which claude` succeeds, OR `~/.claude/` directory exists, OR `$CLAUDE_CODE_*` env vars set |
 | OpenAI Codex CLI | `which codex` succeeds |
 | Google Gemini CLI | `which gemini` succeeds |
 | GitHub Copilot | `gh copilot --version` succeeds |
@@ -37,7 +37,7 @@ npm --version           # required for repomix
 
 ## 3. Detect currently-installed integrations
 
-Each probe is authoritative (used by Phase 5 verify-before-inject):
+Each probe is authoritative (used by Phase 4 verify-before-inject):
 
 ```bash
 which code-review-graph || pipx list | grep code-review-graph
@@ -55,11 +55,11 @@ Results determine:
 
 | Check | Purpose |
 |---|---|
-| `AGENTS.md` at project root | Phase 4 inject target — required to exist for marker writes |
-| `agents/code-reviewer.md` | Phase 4 inject target — required to exist for handoff writes |
-| `.git/` present | Phase 2c CRG pre-commit hook (`Q-CRG-5`) gated on this |
+| `AGENTS.md` at project root | Phase 5 inject target — required to exist for marker writes |
+| `agents/code-reviewer.md` | Phase 5 inject target — required to exist for handoff writes |
+| `.git/` present | Phase 2a CRG pre-commit hook (`Q-CRG-5`) gated on this |
 
-If `AGENTS.md` or `agents/code-reviewer.md` is missing → warn the user. Phase 4 can be skipped (still install binaries), but the integration won't be documented.
+If `AGENTS.md` or `agents/code-reviewer.md` is missing → warn the user. Phase 5 can be skipped (still install binaries), but the integration won't be documented.
 
 ---
 

@@ -33,7 +33,7 @@ Verbosity: {VERBOSITY}
 | D7 | Testability     | 4/5   | Output schema defined; no acceptance fixtures. |
 | D8 | Discoverability | 5/5   | Description in sweet spot with rich triggers. |
 | D9 | Safety          | 2/5   | Mutating skill; 1 of 6 safety sub-concerns addressed. |
-| **Total** | — | **36/45 · 80/100** · 🟡 Yellow (Safety gate triggered) |
+| **Total** | — | **36/45 · 80/100** · 🔴 Red (Safety gate triggered — would be 🟢 Green by numeric tier alone) |
 ```
 
 The «One-line finding» column is the same evidence that appears at the top of

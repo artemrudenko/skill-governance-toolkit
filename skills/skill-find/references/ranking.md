@@ -12,11 +12,11 @@ Parse `NEED` to extract matching signals:
 
 **Signal C — Expected output (WHAT the user wants to GET):** Identify output type: score / ranked list / YAML file / document / recommendation / comparison / diff / summary / alerts / dashboard. Match against output descriptions in `description`. **Weight: 20%.**
 
-**Signal D — Trigger phrase match:** Does the skill's `description` contain «Use when…» / «Triggers:…» text that directly matches the phrasing in `NEED`? If yes: +10 bonus points (applied after weighted scoring). **Weight: 15%.**
+**Signal D — Trigger phrase match:** Does the skill's `description` contain «Use when…» / «Triggers:…» text that directly matches the phrasing in `NEED`? **Weight: 15%.**
 
 ## Compute match score (0–100) per entry
 
-Combine the four weighted signals to a 0–100 score, then apply the +10 Signal D bonus if it matched.
+Combine the four weighted signals (30 + 35 + 20 + 15 = 100) into a single score. Scores clamp to 0–100.
 
 ## Match tier classification
 

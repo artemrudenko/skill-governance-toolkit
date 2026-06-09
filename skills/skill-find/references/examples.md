@@ -43,7 +43,7 @@ Closest: code-review (24%) — not a match
 
 Suggested frontmatter:
 ---
-name: api-latency-monitor
+name: api-latency-audit
 description: |
   Monitors API endpoint response times and identifies regressions.
   Use when investigating latency issues, reviewing performance,
@@ -52,3 +52,5 @@ description: |
   detection, alert generation.
 ---
 ```
+
+Note: suggested names must pass the naming-spec checks N1–N5 (closed-vocabulary action verb, `{entity}-{action}[-{qualifier}]` shape) — e.g. `monitor` is not a closed-vocab verb, so the suggestion uses `audit`.

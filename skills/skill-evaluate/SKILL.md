@@ -88,7 +88,7 @@ metainfo:
 ## Parallelization guidance
 
 - **Phase 1 (D1–D9) — do NOT parallelize.** Cross-dim insights (D3+D4 interaction, D5 vs D9, D9 caps from 3.5, D1 caps from 3.6, D8 caps from 3.7's semantic description↔body comparison) require all 9 dims in ONE context.
-- **Phase 3 sub-checks — batch tool calls.** 3.0/3.0b/3.1/3.2/3.3/3.4/3.4b/3.5/3.6/3.8 are independent; emit supporting `grep`/`ls`/`Read` in ONE message with multiple `tool_use` blocks. Aggregate in context to apply caps. (3.7 and 3.8 are semantic — judge in context, not by regex.)
+- **Phase 3 sub-checks — batch tool calls.** 3.0/3.0b/3.1/3.2/3.3/3.4/3.4b/3.5/3.6 are independent; emit supporting `grep`/`ls`/`Read` in ONE message with multiple `tool_use` blocks. Aggregate in context to apply caps. (3.7 and 3.8 are semantic — judge in context, not by regex.)
 - **Phase 0 / 4 / 5 / 6 — sequential** (trivially fast or synthesis-dependent).
 - **Never require `Task` / sub-agent dispatch for scoring correctness.** Optional specialized sub-agent paths are acceptable only when the skill also documents a sequential fallback with the same output schema. Do not use sub-agents for plain parallelization; use batched tool calls.
 
@@ -124,7 +124,7 @@ Score  = round(Total / 45 × 100)                         (0–100)
 
 ## Phase 3 — Structural analysis
 
-Run **regardless of score**. Nine independent sub-checks; full catalog with
+Run **regardless of score**. Eleven independent sub-checks; full catalog with
 detection logic, thresholds, and D-score caps lives in
 [`references/structural-analysis.md`](references/structural-analysis.md).
 Each sub-check is detect-only; findings appear in the Phase 4 report.

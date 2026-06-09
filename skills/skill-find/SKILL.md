@@ -69,7 +69,7 @@ If `NEED` is not provided, ask the user for it before proceeding. Use `AskUserQu
 
 Collect sources in priority order and record, for each, whether it exists and whether it has an `INDEX.jsonl`.
 
-- **Source 1 — Current project (always):** `.{tool}/skills/` (`.claude/skills/`, `.cursor/skills/`, `.codex/skills/`, `.github/skills/`). Prefer `INDEX.jsonl`; fall back to scanning `SKILL.md` files.
+- **Source 1 — Current project (always):** the repo-root `./skills/` directory (with its `INDEX.jsonl`) first, then `.{tool}/skills/` (`.claude/skills/`, `.cursor/skills/`, `.codex/skills/`, `.github/skills/`). Prefer `INDEX.jsonl`; fall back to scanning `SKILL.md` files.
 - **Source 2 — Personal library (always):** `~/.{tool}/skills/`. Same INDEX-first logic.
 - **Source 3 — Corporate library (from config):** read from `AGENTS.md` / `CLAUDE.md` / `GEMINI.md`, `.{tool}/config.yml`, or env vars. If not configured: note it, continue with sources 1–2.
 
@@ -116,7 +116,7 @@ one JSON object per line). For each catalog entry, find the line whose
 
 Score each catalog entry against `NEED` using four weighted signals (task verb, domain entities, expected output, trigger-phrase match), then classify into Strong / Partial / Weak / No-match tiers. Sort descending; apply `LIMIT`.
 
-See `references/ranking.md` for full signal definitions, weights (30 / 35 / 20 / 15 + bonus), tier thresholds, tie-break rules, and next-step recommendation mapping.
+See `references/ranking.md` for full signal definitions, weights (30 / 35 / 20 / 15), tier thresholds, tie-break rules, and next-step recommendation mapping.
 
 ---
 
@@ -171,6 +171,7 @@ description: |
 
 ```
 Sources searched:
+  · Project  (./skills/):          {N} skills  [index: yes/no]
   · Project  (.{tool}/skills/):   {N} skills  [index: yes/no]
   · Personal (~/.{tool}/skills/): {N} skills  [index: yes/no]
   · Corporate ({label}):           {N} skills  [index: yes/no]
@@ -187,7 +188,7 @@ If the user selects a result and wants to see the full skill content:
 - Retrieve the complete `SKILL.md` from the path in the catalog entry.
 - For Git URL sources: construct raw content URL from the path field.
 - Display the skill body in full.
-- Offer: «Run `skill-evaluate` on this skill? (yes/no)».
+- Suggest the next command (non-interactive, no prompt): «To score this skill, run `skill-evaluate` on it.»
 
 **Important:** Do NOT load full SKILL.md files during search. Only frontmatter is needed for matching — both `name` and `description` are in `INDEX.jsonl`. Full load is on-demand only.
 

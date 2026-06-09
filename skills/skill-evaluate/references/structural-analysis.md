@@ -64,10 +64,14 @@ Recommended sections (each missing → 🟡 Minor):
 
 ## 3.1 — Skill size & density
 
-**Thresholds are the single source of truth in the gate config** (`body_budget`,
-`body_critical` in `references/agent-audit-config` — configurable; never hardcode
-a different boundary here or in `library-audit`). Defaults: budget **500**,
-critical **600**. Recommended authoring target: **≤ 200** lines.
+**Thresholds are the single source of truth in the gate config**: defaults
+`body_budget: 500` / `body_critical: 600` are hardcoded in the config block of
+`scripts/agent_audit.py`, overridable via the `config` block in
+`references/agent-audit-rules.json` (or a file pointed to by
+`AGENT_GOVERNANCE_RULES_PATH`); `references/agent-audit-config.example.json` is
+an optional example overlay. Never hardcode a different boundary here or in
+`library-audit`. Defaults: budget **500**, critical **600**. Recommended
+authoring target: **≤ 200** lines.
 
 | Body lines | Classification |
 |---|---|

@@ -31,7 +31,7 @@ Transformations applied (5):
   🔴 F1 · frontmatter:5 · remove allowed-tools (non-portable hard whitelist)
   🟡 F2 · frontmatter:3 · remove type:, status: (not in agentskills.io spec)
   🟡 F3 · frontmatter:8 · remove paths: (Claude-only; document in body if path-scope matters)
-  🔴 B1 · body:line 1 · replace _audits/internal/ → out/internal/
+  🔴 B1 · body:line 1 · replace _audits/internal/ → out/audits/internal/
   🟡 F7 · add compatibility: field
 
 Description too short (16 chars). Required ≥ 80 to score well on D8 (discoverability).
@@ -74,18 +74,22 @@ context: fork
 
 **Output frontmatter:**
 ```yaml
+---
 # claude-only: the following fields are honored only by Claude Code.
 # Other runtimes will ignore them silently.
 #   model: opus
 #   effort: high
 #   context: fork
----
 name: research-build
 description: ...
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
 ---
 ```
+
+The comment block sits *inside* the frontmatter (YAML comments after the opening
+`---` are legal) — placing it before the opening `---` would make the frontmatter
+undetectable to parsers that require `---` on line 1.
 
 This way the optimization is documented (a Claude Code user can re-enable it by
 uncommenting) without breaking other runtimes that would otherwise silently

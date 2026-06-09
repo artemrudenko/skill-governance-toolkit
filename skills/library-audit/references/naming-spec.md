@@ -29,6 +29,8 @@ Skills using verbs outside this set (e.g. `skill-fix`, `skill-improve`, `skill-h
 {entity}-{action}[-{qualifier}]
 ```
 
+The cap is **≤ 2 words after the entity** (action + optional qualifier) — enforced by N2's regex, which allows at most 2 hyphens.
+
 Examples:
 - `skill-find` — entity `skill`, action `find` ✓
 - `library-audit` — entity `library`, action `audit` ✓ (audits the collection, not one skill)
@@ -41,7 +43,8 @@ Anti-examples:
 - `audit-skills` — verb first → 🔴 N2 violation
 - `skill_audit` — underscore → 🔴 N3 violation
 - `SkillAudit` — camelCase → 🔴 N3 violation
-- `library-audit-detail-mode-v2` — too many parts → 🟡 N4 violation
+- `library-audit-detail-mode-v2` — too many parts (> 2 hyphens) → 🔴 N2 violation
+- `presentation-restructure-aggressively` — passes N2's shape but words are overlong → 🟡 N4 advisory
 - `acme-library-audit` — organization prefix → 🔴 N5 violation (skills should be vendor-neutral)
 
 ## Five atomic checks (Phase 3)
@@ -49,9 +52,9 @@ Anti-examples:
 | # | Check | Detection | Severity |
 |---|---|---|---|
 | **N1** | Verb is in closed vocabulary | Parse `name` → extract action part → check membership | 🔴 |
-| **N2** | Pattern `{entity}-{action}[-{qualifier}]` — 2-3 parts, hyphens only | Regex `^[a-z][a-z0-9]+(-[a-z0-9]+){1,2}$` | 🔴 |
+| **N2** | Pattern `{entity}-{action}[-{qualifier}]` — 2-3 parts (≤ 2 words after entity), hyphens only | Regex `^[a-z][a-z0-9]+(-[a-z0-9]+){1,2}$` | 🔴 |
 | **N3** | kebab-case only | Regex `^[a-z][a-z0-9-]*$` | 🔴 |
-| **N4** | Length ≤ 3 words after entity | Hyphen count ≤ 2 | 🟡 |
+| **N4** | Length advisory for names that PASS N2's shape | Any single word > 12 chars OR total name > 30 chars | 🟡 |
 | **N5** | No organization-specific prefix | Reject names embedding org/brand identifiers (case-by-case) | 🔴 |
 
 Any 🔴 violation in a new SKILL.md blocks merge.

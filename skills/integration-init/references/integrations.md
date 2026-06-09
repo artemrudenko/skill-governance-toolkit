@@ -119,14 +119,20 @@ CRG installs a **post-edit / post-commit hook** automatically when you run `code
 
 ### Handoff template (code-reviewer.md)
 
+> **Comment-form only.** `code-reviewer.md` declares `handoffs: []` and requires every
+> non-comment handoff target to resolve to an `agents/{target}.md` file. Integrations are
+> not dispatchable agents, so the injected lines below are `#`-prefixed YAML comments
+> (matching the existing marker style) — human-facing documentation, never dispatch targets.
+> The same rule applies to the repomix and serena templates.
+
 ```yaml
   # <!-- skill-init: handoff:crg BEGIN -->
-  - target: code-review-graph
-    label: "Blast-radius analysis (CRG)"
-    condition: "PR touches > 20 files OR cross-module changes detected OR Modularity.M3 (cycle) flagged"
-    invocation: |
-      MCP mode: call review-pr / callers_of / dependents_of as needed
-      CLI mode: code-review-graph query "{specific question}"
+  # - target: code-review-graph
+  #   label: "Blast-radius analysis (CRG)"
+  #   condition: "PR touches > 20 files OR cross-module changes detected OR Modularity.M3 (cycle) flagged"
+  #   invocation: |
+  #     MCP mode: call review-pr / callers_of / dependents_of as needed
+  #     CLI mode: code-review-graph query "{specific question}"
   # <!-- skill-init: handoff:crg END -->
 ```
 
@@ -204,10 +210,10 @@ repomix --output context.xml    # pack current project to context.xml
 
 ```yaml
   # <!-- skill-init: handoff:repomix BEGIN -->
-  - target: repomix
-    label: "Pack repo context (one-shot)"
-    condition: "Reviewing an external repository not indexed by CRG, OR small repo (< 100 files) where full context is feasible"
-    invocation: "repomix --output {tmp path} --include={pattern}; then read that file as context"
+  # - target: repomix
+  #   label: "Pack repo context (one-shot)"
+  #   condition: "Reviewing an external repository not indexed by CRG, OR small repo (< 100 files) where full context is feasible"
+  #   invocation: "repomix --output {tmp path} --include={pattern}; then read that file as context"
   # <!-- skill-init: handoff:repomix END -->
 ```
 
@@ -272,10 +278,10 @@ serena status                  # lists active LSP servers
 
 ```yaml
   # <!-- skill-init: handoff:serena BEGIN -->
-  - target: serena
-    label: "Semantic refactor / type-aware refs"
-    condition: "Rename operation flagged; cross-module type changes; CRG returned AMBIGUOUS edges for dynamic code"
-    invocation: "MCP: rename_symbol / find_references / type_at_cursor"
+  # - target: serena
+  #   label: "Semantic refactor / type-aware refs"
+  #   condition: "Rename operation flagged; cross-module type changes; CRG returned AMBIGUOUS edges for dynamic code"
+  #   invocation: "MCP: rename_symbol / find_references / type_at_cursor"
   # <!-- skill-init: handoff:serena END -->
 ```
 

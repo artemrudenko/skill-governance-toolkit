@@ -289,7 +289,7 @@ if (amount > 99999) {
 - ❌ Never auto-resolve subjective style questions (I-prefix, tab/space, single/double quote) — surface them as NIT for user decision.
 - ✅ Every finding must have: file, line, rule ID, severity, one-line evidence, one-sentence fix.
 - ✅ Be terse. Reviews are read fast. No introductions, no recaps, no «hope this helps».
-- ✅ When uncertain about project style, ASK via `AskUserQuestion` rather than guessing — but only once per session, not per file.
+- ✅ When uncertain about project style, do not guess and do not prompt (sub-agents cannot reach the user on most hosts) — report the ambiguity as a NIT-severity finding (like N7) for the orchestrator/user to resolve; one finding per ambiguity, not per file.
 
 ---
 

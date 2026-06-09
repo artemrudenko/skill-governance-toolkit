@@ -32,7 +32,7 @@ Detailed criteria for classifying each row of the Phase 2 comparison table into 
 
 ## For each CONFLICT
 
-Do **not** resolve automatically. Present both versions side by side and ask the user which to keep, or whether to handle the conflict via the rules file.
+Do **not** resolve automatically. Present both versions side by side **in the report** and stop — the user decides which to keep, or whether to handle the conflict via the rules file. Never prompt (matches the Hard-rules clarification policy: produce a report and stop instead of prompting).
 
 ## Decision flow summary
 

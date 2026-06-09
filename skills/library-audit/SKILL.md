@@ -33,6 +33,7 @@ metainfo:
 - Phase 3 specific: «naming audit», «verify naming convention»
 - Phase 4 specific: «portability check», «multi-tool compatibility», «allowed-tools audit»
 - Phase 5 specific: «security audit», «secrets scan», «check for credentials», «dangerous shell patterns»
+- Phase 5.5 specific: «metainfo coverage», «category/tier audit»
 
 **Always:**
 - Before merging a new `SKILL.md` or after a major rewrite.
@@ -79,9 +80,9 @@ All optional.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `MODE` | enum: `full` / `handoff-only` / `budget-only` / `naming-only` / `portability-only` / `compat-only` / `security-only` | `full` | Which phases to run |
+| `MODE` | enum: `full` / `handoff-only` / `budget-only` / `naming-only` / `portability-only` / `compat-only` / `security-only` / `metainfo-only` | `full` | Which phases to run |
 | `OUTPUT_PATH_OVERRIDE` | path | `out/library-audit/library-audit-{TODAY}.md` | Where to write the report |
-| `SKILLS_DIRS` | list of paths | `[skills/]` | Directories to scan |
+| `SKILLS_DIRS` | list of paths | `[skills/, .{tool}/skills/]` | Directories to scan |
 | `STRICTNESS` | enum: `default` / `strict` / `permissive` | `default` | Severity matrix tuning |
 | `WORD_TO_TOKEN_RATIO` | float | `1.3` | Phase 2 token-estimation heuristic |
 | `VERBOSITY` | enum: `terse` / `standard` / `detailed` | `detailed` | Output depth. `terse` = roll-up table only. `standard` = previous (v1.4) format with category counts + per-finding row. `detailed` = full 4-part per-category blocks (What we check / What we found / Why it matters / How to fix) + per-finding remediation. |
@@ -128,7 +129,7 @@ Apply 3 atomic passes per `references/budget-spec.md`:
 
 ### Phase 3 — Naming validation
 
-Apply 5 atomic checks (**N1**–**N5**) per `references/naming-spec.md`: closed-vocabulary verb, `{entity}-{action}[-{qualifier}]` pattern, kebab-case, ≤ 3 words after entity, no brand-specific names. Any 🔴 violation in a new skill → block merge. Full rule table, severities, and rename guidance in the spec file.
+Apply 5 atomic checks (**N1**–**N5**) per `references/naming-spec.md`: closed-vocabulary verb, `{entity}-{action}[-{qualifier}]` pattern, kebab-case, ≤ 2 words after entity (action + optional qualifier), no brand-specific names. Any 🔴 violation in a new skill → block merge. Full rule table, severities, and rename guidance in the spec file.
 
 ### Phase 4 — Portability tag coverage
 
@@ -142,6 +143,16 @@ Apply 2 atomic checks:
 ### Phase 4.5 — Multi-tool compatibility
 
 Validates anti-patterns that break SKILL.md portability across Claude Code / Copilot / Cursor / Codex / Gemini. Apply 4 atomic checks (**MC1**–**MC4**) per skill: no `allowed-tools:` in frontmatter, no per-skill `rules/{tool}.md`, portability claim matches actual content, Task-orchestration awareness for Gemini. Full check table, detection commands, severity matrix, and per-check rationale in `references/multi-tool-compat-spec.md`.
+
+### Phase 5 — Security validation
+
+Apply 3 atomic passes per `references/security-spec.md`. Scans **both** `SKILLS_DIRS` (every SKILL.md) **and** `AGENT_DIRS` (every agent .md).
+
+1. **Pass 5.1 — Secret patterns:** regex sweep for vendor credential formats (OpenAI / Anthropic / Slack / GitHub / AWS / Google) + private keys + Bearer tokens; honor documentation-placeholder allowlist. Findings **S1–S10**.
+2. **Pass 5.2 — Dangerous shell patterns:** detect `rm -rf /`, `curl | bash`, `eval`, fork bombs, disk-wipe patterns; skip anti-pattern headings. Findings **D1–D9**.
+3. **Pass 5.3 — Credential file path reads:** flag references to `~/.aws/credentials`, `~/.ssh/id_rsa`, `~/.gnupg/`, `.netrc`, etc.; distinguish documentation from skill behavior. Findings **C1–C9**.
+
+**Output discipline:** report MUST mask every matched secret (first 5 + last 3 chars; never print raw match). Full regex catalog, allowlists, and per-finding severity in the spec file.
 
 ### Phase 5.5 — Metainfo coverage (since 1.8.0)
 
@@ -168,16 +179,6 @@ escalation when a skill misbehaves in production.
 skills-by-category × skills-by-tier so the reader sees the library shape
 at a glance. Surface orphans (no metainfo) at the top, then the matrix,
 then the unknown-vocab list if any.
-
-### Phase 5 — Security validation
-
-Apply 3 atomic passes per `references/security-spec.md`. Scans **both** `SKILLS_DIRS` (every SKILL.md) **and** `AGENT_DIRS` (every agent .md).
-
-1. **Pass 5.1 — Secret patterns:** regex sweep for vendor credential formats (OpenAI / Anthropic / Slack / GitHub / AWS / Google) + private keys + Bearer tokens; honor documentation-placeholder allowlist. Findings **S1–S10**.
-2. **Pass 5.2 — Dangerous shell patterns:** detect `rm -rf /`, `curl | bash`, `eval`, fork bombs, disk-wipe patterns; skip anti-pattern headings. Findings **D1–D9**.
-3. **Pass 5.3 — Credential file path reads:** flag references to `~/.aws/credentials`, `~/.ssh/id_rsa`, `~/.gnupg/`, `.netrc`, etc.; distinguish documentation from skill behavior. Findings **C1–C9**.
-
-**Output discipline:** report MUST mask every matched secret (first 5 + last 3 chars; never print raw match). Full regex catalog, allowlists, and per-finding severity in the spec file.
 
 ### Phase 6 — Aggregate + write report (4-part structured)
 

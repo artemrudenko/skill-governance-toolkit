@@ -223,9 +223,10 @@ shape the triggering examples should be relocated *to*.
 This skill is for full PRs, not one-off snippets.
 ```
 
-These sections are **required** by 3.0b and coherence-checked by 3.7 — they are
-the sanctioned in-body home for negative scope. 3.8 must **not** flag them;
-doing so would contradict the structure checks that mandate them.
+These sections are the *sanctioned optional* in-body home for negative scope
+(3.0b — optional, missing one is NOT a finding), coherence-checked when present
+(3.7). 3.8 must **not** flag them; doing so would contradict the structure
+checks that sanction them.
 
 ## D9 — Safety / Risk Awareness
 

@@ -67,13 +67,18 @@ NETWORK_TOOLS_RE = re.compile(
 )
 
 # Env-dump commands that expose the whole environment (secrets included).
-ENV_DUMP_RE = re.compile(r"\b(printenv|env)\b")
+# `printenv` is distinctive enough to match anywhere; the bare `env` token must
+# sit in COMMAND position (start of string, or after ; & | $( `) and not be a
+# path component like `env/bin/activate` — hence the `(?!/)` guard.
+ENV_DUMP_RE = re.compile(r"\bprintenv\b|(?:^|[;&|]|\$\(|`)\s*env\b(?!/)")
 
 # Secret-looking env var names (best-effort) — `echo $AWS_SECRET_ACCESS_KEY`,
-# `printenv GITHUB_TOKEN`, etc.
+# `printenv GITHUB_TOKEN`, `curl x?d=$my_secret_token`. Case-insensitive: a
+# lowercase/mixed-case name is the same secret shape, just spelled small.
 SECRET_VAR_RE = re.compile(
     r"\b[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE[_-]?KEY|"
-    r"ACCESS[_-]?KEY|CREDENTIAL)[A-Z0-9_]*\b"
+    r"ACCESS[_-]?KEY|CREDENTIAL)[A-Z0-9_]*\b",
+    re.IGNORECASE,
 )
 
 

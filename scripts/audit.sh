@@ -128,7 +128,10 @@ fi
 
 phase "P4 — install.sh smoke test (fresh + re-run idempotency)"
 SMOKE_DIR=$(mktemp -d)
-trap "rm -rf $SMOKE_DIR" EXIT
+# Single quotes: expand at fire time (a space-containing TMPDIR would word-split
+# a baked-in path). Also covers P22's DELTA_DIR if the run aborts before its
+# own cleanup line.
+trap 'rm -rf "$SMOKE_DIR" "${DELTA_DIR:-/nonexistent}"' EXIT
 if bash "$ROOT/scripts/install.sh" --claude --project --target-project="$SMOKE_DIR" >/dev/null 2>&1; then
   if [[ -f "$SMOKE_DIR/AGENTS.md" && -f "$SMOKE_DIR/.claude/CLAUDE.md" && -d "$SMOKE_DIR/skills" ]]; then
     pass "fresh install creates root AGENTS.md + .claude/CLAUDE.md + root skills/"
@@ -168,21 +171,32 @@ fi
 # Boundaries are read from the engine config (body_budget / body_critical in
 # agent_audit.py) — the single source of truth — so this gate can never drift
 # stricter than the real audit. Never hardcode the numbers here.
-read -r BODY_BUDGET BODY_CRITICAL < <(python3 -c "
-import re
-t = open('$ROOT/scripts/agent_audit.py').read()
-print(re.search(r'\"body_budget\"\s*:\s*(\d+)', t).group(1),
-      re.search(r'\"body_critical\"\s*:\s*(\d+)', t).group(1))
-")
+# Paths go via argv (not interpolated into the Python source) so a checkout
+# path containing quotes can't produce a syntax error.
+read -r BODY_BUDGET BODY_CRITICAL < <(python3 - "$ROOT/scripts/agent_audit.py" <<'PY'
+import re, sys
+t = open(sys.argv[1]).read()
+print(re.search(r'"body_budget"\s*:\s*(\d+)', t).group(1),
+      re.search(r'"body_critical"\s*:\s*(\d+)', t).group(1))
+PY
+) || true
+if [[ -z "${BODY_BUDGET:-}" || -z "${BODY_CRITICAL:-}" ]]; then
+  # A failed extraction must surface as a FAILED phase, not abort the whole
+  # suite via set -u (the deliberate no-set-e design wants every check to run).
+  fail "P6: could not extract body_budget/body_critical from agent_audit.py — falling back to 500/600"
+  BODY_BUDGET=500
+  BODY_CRITICAL=600
+fi
 phase "P6 — Skill body length (≤200 clean, ≤${BODY_BUDGET} candidate, ≤${BODY_CRITICAL} over budget, >${BODY_CRITICAL} critical)"
 for f in "$ROOT"/skills/*/SKILL.md; do
   name=$(basename "$(dirname "$f")")
-  body_lines=$(python3 -c "
-import re
-text = open('$f').read()
+  body_lines=$(python3 - "$f" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
 body = re.sub(r'^---\n.*?\n---\n', '', text, count=1, flags=re.DOTALL)
 print(len(body.splitlines()))
-")
+PY
+)
   if   [[ "$body_lines" -le 200 ]];            then pass "$name: $body_lines (clean)"
   elif [[ "$body_lines" -le "$BODY_BUDGET" ]]; then pass "$name: $body_lines (overload candidate, accepted)"
   elif [[ "$body_lines" -le "$BODY_CRITICAL" ]]; then warn "$name: $body_lines (over body_budget — should extract)"
@@ -424,6 +438,12 @@ else
   for critical in ".github/workflows/ci.yml" "scripts/audit.sh" "scripts/sync_version.py" "scripts/post_mr_comment.py" "VERSION"; do
     grep -qF "$critical" "$ROOT/CODEOWNERS" || missing_owners+=" $critical"
   done
+  # Shipped runtime security controls execute on USER machines (the secret-guard
+  # PreToolUse hook runs on every Bash tool call) — weakening one in an ordinary
+  # MR would silently disable a fleet-wide control.
+  for critical in "skills/integration-init/assets/secret-guard-hook.py"; do
+    grep -qF "$critical" "$ROOT/CODEOWNERS" || missing_owners+=" $critical"
+  done
   # The suppression list MUST be code-owner-gated when it exists, so an MR
   # author can't self-approve silencing their own security finding.
   if [[ -f "$ROOT/references/audit-ignore.json" ]]; then
@@ -482,17 +502,19 @@ fi
 
 phase "P22 — Delta-gate integration (real git: --fail-on-new + kill-switch)"
 DELTA_DIR=$(mktemp -d)
-GIT="git -C $DELTA_DIR -c user.email=ci@test -c user.name=ci"
-$GIT init -q >/dev/null 2>&1
+# A function (not an unquoted $GIT command string) so a space-containing
+# TMPDIR cannot word-split the repo path.
+git_delta() { git -C "$DELTA_DIR" -c user.email=ci@test -c user.name=ci "$@"; }
+git_delta init -q >/dev/null 2>&1
 mkdir -p "$DELTA_DIR/config" "$DELTA_DIR/other"
 # Two distinct, valid 36-char ghp_ tokens (SEC011 high findings).
 printf '{"mcpServers":{"x":{"token":"ghp_012345678901234567890123456789012345"}}}\n' > "$DELTA_DIR/config/.mcp.json"
-$GIT add -A >/dev/null 2>&1
-$GIT commit -q -m base >/dev/null 2>&1
-DELTA_BASE=$($GIT rev-parse HEAD 2>/dev/null)
+git_delta add -A >/dev/null 2>&1
+git_delta commit -q -m base >/dev/null 2>&1
+DELTA_BASE=$(git_delta rev-parse HEAD 2>/dev/null)
 printf '{"mcpServers":{"y":{"token":"ghp_abcdefghijabcdefghijabcdefghijabcdef"}}}\n' > "$DELTA_DIR/other/.mcp.json"
-$GIT add -A >/dev/null 2>&1
-$GIT commit -q -m head >/dev/null 2>&1
+git_delta add -A >/dev/null 2>&1
+git_delta commit -q -m head >/dev/null 2>&1
 
 if [[ -z "$DELTA_BASE" ]]; then
   fail "delta-gate: could not initialize temp git repo"

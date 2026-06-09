@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -271,6 +272,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project-id", default=os.environ.get("CI_PROJECT_ID"))
     parser.add_argument("--mr-iid", default=os.environ.get("CI_MERGE_REQUEST_IID"))
     parser.add_argument("--token-env", default="GITLAB_TOKEN", help="Env var holding the API token.")
+    parser.add_argument(
+        "--allow-insecure-http", action="store_true",
+        help="Permit a non-https --api-url (on-host test instances only). "
+             "Without it the poster refuses: the PRIVATE-TOKEN header would travel in cleartext.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -284,6 +290,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print(body)
         return 0
+
+    # Refuse cleartext token transport: a non-https api-url would send the
+    # PRIVATE-TOKEN header unencrypted. --allow-insecure-http is the explicit
+    # escape hatch for on-host test instances.
+    scheme = urllib.parse.urlsplit(args.api_url).scheme.lower()
+    if scheme != "https" and not args.allow_insecure_http:
+        print(
+            f"post_mr_comment: refusing non-https api-url {args.api_url!r} — "
+            "the PRIVATE-TOKEN header would travel in cleartext. "
+            "Use an https endpoint or pass --allow-insecure-http.",
+            file=sys.stderr,
+        )
+        return 2
 
     token = os.environ.get(args.token_env)
     missing = [

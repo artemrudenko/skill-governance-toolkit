@@ -38,6 +38,13 @@
 /skills/library-audit/references/security-spec.md  @skill-governance-owners
 /docs/checks-reference.md                   @skill-governance-owners
 
+# --- Shipped runtime security controls (execute on user machines) ---
+# The secret-guard hook ships into users' .claude/settings.json as a PreToolUse
+# hook and runs automatically on every Bash tool call — weakening it in an
+# ordinary MR would silently disable a fleet-wide control. audit.sh P18
+# machine-checks this entry stays present.
+/skills/integration-init/assets/secret-guard-hook.py  @skill-governance-owners
+
 # --- The toolkit's OWN enforcement plane (the gate cannot weaken itself) ---
 # Without code-owner review here, an author could disable the self-CI gate,
 # rewrite the release/version machinery, or neuter the MR poster in the SAME

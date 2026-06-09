@@ -196,7 +196,11 @@ install_crg() {
   fi
 
   if $USE_FORK; then
-    run pipx install git+https://github.com/n24q02m/better-code-review-graph
+    # Pinned to an immutable commit — a personal fork's mutable default branch
+    # is exactly the supply-chain surface the audit gate polices. Bump the pin
+    # deliberately (after review) via SGT_CRG_FORK_REF.
+    local fork_ref="${SGT_CRG_FORK_REF:-144bd58b5d91ba3e3909ab93985c12b09ce94494}"
+    run pipx install "git+https://github.com/n24q02m/better-code-review-graph@${fork_ref}"
   else
     if $ENRICHMENT; then
       run pipx install 'code-review-graph[enrichment]'

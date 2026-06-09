@@ -1,4 +1,9 @@
-FROM python:3.12-slim
+# Base image is a build arg so an egress-restricted org can point it at an
+# internal registry mirror — and, for an immutable supply chain, at a digest:
+#   docker build --build-arg BASE_IMAGE=registry.example.com/mirrors/python:3.12-slim@sha256:<digest> .
+# The floating default is an accepted residual risk for local/dev builds only.
+ARG BASE_IMAGE=python:3.12-slim
+FROM ${BASE_IMAGE}
 
 ENV PYTHONUNBUFFERED=1
 

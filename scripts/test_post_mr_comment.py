@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import contextmanager
+import urllib.error
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 
 import agent_audit
@@ -17,6 +20,42 @@ import post_mr_comment
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
+
+
+@contextmanager
+def _env(**overrides: str | None):
+    """Temporarily set (value) or unset (None) environment variables."""
+    saved = {key: os.environ.get(key) for key in overrides}
+    for key, value in overrides.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+    try:
+        yield
+    finally:
+        for key, prev in saved.items():
+            if prev is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = prev
+
+
+@contextmanager
+def _report_file(findings: list[dict[str, object]] | None = None):
+    """Yield the path of a temporary audit-report JSON for main() CLI tests."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "skill-audit.json"
+        path.write_text(json.dumps(_report(findings or [])), encoding="utf-8")
+        yield str(path)
+
+
+def _http_error(code: int, reason: str, body: bytes) -> urllib.error.HTTPError:
+    """Build an HTTPError whose .read() returns `body`, like a real GitLab response."""
+    return urllib.error.HTTPError(
+        "https://gitlab.example/api/v4/projects/1/merge_requests/2/notes",
+        code, reason, hdrs=None, fp=io.BytesIO(body),
+    )
 
 
 def _report(findings: list[dict[str, object]]) -> dict[str, object]:
@@ -210,6 +249,169 @@ class PostMrCommentTests(unittest.TestCase):
         ])
         body = post_mr_comment.render_comment(report)
         self.assertIn("docs/gate-for-authors.md", body)
+
+    def test_post_or_update_puts_to_existing_marker_note(self) -> None:
+        # Idempotency contract: when the marker note already exists, the poster
+        # must PUT the new body to /notes/<id> — never POST a duplicate note.
+        calls: list[tuple[str, str, object]] = []
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append((method, url, payload))
+            if method == "GET":
+                return [
+                    {"id": 7, "body": "unrelated review note"},
+                    {"id": 42, "body": f"{post_mr_comment.MARKER}\nprevious gate result"},
+                ]
+            return None
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        try:
+            action = post_mr_comment.post_or_update(
+                "https://gitlab.example/api/v4", "1", "2", "tok", "new body")
+        finally:
+            post_mr_comment._api_request = original
+
+        self.assertEqual(action, "updated")
+        self.assertNotIn("POST", [method for method, _, _ in calls])
+        put_calls = [(url, payload) for method, url, payload in calls if method == "PUT"]
+        self.assertEqual(put_calls, [(
+            "https://gitlab.example/api/v4/projects/1/merge_requests/2/notes/42",
+            {"body": "new body"},
+        )])
+
+    def test_main_http_error_sanitized_and_surfaces_gitlab_body(self) -> None:
+        # 401 and 500 from the API must exit non-zero, surface the GitLab response
+        # body (the author's only self-diagnosis signal), and never leak the token.
+        token_value = "glpat-SUPER-SECRET-VALUE"
+        for code, reason, api_body in (
+            (401, "Unauthorized", b'{"message":"401 Unauthorized"}'),
+            (500, "Internal Server Error", b'{"message":"internal error"}'),
+        ):
+            with self.subTest(code=code):
+                def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+                    raise _http_error(code, reason, api_body)
+
+                original = post_mr_comment._api_request
+                post_mr_comment._api_request = fake_api
+                stdout, stderr = io.StringIO(), io.StringIO()
+                try:
+                    with _report_file() as report, _env(GITLAB_TOKEN=token_value), \
+                            redirect_stdout(stdout), redirect_stderr(stderr):
+                        rc = post_mr_comment.main([
+                            report, "--api-url", "https://gitlab.example/api/v4",
+                            "--project-id", "1", "--mr-iid", "2",
+                        ])
+                finally:
+                    post_mr_comment._api_request = original
+
+                self.assertEqual(rc, 1)
+                combined = stdout.getvalue() + stderr.getvalue()
+                self.assertNotIn(token_value, combined)
+                self.assertIn(str(code), stderr.getvalue())
+                self.assertIn(api_body.decode("utf-8"), stderr.getvalue())
+
+    def test_main_missing_token_env_exits_2_without_api_call(self) -> None:
+        calls: list[str] = []
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append(url)
+            return []
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        stderr = io.StringIO()
+        try:
+            with _report_file() as report, _env(GITLAB_TOKEN=None), redirect_stderr(stderr):
+                rc = post_mr_comment.main([
+                    report, "--api-url", "https://gitlab.example/api/v4",
+                    "--project-id", "1", "--mr-iid", "2",
+                ])
+        finally:
+            post_mr_comment._api_request = original
+
+        self.assertEqual(rc, 2)
+        self.assertEqual(calls, [])
+        self.assertIn("GITLAB_TOKEN", stderr.getvalue())
+        self.assertIn("missing required config", stderr.getvalue())
+
+    def test_main_proceeds_to_api_call_with_ci_env(self) -> None:
+        # The documented CI contract: CI_API_V4_URL / CI_PROJECT_ID /
+        # CI_MERGE_REQUEST_IID + token env supply everything — no flags needed.
+        calls: list[tuple[str, str]] = []
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append((method, url))
+            return [] if method == "GET" else None
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        stdout = io.StringIO()
+        try:
+            with _report_file() as report, _env(
+                CI_API_V4_URL="https://gitlab.example/api/v4",
+                CI_PROJECT_ID="123",
+                CI_MERGE_REQUEST_IID="9",
+                GITLAB_TOKEN="tok",
+            ), redirect_stdout(stdout):
+                rc = post_mr_comment.main([report])
+        finally:
+            post_mr_comment._api_request = original
+
+        self.assertEqual(rc, 0)
+        urls = [url for _, url in calls]
+        self.assertTrue(any("/projects/123/merge_requests/9/notes" in url for url in urls), urls)
+        self.assertIn("created", stdout.getvalue())
+
+    def test_main_refuses_http_api_url_with_exit_2(self) -> None:
+        # An http:// endpoint would send the PRIVATE-TOKEN header in cleartext.
+        # The poster must refuse before any API call, naming the URL and https.
+        calls: list[str] = []
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append(url)
+            return []
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        stderr = io.StringIO()
+        try:
+            with _report_file() as report, _env(GITLAB_TOKEN="tok"), redirect_stderr(stderr):
+                rc = post_mr_comment.main([
+                    report, "--api-url", "http://gitlab.example/api/v4",
+                    "--project-id", "1", "--mr-iid", "2",
+                ])
+        finally:
+            post_mr_comment._api_request = original
+
+        self.assertEqual(rc, 2)
+        self.assertEqual(calls, [])
+        self.assertIn("https", stderr.getvalue())
+        self.assertIn("http://gitlab.example/api/v4", stderr.getvalue())
+
+    def test_main_allow_insecure_http_flag_proceeds(self) -> None:
+        # Escape hatch for on-host test instances: --allow-insecure-http lets an
+        # http:// endpoint through and the normal post flow runs.
+        calls: list[tuple[str, str]] = []
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append((method, url))
+            return [] if method == "GET" else None
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        stdout = io.StringIO()
+        try:
+            with _report_file() as report, _env(GITLAB_TOKEN="tok"), redirect_stdout(stdout):
+                rc = post_mr_comment.main([
+                    report, "--api-url", "http://gitlab.example/api/v4",
+                    "--project-id", "1", "--mr-iid", "2", "--allow-insecure-http",
+                ])
+        finally:
+            post_mr_comment._api_request = original
+
+        self.assertEqual(rc, 0)
+        self.assertIn("POST", [method for method, _ in calls])
 
     def test_cli_dry_run_prints_body_without_token(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

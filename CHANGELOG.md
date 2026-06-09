@@ -13,6 +13,97 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.17.0] — 2026-06-09 — first-run UX + coverage gaps closed (post-review)
+
+Addresses the confirmed findings from two rounds of parallel role-based critical
+review: a CI-gate blocker, checkout-centric first-run UX, untested engine rules /
+installer filter / destructive runtime scripts, and GitHub/GitLab parity.
+
+### Fixed (blocker)
+- **`sgt ci-init` no longer pins the consumer's git HEAD.** In a consumer install
+  `SGT_ROOT` is the user's project, so `git rev-parse HEAD`/`origin` there returned
+  the *user's* commit/remote — the generated gate then cloned a SHA absent from the
+  toolkit mirror and **failed on every PR**. `_current_head_sha`/`_origin_url` now
+  resolve only inside a toolkit checkout (detected via dev-only markers); from a
+  consumer install `ci-init` requires an explicit `--ref <toolkit-sha>` with a clear
+  message instead of silently emitting a broken workflow.
+
+### Added
+- **`doctor` / `quickstart` auto-detect consumer vs checkout** (`--mode auto|checkout|consumer`).
+  In a consumer project they check only delivered artifacts (installed skills,
+  managed `AGENTS.md` block, index validity, python) instead of false-flagging on
+  checkout-only files (`scripts/audit.sh`, `pyproject.toml`, `README`/`LICENSE`).
+  `quickstart` no longer points consumers at `./install.sh` or `sgt audit` (neither
+  ships into an install) — it surfaces skill invocation, `sgt skills`, and `sgt gate`.
+- **`audit-project --include-install-dirs`.** By default `audit-project` now skips
+  install-copied governance content (a duplicated `AGENTS.md`, vendored skills/agents)
+  under per-host dirs (`.claude`/`.codex`/`.gemini`/`.cursor`), so a fresh install's
+  first audit reports **0 findings about the toolkit's own layout** instead of 9.
+  Security configs under those dirs (`.claude/settings.json` hooks, `.mcp.json`,
+  `plugin.json`) are still audited. The skip is non-silent (logs the opt-in flag).
+- **`docs/github-onboarding.md`** — GitHub-Actions counterpart to `gitlab-onboarding.md`
+  (required checks, pinned SHA, CODEOWNERS, base-ref edge cases, and the documented
+  GitHub-vs-GitLab advisory-comment difference).
+- **Self-CI P27–P30.** Wired four previously-orphan/missing suites into `audit.sh`:
+  `test_secret_guard.py` + `test_backfill_requires_mcp.py` (P27, 22 tests, green but
+  never in CI), `install.ps1` parse-check (P28), `test_checkpoint.py` (P29, new —
+  resumable-run lifecycle + atomicity), and `test_install_pre_commit_hook.py` (P30,
+  new — the commit-blocking hook installer). A `windows-parity` CI job runs the
+  `install.ps1` tests under `pwsh` so the Windows installer's copy/marker/guard path
+  (which can delete user skills) actually **executes** in CI instead of self-skipping.
+
+### Changed
+- **`install.sh` fails fast with a clear message when `python3` is absent**, before
+  touching the target (was a raw `python3: command not found` mid-install).
+- **`github-pr.yml` uses the engine's native `--format github`** for PR annotations
+  instead of re-deriving them from JSON — the two output paths can no longer drift,
+  and annotations regain the rule `title=`.
+- **`install-pre-commit-hook.sh` prints its not-a-git-repo guidance** instead of
+  exiting silently under `set -e`.
+
+### Fixed
+- **Test coverage gaps:** added fixtures for 12 previously-unexercised detection
+  rules (DISC001/002, SEC012, SKILL004/005/006/007/010/011/013/016/017) and behavior
+  tests for the installer's `filter_skills.apply_filters` selection logic
+  (`--category`/`--tier`/`--skill`/`--filtered-index`), which only had `--info-summary`
+  coverage before — a bug there would have silently installed the wrong skill subset.
+- **Doc-vs-reality drift:** `agent-governance-engine.md` now shows `--fail-on-new high`
+  for the ci-init gate (was `--fail-on high`) and an illustrative (not frozen)
+  `engine_version`; `cli-reference.md` documents `sgt gate --allow-dirty`; the user
+  guides document `filter_skills --info-summary`; `AGENTS.md` self-CI range is `P1–P30`;
+  `QUICKSTART.md` clone command no longer uses an unresolved `<toolkit-repo>` placeholder.
+- **Consumer-onboarding doc fixes:** `QUICKSTART.md` raw-installer line now points at
+  `scripts/install.sh` (the root wrapper rejects `--claude`/`--project`); README's
+  primary install path runs the installer **from** the user's project (running it from
+  inside the toolkit dir self-installs and skips); the root `install.sh` banner reports
+  the real `$PWD` target instead of the toolkit dir; `sgt audit` is marked checkout-only;
+  `cli-reference.md` documents `--include-install-dirs`.
+- **Consistency-guard hole:** `skill-evaluate/SKILL.md` 3.1 row now shows the full
+  `120/200/500/600` grid (omitted `body_critical`), and `test_audit_config.py` now
+  guards that file — the rule named "skill-evaluate 3.1" but did not cover it, so it drifted.
+- **More untested shipped mutating scripts covered (P31/P32):** `test_init.py` (the
+  integration bootstrapper — dry-run/advise-only no-op + deselected-block removal) and
+  `test_generate_subset_agents_md.py` + a `--skill` filtered-install integration test
+  (the install-time AGENTS.md subset rewriter). Removed dead `inject_marker_block` from
+  `init.sh` (never called; duplicated marker logic that could drift) and corrected its
+  header, which claimed an injection the script delegates to `integration-init`.
+- **`sgt gate` auto-detects the default branch** (`origin/HEAD`, fallback `main`) instead
+  of hard-coding `--base main`, so the gate works on a `master`/non-`main` repo without `--base`.
+- **`doctor` and `quickstart` agree on "not installed":** the `looks_uninstalled` check
+  moved into `doctor.py` (shared), so a pristine directory reports "toolkit is NOT installed
+  here" from both entry points instead of doctor implying a broken install.
+- **README** Cursor row no longer references a non-existent `.cursor-plugin/plugin.json`
+  (Cursor reads `AGENTS.md` + `agents/` natively; no manifest ships).
+- **`sgt uninstall` now removes toolkit-owned `docs/`** (tracked via a `docs/.sgt-owned`
+  sidecar written at install), honoring the "removes ONLY toolkit-owned files" promise —
+  user docs are preserved. Previously toolkit docs persisted after uninstall.
+- **CLI-flag drift guard (P33):** `test_cli_reference_coverage.py` asserts every long flag
+  in `sgt.py` + `agent_audit.py` is documented in `cli-reference.md`; that reference gained
+  a consolidated "Auxiliary scripts" flag table (`filter_skills`/`build_index`/`post_mr_comment`/
+  `doctor`/`quickstart`). Onboarding wording no longer hides the one-time `clone`/`cd` as "1 command".
+
+---
+
 ## [1.16.1] — 2026-06-09 — body-length threshold drift fixed + guarded
 
 ### Fixed

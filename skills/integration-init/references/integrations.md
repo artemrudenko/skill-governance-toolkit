@@ -280,6 +280,98 @@ serena status                  # lists active LSP servers
 
 ---
 
+## secret-guard (opt-in PreToolUse hook)
+
+### What it is
+
+A standalone Python 3 (stdlib-only) **Claude Code PreToolUse hook** that inspects Bash command strings before they run and BLOCKS the obvious secret-read / secret-exfiltration patterns: reading `~/.aws/credentials`, `~/.ssh/id_*`, `~/.kube/config`, `.env` files, dumping secret-looking env vars (`printenv`/`env`), or piping any of those into a network tool (`curl`/`wget`/`nc`/…). It ships as a skill asset: `skills/integration-init/assets/secret-guard-hook.py`.
+
+> ⚠ **Claude-Code-only.** Hooks are a Claude Code mechanism. Copilot / Cursor / Codex / Gemini have no equivalent — this integration is NOT portable and MUST NOT be documented in the portable `AGENTS.md` body. It is offered only in the Claude-only path.
+>
+> ⚠ **Opt-in / not default.** Unlike CRG / repomix / serena, secret-guard is never installed automatically. The user must explicitly request it and register it in `.claude/settings.json` themselves (or confirm the skill may edit that file).
+
+### Honest framing — defense-in-depth, NOT a security boundary
+
+This hook is a **best-effort tripwire**, not a control surface. A determined skill bypasses it trivially (read the file from Python, encode the path, shell out indirectly). Installing it does **NOT** permit relaxing the SEC / SCR / HOOK audit gates — those remain authoritative. Never weaken a gate "because the hook will catch it." The same disclaimer is restated at the top of the hook script.
+
+### Why integrate
+
+A cheap extra layer for teams running semi-trusted skills: it stops the most common accidental or naive-malicious `cat ~/.aws/credentials | curl …` before the shell runs, surfacing a clear block message to the user. It pairs with — does not replace — the static audit gates.
+
+### Install commands
+
+There is no installer binary — the hook is already shipped with the skill. "Installing" means registering it in Claude Code's settings:
+
+1. Resolve the hook path inside your install (`skills/integration-init/assets/secret-guard-hook.py`; under a plugin/global install resolve `$SGT_ROOT` per `references/path-resolution.md`).
+2. Add a `hooks.PreToolUse` matcher to `.claude/settings.json` (project) or `~/.claude/settings.json` (global):
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT:-.}/skills/integration-init/assets/secret-guard-hook.py"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Adjust the `command` path to the absolute location of the shipped hook in your install. The hook reads the tool-call JSON on STDIN; exit 0 allows, exit 2 blocks.
+
+### Configure guarded paths
+
+The hook guards a sensible default set (`~/.aws/credentials`, `~/.ssh/id_*`, `~/.kube/config`, `.env`, `.netrc`, `.npmrc`, `.pgpass`, …). Extend it without editing the script via the `SGT_GUARD_PATHS` env var — colon- OR comma-separated path fragments:
+
+```bash
+export SGT_GUARD_PATHS="/etc/myapp/secret.token,/srv/keys/deploy.pem"
+```
+
+### Verify commands
+
+```bash
+# Should BLOCK (exit 2) and print a redacted message:
+echo '{"tool_name":"Bash","tool_input":{"command":"cat ~/.aws/credentials"}}' \
+  | python3 skills/integration-init/assets/secret-guard-hook.py; echo "exit=$?"
+
+# Should ALLOW (exit 0):
+echo '{"tool_name":"Bash","tool_input":{"command":"ls -la"}}' \
+  | python3 skills/integration-init/assets/secret-guard-hook.py; echo "exit=$?"
+```
+
+### Known caveats
+
+- **Bypassable by design** — see the honest-framing note above. Treat any "pass" as "did not match a known-bad pattern," never as "safe."
+- **Bash-only** — non-Bash tool calls (Read/Write/Edit) are not inspected; allowed unconditionally.
+- **False positives possible** — a legitimate `cat .env.example` for a literal example file may trip the `.env` matcher. Run such commands outside the agent, or scope `matcher` more tightly.
+- **Redaction is best-effort** — the hook masks matched secret substrings before logging, but does not redact arbitrary inline secrets it did not match on.
+
+### Documentation block template (Claude-only — NOT AGENTS.md)
+
+Because this is Claude-only, the doc block is injected into the **Claude-only path** (e.g. `CLAUDE.md` below the «Claude Code specifics» section), never into the portable `AGENTS.md` body. The marker keeps the legacy `skill-init:` prefix per repo convention.
+
+```markdown
+<!-- skill-init: integration:secret-guard BEGIN -->
+### secret-guard hook (active — Claude Code only, defense-in-depth)
+- **What:** PreToolUse Bash hook blocking obvious secret-read / exfil commands
+- **Path:** `skills/integration-init/assets/secret-guard-hook.py`
+- **Registered in:** `.claude/settings.json` → `hooks.PreToolUse` (matcher `Bash`)
+- **NOT a security boundary** — bypassable; does NOT relax SEC/SCR/HOOK gates
+- **Configure:** `SGT_GUARD_PATHS` env var (colon/comma-separated extra paths)
+- **Verify:** `echo '{"tool_name":"Bash","tool_input":{"command":"cat ~/.aws/credentials"}}' | python3 <path>/secret-guard-hook.py` → exit 2
+<!-- skill-init: integration:secret-guard END -->
+```
+
+There is no `code-reviewer.md` handoff for this integration — it is a passive runtime guard, not a dispatchable analysis target.
+
+---
+
 ## Future integrations (roadmap, not yet active)
 
 The following are out of scope for the initial init flow but tracked for future addition:

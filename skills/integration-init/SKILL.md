@@ -84,7 +84,9 @@ Full detection logic, prereq matrix, and state-snapshot schema → [`references/
 
 ### Phase 1 — Ask which tools to install
 
-If `WITH` input is provided, skip this phase and use that list. Otherwise ask a multi-select clarification across `code-review-graph` · `repomix` · `serena`. If user selects nothing → emit no-op report and exit cleanly.
+If `WITH` input is provided, skip this phase and use that list. Otherwise ask a multi-select clarification across `code-review-graph` · `repomix` · `serena` · `secret-guard`. If user selects nothing → emit no-op report and exit cleanly.
+
+**`secret-guard` is special — Claude-Code-only, opt-in, defense-in-depth.** Offer it only when the host runtime is Claude Code (hooks have no cross-tool equivalent). Present it with the honest framing: a best-effort PreToolUse tripwire blocking obvious secret-read / exfil Bash commands — **NOT a security boundary**, bypassable, and it does NOT relax the SEC/SCR/HOOK audit gates. On non-Claude hosts, do not list it. Full spec → [`references/integrations.md`](references/integrations.md) §secret-guard.
 
 ### Phase 2 — Per-tool configuration
 
@@ -106,7 +108,9 @@ Per-tool install command sequences (CRG variants, repomix, serena) → [`referen
 
 For each **successfully verified** integration (see Phase 5 verify-before-inject in Hard rules), insert a marker block into `AGENTS.md` (outer marker `<!-- skill-init: integrations BEGIN/END -->`) and `agents/code-reviewer.md` (outer marker `<!-- skill-init: handoffs BEGIN/END -->`). Inner per-integration markers `<!-- skill-init: integration:{tool} BEGIN/END -->` are append-or-update or remove (if deselected on re-run). Use `marker_block.py` (atomic write) for all edits.
 
-Full per-tool marker-block templates (AGENTS.md + code-reviewer handoffs, all three tools) → [`references/integrations.md`](references/integrations.md) §Documentation block template / §Handoff template.
+Full per-tool marker-block templates (AGENTS.md + code-reviewer handoffs, CRG / repomix / serena) → [`references/integrations.md`](references/integrations.md) §Documentation block template / §Handoff template.
+
+**`secret-guard` injects differently — Claude-only target, never `AGENTS.md`.** Hooks are not portable, so its doc block must NOT enter the portable `AGENTS.md` body (doing so would break the toolkit's own portability claim). Inject the `<!-- skill-init: integration:secret-guard BEGIN/END -->` block into the **Claude-only path** (e.g. `CLAUDE.md` below the «Claude Code specifics» section), and only after the user has registered the hook in `.claude/settings.json`. The hook ships as a skill asset (`assets/secret-guard-hook.py`) — no installer binary; register it via the `.claude/settings.json` `hooks.PreToolUse` snippet in [`references/integrations.md`](references/integrations.md) §secret-guard. There is no `code-reviewer.md` handoff (passive guard, not a dispatch target).
 
 ### Phase 5 — Verify install
 

@@ -91,6 +91,28 @@ class InstallBehaviorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Dry-run install plan", result.stdout)
 
+    def test_powershell_installer_real_project_install(self) -> None:
+        """Execute the NON-dry-run native PS install path (copy + marker upsert),
+        which the dry-run test exits before. Runs on a pwsh-capable runner (the
+        ubuntu CI 'windows-parity' job); skips locally when pwsh is absent."""
+        if not shutil.which("pwsh"):
+            self.skipTest("pwsh not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                ["pwsh", "-NoProfile", "-File", str(ROOT / "install.ps1"),
+                 "-YesDefault", "-TargetProject", tmp],
+                cwd=ROOT, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            target = Path(tmp)
+            self.assertTrue((target / "AGENTS.md").exists(), "PS install did not write AGENTS.md")
+            self.assertTrue((target / "skills").is_dir(), "PS install did not create skills/")
+            self.assertIn(
+                "skill-governance-toolkit: BEGIN",
+                (target / "AGENTS.md").read_text(encoding="utf-8"),
+                "PS install did not upsert the managed marker block",
+            )
+
 
 class RuntimeManifestTests(unittest.TestCase):
     """The runtime whitelist is the single source of truth for what ships."""
@@ -184,6 +206,26 @@ class InstallContentTests(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
             for needed in RUNTIME_SMOKE:
                 self.assertTrue(list(target.rglob(needed)), f"runtime script {needed} missing from install")
+
+    def test_filtered_install_tailors_agents_md_and_skills(self) -> None:
+        """A --skill subset install must (a) copy only the requested skill, and
+        (b) run generate_subset_agents_md.py so the installed AGENTS.md carries the
+        scoped notice and drops other skills' table rows. Covers the bash filter
+        wiring (resolve_skill_subset → subset generator → marker upsert)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            r = subprocess.run(
+                ["bash", str(ROOT / "scripts" / "install.sh"),
+                 "--claude", "--project", f"--target-project={target}", "--skill", "skill-find"],
+                cwd=ROOT, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            installed_skills = sorted(p.name for p in (target / "skills").iterdir() if p.is_dir())
+            self.assertEqual(installed_skills, ["skill-find"], "subset install copied the wrong skills")
+            agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn("Scoped install notice", agents)
+            self.assertIn("`skill-find`", agents)
+            self.assertNotIn("| `library-audit` |", agents)
 
     def test_security_data_files_ship_into_install(self) -> None:
         """references/*.json data files must land in an install.

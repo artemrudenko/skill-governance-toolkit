@@ -33,6 +33,28 @@ jobs:
       - name: Run release-ready audit engine gate
         run: python3 scripts/agent_audit.py audit-project . --profile release-ready --fail-on any --format json
 
+  windows-parity:
+    name: install.ps1 behavioral parity (pwsh)
+    # GitHub's ubuntu image ships pwsh, so the install.ps1 tests EXECUTE here
+    # (syntax parse + real non-dry-run install) instead of self-skipping. This
+    # closes the gap where the Windows installer's copy/marker/guard path — which
+    # can delete user skills — never ran in CI.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Confirm pwsh is available
+        run: pwsh -version
+
+      - name: install.ps1 syntax + behavioral install tests
+        run: python3 scripts/test_install.py
+
   docker:
     name: Docker MCP smoke test
     runs-on: ubuntu-latest

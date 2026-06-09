@@ -21,7 +21,9 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+# `|| true` so `set -e` doesn't abort silently here — we want the explicit,
+# actionable message below, not a bare non-zero exit, when run outside a repo.
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "$REPO_ROOT" ]]; then
   echo "✗ Not a git repository (no .git found). Initialize git first: git init"
   exit 1

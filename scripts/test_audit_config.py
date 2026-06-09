@@ -48,6 +48,10 @@ class BodyThresholdSingleSourceTests(unittest.TestCase):
     # and made reports stricter than the gate, so they must echo the config too.
     LIB_SKILL = ROOT / "skills" / "library-audit" / "SKILL.md"
     LIB_TEMPLATE = ROOT / "skills" / "library-audit" / "assets" / "output-template-detailed.md"
+    # AGENTS.md names "skill-evaluate 3.1" as a doc that must echo the config grid,
+    # but its SKILL.md 3.1 row was unguarded and drifted (omitted body_critical).
+    # Guard it so the rule covers the table it explicitly references.
+    EVAL_SKILL = ROOT / "skills" / "skill-evaluate" / "SKILL.md"
     AUDIT_SH = ROOT / "scripts" / "audit.sh"
 
     def _default(self, key: str) -> str:
@@ -60,7 +64,7 @@ class BodyThresholdSingleSourceTests(unittest.TestCase):
         budget = self._default("body_budget")   # 500
         critical = self._default("body_critical")  # 600
         for doc in (self.STRUCT, self.BUDGET, self.STANDARD,
-                    self.LIB_SKILL, self.LIB_TEMPLATE):
+                    self.LIB_SKILL, self.LIB_TEMPLATE, self.EVAL_SKILL):
             body = doc.read_text(encoding="utf-8")
             self.assertIn(budget, body, f"{doc.name} must echo body_budget={budget}")
             self.assertIn(critical, body, f"{doc.name} must echo body_critical={critical}")

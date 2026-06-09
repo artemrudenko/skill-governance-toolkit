@@ -35,6 +35,13 @@
 #   P24 — skill-evaluate sub-check catalog consistency (sync + info contract)
 #   P25 — gate-rule rationale coverage (why + checks-reference entry)
 #   P26 — filter_skills --info-summary aggregation
+#   P27 — secret-guard hook + requires_mcp backfill behavior
+#   P28 — install.ps1 PowerShell syntax parity (when pwsh is available)
+#   P29 — checkpoint resumable-run state behavior
+#   P30 — install-pre-commit-hook.sh behavior
+#   P31 — init.sh integration-bootstrap behavior
+#   P32 — generate_subset_agents_md.py subset rewriter behavior
+#   P33 — cli-reference flag coverage (argparse ⊆ docs)
 #
 # Exit 0 if all checks pass; non-zero on any failure (so this is CI-friendly).
 
@@ -569,6 +576,99 @@ if python3 "$ROOT/scripts/test_filter_skills.py" >/dev/null 2>&1; then
   pass "info-summary aggregation behaves"
 else
   fail "filter_skills info-summary tests failed — run: python3 scripts/test_filter_skills.py"
+fi
+
+# ── P27: secret-guard hook + requires_mcp backfill behavior ───────────────────
+# These two suites previously passed standalone but were never wired into CI,
+# so a regression in the opt-in PreToolUse secret-guard (a security asset) or in
+# build_index.parse_frontmatter / requires_mcp backfill would go unnoticed here.
+
+phase "P27 — Secret-guard hook + requires_mcp backfill behavior"
+if python3 "$ROOT/scripts/test_secret_guard.py" >/dev/null 2>&1; then
+  pass "secret-guard hook tests pass"
+else
+  fail "secret-guard tests failed — run: python3 scripts/test_secret_guard.py"
+fi
+if python3 "$ROOT/scripts/test_backfill_requires_mcp.py" >/dev/null 2>&1; then
+  pass "requires_mcp backfill tests pass (exercises build_index.parse_frontmatter)"
+else
+  fail "requires_mcp backfill tests failed — run: python3 scripts/test_backfill_requires_mcp.py"
+fi
+
+# ── P28: install.ps1 PowerShell syntax parity ────────────────────────────────
+# install.ps1 is the Windows-native install path and must stay parseable. P1
+# only bash -n's the *.sh scripts, so a PS1 syntax/logic regression on the
+# installer (which can delete user skills) would otherwise be invisible on a
+# default CI runner. We parse it via pwsh when present; absence is a warning,
+# not a failure (default Linux/macOS CI has no pwsh).
+
+phase "P28 — install.ps1 PowerShell syntax parity"
+if [[ ! -f "$ROOT/install.ps1" ]]; then
+  warn "install.ps1 not found — Windows install path unverified"
+elif command -v pwsh >/dev/null 2>&1; then
+  if pwsh -NoProfile -Command "\$errs = \$null; \$null = [System.Management.Automation.Language.Parser]::ParseFile('$ROOT/install.ps1', [ref]\$null, [ref]\$errs); exit ([int](\$errs.Count -gt 0))" >/dev/null 2>&1; then
+    pass "install.ps1 parses cleanly under pwsh"
+  else
+    fail "install.ps1 has PowerShell syntax errors — run: pwsh -Command Parser::ParseFile install.ps1"
+  fi
+else
+  warn "pwsh not on PATH — install.ps1 behavioral/syntax parity unverified on this runner"
+fi
+
+# ── P29: checkpoint resumable-run state behavior ─────────────────────────────
+# AGENTS.md declares the resumable-run state a core contract; this exercises the
+# full lifecycle (start/save-phase/list-resumable/complete/fail) + atomicity.
+
+phase "P29 — Checkpoint resumable-run state behavior"
+if python3 "$ROOT/scripts/test_checkpoint.py" >/dev/null 2>&1; then
+  pass "checkpoint lifecycle + atomicity tests pass"
+else
+  fail "checkpoint tests failed — run: python3 scripts/test_checkpoint.py"
+fi
+
+# ── P30: install-pre-commit-hook.sh behavior ─────────────────────────────────
+# This script writes a commit-blocking git hook and can overwrite an existing
+# one — behavioral coverage (creation, executability, foreign-hook backup,
+# uninstall scoping, not-a-repo guard) guards a destructive runtime path.
+
+phase "P30 — install-pre-commit-hook.sh behavior"
+if python3 "$ROOT/scripts/test_install_pre_commit_hook.py" >/dev/null 2>&1; then
+  pass "pre-commit hook installer tests pass"
+else
+  fail "pre-commit hook installer tests failed — run: python3 scripts/test_install_pre_commit_hook.py"
+fi
+
+# ── P31: init.sh integration-bootstrap behavior ──────────────────────────────
+# init.sh can remove marker blocks from AGENTS.md; this guards the dry-run/
+# advise-only no-op contract and the deselected-block removal path.
+
+phase "P31 — init.sh integration-bootstrap behavior"
+if python3 "$ROOT/scripts/test_init.py" >/dev/null 2>&1; then
+  pass "init.sh behavior tests pass"
+else
+  fail "init.sh tests failed — run: python3 scripts/test_init.py"
+fi
+
+# ── P32: generate_subset_agents_md.py subset rewriter behavior ────────────────
+# Runs at install time under --category/--tier/--skill to tailor AGENTS.md; an
+# untested regression would silently ship a misleading skill table.
+
+phase "P32 — generate_subset_agents_md.py subset rewriter"
+if python3 "$ROOT/scripts/test_generate_subset_agents_md.py" >/dev/null 2>&1; then
+  pass "subset AGENTS.md rewriter tests pass"
+else
+  fail "subset rewriter tests failed — run: python3 scripts/test_generate_subset_agents_md.py"
+fi
+
+# ── P33: cli-reference flag coverage ─────────────────────────────────────────
+# Forcing function: every long flag in sgt.py + agent_audit.py must be documented
+# in docs/cli-reference.md — catches the `--allow-dirty`-class doc drift.
+
+phase "P33 — cli-reference flag coverage (argparse ⊆ docs)"
+if python3 "$ROOT/scripts/test_cli_reference_coverage.py" >/dev/null 2>&1; then
+  pass "every main-CLI flag is documented in cli-reference.md"
+else
+  fail "cli-reference flag drift — run: python3 scripts/test_cli_reference_coverage.py"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

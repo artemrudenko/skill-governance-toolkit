@@ -5,7 +5,8 @@
 #   - Detects environment
 #   - Asks (interactively) or accepts CLI flags for tool selection
 #   - Runs native installers
-#   - Injects per-tool documentation between paired markers in AGENTS.md and agents/code-reviewer.md
+#   - Removes per-tool documentation blocks for DESELECTED tools from AGENTS.md and agents/code-reviewer.md
+#     (adding blocks for newly installed tools is delegated to the integration-init skill — see Main)
 #
 # Usage:
 #   ./scripts/init.sh                                              # full interactive
@@ -260,40 +261,12 @@ install_serena() {
   run serena init "--languages=$SERENA_LANGS"
 }
 
-# ── Marker-based documentation injection ───────────────────────────────────────
-
-inject_marker_block() {
-  local file="$1"; local marker_id="$2"; local content="$3"
-  if [[ ! -f "$file" ]]; then
-    say "  [warn] $file not found — skipping documentation injection"
-    return
-  fi
-  if $DRY_RUN; then
-    say "  [dry-run] would inject block '$marker_id' into $file"
-    return
-  fi
-  # Remove existing block if present, then insert
-  python3 - "$file" "$marker_id" "$content" <<'PYEOF'
-import sys, re
-path, marker_id, content = sys.argv[1], sys.argv[2], sys.argv[3]
-text = open(path).read()
-begin = f"<!-- skill-init: integration:{marker_id} BEGIN -->"
-end   = f"<!-- skill-init: integration:{marker_id} END -->"
-# Remove existing
-pattern = re.compile(re.escape(begin) + r'.*?' + re.escape(end), re.DOTALL)
-text = pattern.sub('', text)
-# Find outer marker block and insert
-outer_pattern = re.compile(r'(<!-- skill-init: integrations BEGIN -->)(.*?)(<!-- skill-init: integrations END -->)', re.DOTALL)
-m = outer_pattern.search(text)
-if m:
-    new_inner = m.group(2).rstrip() + "\n\n" + begin + "\n" + content + "\n" + end + "\n"
-    text = text[:m.start(2)] + new_inner + text[m.end(2):]
-    open(path, 'w').write(text)
-    print(f"  ✓ injected '{marker_id}' into {path}")
-else:
-    print(f"  ! outer marker block not found in {path} — manual insertion required")
-PYEOF
-}
+# ── Marker-block cleanup ───────────────────────────────────────────────────────
+# init.sh removes per-tool blocks for DESELECTED integrations. Adding blocks for
+# newly installed tools is delegated to the integration-init skill (host runtime,
+# needs references/integrations.md template content) — see the note in Main below.
+# (There is deliberately no bash inject helper here: it would duplicate marker
+# logic and drift from marker_block.py / the skill's injector.)
 
 remove_marker_block() {
   local file="$1"; local marker_id="$2"

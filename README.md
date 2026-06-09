@@ -51,8 +51,8 @@ python3 ~/tools/sgt/scripts/sgt.py init        # guided install + verify; undo w
 
 Pin a release for reproducibility:
 ```bash
-/plugin install skill-governance-toolkit@1.18.2    # Claude
-gemini extensions install ...@1.18.2                # Gemini
+/plugin install skill-governance-toolkit@1.19.0    # Claude
+gemini extensions install ...@1.19.0                # Gemini
 ```
 
 Everything else — hosts & scopes, selective install (`--category` / `--tier` / `--skill`),

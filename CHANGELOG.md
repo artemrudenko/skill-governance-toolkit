@@ -13,6 +13,52 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.19.0] — 2026-06-09 — documentation restructure (single-source + IA)
+
+A corpus-wide IA pass (duplication map, Diátaxis classification, visualization
+audit) approved by the maintainer. Content moved, not lost; REF-checked links
+throughout. Corpus shrinks ~1,800 lines with zero information loss.
+
+### Added
+- **docs/README.md** — the documentation hub: per-doc type/audience/read-when
+  table + four audience reading paths (the corpus had no index).
+- **docs/installation.md** — the single canonical install/upgrade/distribution
+  guide (extracted from README's 3-in-1).
+- Four new diagrams where flow-heavy docs had none: MR gate lifecycle
+  (gitlab-onboarding), two-layer detection model (checks-reference), scoping
+  layers `--changed-only` × `--fail-on-new` (cli-reference), install file-
+  ownership map (architecture).
+- Header contract (`> Audience · Type · Prerequisite`) + "See also" footer on
+  every doc; declared devops read order (onboarding → rollout-guide).
+
+### Changed
+- **README 771 → 187 lines** — a real entry point: overview, 60-second start,
+  skills tables, docs-hub link.
+- **user-guide en 1260 → 649 / ru 1291 → 663** — now the UC1–UC8 workflow
+  how-to layer; deep content lives in canonical docs (engine, onboarding,
+  cli/checks-reference, installation, checkpointing) behind links. The en/ru
+  parity surface shrinks ~50% permanently.
+- Single-owner rule extended from thresholds to procedures: kill-switch →
+  incident-runbook; floor list → checks-reference (sole SEVERITY_FLOOR doc
+  mirror); fail-closed/base-ref → cli-reference; resume defaults →
+  checkpointing.md; profiles → checks-reference.
+- contributing-rules.md merged into extending-checks.md; AGENTS.md rule 8
+  links the metainfo schema instead of restating it (always-on token saving);
+  checks-reference rule leads promoted to #### anchors.
+- configure_org.sh also rewrites docs/installation.md + QUICKSTART.md (the
+  sentinels moved); +2 tests.
+
+### Removed
+- docs/benchmarks.md (the CRG 8.2× caveat lives with the integration docs;
+  locally-verified properties live in architecture.md).
+- docs/plans/ leftover (completed 1.12.0 implementation plan).
+
+### Fixed
+- Six stale/wrong diagrams: library-audit phase order (P5 → P5.5), GitLab gate
+  flow redrawn for the delta gate, skill-evaluate sequence (3.7/3.8 + two-
+  branch safety gate), engine pipeline (REF/SCR/MCP/HOOK families), repo-map
+  false dispatch edge, `--fail-on` → `--fail-on-new` in gate examples.
+
 ## [1.18.2] — 2026-06-09 — functional-verification fixes
 
 A live execution test of the skills (planted-bad target + real targets, MCP

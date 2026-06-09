@@ -1,6 +1,6 @@
 {
   "name": "skill-governance-toolkit",
-  "version": "1.18.0",
+  "version": "1.18.1",
   "description": "Universal AGENTS.md + SKILL.md toolkit — six stable meta-skills, optional integrations, and a preview read-only agent-governance audit engine with CLI/MCP/Docker runners.",
   "contextFileName": "GEMINI.md"
 }

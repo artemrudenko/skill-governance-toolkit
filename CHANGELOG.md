@@ -13,6 +13,29 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.18.1] — 2026-06-09 — post-audit simplifications
+
+Closes the simplification recommendations accepted after the 1.18.0 audit.
+
+### Changed
+- **Dangerous-shell catalog rule IDs renamed DS1–DS9** (were D1–D9 — collided
+  with the quality dimensions D1–D9 consumed in the same execution context;
+  skill-evaluate 3.5's cap rule read the same ID with two meanings). Dimension
+  IDs are unchanged. Affects only skill/reference markdown — engine rule IDs
+  (SEC*/SKILL*/…) were never involved.
+- **Four frontmatter descriptions trimmed below the toolkit's own 600-char
+  advisory** (library-audit 906→587, skill-build-portable 856→599,
+  skill-evaluate 717→551, integration-init 720→576). Every quoted trigger
+  phrase preserved verbatim; `skills/INDEX.jsonl` regenerated.
+
+### Fixed
+- **post_mr_comment.py follows notes pagination** — on an MR with 100+ notes
+  created before the gate comment, the marker lookup used to stop at one page
+  and POST a duplicate on every pipeline run. It now walks pages until the
+  marker is found or the list ends.
+
+---
+
 ## [1.18.0] — 2026-06-09 — private-GitLab deployment + engine/install hardening
 
 Closes the confirmed findings of a six-dimension adversarially-verified repo audit

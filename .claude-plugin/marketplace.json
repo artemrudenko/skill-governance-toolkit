@@ -6,7 +6,7 @@
     "url": "https://github.com/REPLACE-ME-ORG/skill-governance-toolkit"
   },
   "metadata": {
-    "version": "1.18.1",
+    "version": "1.18.2",
     "description": "Internal marketplace for the Skill Governance Toolkit — six meta-skills (find / evaluate / compare / audit / build-portable / init), TypeScript code-reviewer sub-agent, and optional integrations (code-review-graph, repomix, serena)."
   },
   "plugins": [
@@ -14,7 +14,7 @@
       "name": "skill-governance-toolkit",
       "source": "./",
       "description": "Universal AGENTS.md + SKILL.md toolkit — meta-skills that operate on other skills, plus a TypeScript code-reviewer agent.",
-      "version": "1.18.1",
+      "version": "1.18.2",
       "skills": [
         "./skills/skill-find",
         "./skills/skill-evaluate",

@@ -13,6 +13,38 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.18.2] — 2026-06-09 — functional-verification fixes
+
+A live execution test of the skills (planted-bad target + real targets, MCP
+smoke, e2e install, CI YAML) confirmed the system works end-to-end and surfaced
+the gaps below. Test suite: 381 → 384.
+
+### Fixed
+- **security-spec DS catalog lagged the 1.18.0 engine broadening** — the
+  skills-layer lexical scan missed `rm -fr <system-path>` and `git push -f`
+  entirely (the safety gate fired only because of a co-planted secret). The
+  DS1–DS9 rows now mirror the engine's DANGEROUS_PATTERNS semantics, plus new
+  DS10 (force push), DS11 (`git reset --hard`), DS12 (approval/sandbox
+  bypass); the engine table is declared canonical.
+- **skill-evaluate**: 3.0 now requires `metainfo:` (was invisible to the skill
+  despite AGENTS.md rule 1 — only library-audit 5.5 enforced it); new
+  `REPORT_PATH` input + Phase 6 writes the detailed report file (executors
+  previously had to guess the file contract); `secret_hits` counting defined.
+- **library-audit executor frictions**: H1.4 call-site definition (a
+  `Clarification policy:` declaration is not a prompt), explicit security-scan
+  scope (all `.md` under skills/ + agents/), body-line counting includes
+  in-body `---` rules, «Mode contracts» → «Verbosity contracts».
+- **Docs**: RU skeleton gains the required `metainfo:` block; RU description
+  floor corrected to 80; `requires-python` relaxed to `>=3.8` (matching
+  QUICKSTART/doctor/install); EN score-trend maintenance note.
+
+### Added
+- Tests for two of the coverage re-map's top-5 dangerous untested paths: the
+  MCP `initialize` handshake (+ parse-error/method-not-found recovery) and the
+  `sgt gate` RED path (introduced high finding → non-zero exit).
+
+---
+
 ## [1.18.1] — 2026-06-09 — post-audit simplifications
 
 Closes the simplification recommendations accepted after the 1.18.0 audit.

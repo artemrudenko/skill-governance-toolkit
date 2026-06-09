@@ -212,6 +212,24 @@
       "description": "A relative in-repo link points at a file that does not exist. Fix the path or create the target."
     },
     {
+      "rule_id": "SCR001",
+      "severity": "high",
+      "title": "Env-var exfiltration heuristic in referenced script",
+      "description": "A script referenced by an asset reads environment variables AND contacts a network sink (urllib/requests/socket/curl/wget/fetch), or pipes a remote payload to a shell. This is a LOW-RECALL heuristic that raises attacker cost — it is NOT a guarantee. Absence of a finding does not mean the script is safe; review referenced scripts manually."
+    },
+    {
+      "rule_id": "SCR002",
+      "severity": "high",
+      "title": "Dangerous shell in referenced script",
+      "description": "A script referenced by an asset contains a destructive or unsafe shell construct (rm -rf, curl|sh, eval on argv, disk-wipe, force push, approval bypass). Referenced scripts execute with the agent's privileges, so the same dangerous-pattern baseline applies to their content."
+    },
+    {
+      "rule_id": "SCR003",
+      "severity": "high",
+      "title": "Secret reference in referenced script",
+      "description": "A script referenced by an asset embeds an inline secret value or credential-store path. Referenced scripts must reference credentials by documented environment variable names, never inline."
+    },
+    {
       "rule_id": "IGNORE001",
       "severity": "medium",
       "title": "Expired or invalid suppression",

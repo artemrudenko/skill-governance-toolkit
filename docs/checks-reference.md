@@ -112,6 +112,20 @@ Scans the **bodies** of skills, agents, and commands for unsafe references — m
 
 REF004 is deliberately conservative: anchor-only links (`#section`), `mailto:`, and paths under gitignored/generated dirs (`out/`, `node_modules/`, `dist/`, `build/`, `__pycache__/`, `.git/`) are excluded. REF001's existence check resolves against the toolkit install root, since `scripts/` lives there even when the audit root is a user project.
 
+### Referenced-script content rules (`SCR*`)
+
+Scans the **content** of in-repo scripts (`scripts/<name>.{py,sh,ps1}`) that an asset references. Threat model: an imported skill/agent/command links to a malicious helper script. A reference (REF*) check looks at the link; these checks open the referenced file and scan its source.
+
+**Scope (false-positive control):** only scripts that are **referenced by an in-scope asset body** (skill / agent / command) OR whose own path is in the `--changed-only` set are scanned — never a blanket sweep of `scripts/`. This is deliberate: the toolkit's own engine scripts legitimately read environment variables and make network calls (e.g. an MR-comment poster), and those must not be flagged unless an asset body actually references them. The `--changed-only` inclusion closes the transitive bypass where a changed malicious script is referenced only by an unchanged asset.
+
+| Rule | Severity | Detects | Why it matters |
+|---|---|---|---|
+| SCR001 | high | An env-read source (`os.environ`, `os.getenv`, `getenv`, `printenv`, `/proc/self/environ`, `process.env`) coexisting with a network sink (`urllib`, `requests`, `socket`, `smtplib`, `curl`, `wget`, `fetch`, `nc`) in the same referenced script, or a config-supplied `env_exfil` pattern match | Reading credentials from the environment and sending them to a network destination is the classic env-var exfiltration shape |
+| SCR002 | high | A destructive/unsafe shell construct in the referenced script's content (same dangerous-pattern baseline as SEC010/SKILL014: `rm -rf`, `curl\|sh`, `eval` on argv, disk-wipe, force push, approval bypass) | Referenced scripts execute with the agent's privileges, so their content faces the same dangerous-command bar as an asset body |
+| SCR003 | high | An inline secret value or credential-store path embedded in the referenced script | Referenced scripts must reference credentials by env-var name, never inline |
+
+> **SCR001 is a deliberately LOW-RECALL heuristic.** It raises an attacker's cost — it is **not** a guarantee. A clean SCR001 result does **not** mean the script is safe: obfuscated reads, indirect sinks, and data-flow it cannot see all evade it. Treat absence of an SCR001 finding as "no cheap signal found," never as proof of safety; always manually review referenced scripts. The dangerous (SCR002) pass runs first, and an `curl|sh`-style line it already reports is **not** double-reported as SCR001.
+
 ### Suppression-visibility rules (`IGNORE*`)
 
 The engine supports two finding-suppression mechanisms, both fail-safe — a broken
@@ -137,7 +151,7 @@ apply, so a silent self-approval bypass is impossible.
 Each new rule below, with whether it is a **floor** rule (severity cannot be
 downgraded; inline markers cannot suppress it) and whether it is
 **inline-suppressible** via `<!-- sgt-ignore: RULEID reason=... -->`. Floor set:
-`SKILL001/002/009/014/015`, `SEC001/002/010/011`, `REF002`.
+`SKILL001/002/009/014/015`, `SEC001/002/010/011`, `REF002`, `SCR001/002/003`.
 
 | Rule | Severity | Floor | Inline-suppressible |
 |---|---|---|---|
@@ -151,6 +165,9 @@ downgraded; inline markers cannot suppress it) and whether it is
 | REF002 | high | yes | no |
 | REF003 | info | no | yes |
 | REF004 | medium | no | yes |
+| SCR001 | high | yes | no |
+| SCR002 | high | yes | no |
+| SCR003 | high | yes | no |
 | IGNORE001 | medium | no | no (it *is* the suppression-failure record) |
 | IGNORE002 | medium | no | no |
 | IGNORE003 | info | no | no |

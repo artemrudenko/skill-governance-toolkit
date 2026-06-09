@@ -54,6 +54,9 @@ SEVERITY_FLOOR = {
     "SEC010": "high",
     "SEC011": "high",
     "REF002": "high",
+    "SCR001": "high",
+    "SCR002": "high",
+    "SCR003": "high",
 }
 # Upper bound on an org-supplied regex length — a coarse ReDoS / footgun guard.
 MAX_PATTERN_LENGTH = 500
@@ -94,6 +97,9 @@ ENGINE_RULE_IDS = {
     "REF002",
     "REF003",
     "REF004",
+    "SCR001",
+    "SCR002",
+    "SCR003",
     "IGNORE001",
     "IGNORE002",
     "IGNORE003",
@@ -1141,6 +1147,100 @@ def scan_references(
     return out
 
 
+# Env-read sources and network sinks for the SCR001 exfiltration heuristic. A script
+# that contains BOTH an env-source AND a network-sink is flagged once (low-recall —
+# it raises attacker cost, it does NOT prove exfiltration; absence ≠ safe).
+_ENV_SOURCE_RE = re.compile(
+    r"os\.environ(?:\.get)?|os\.getenv|\bgetenv\b|printenv|/proc/self/environ|process\.env",
+    re.I,
+)
+_NETWORK_SINK_RE = re.compile(
+    r"urllib|requests|\bsocket\b|smtplib|\bcurl\b|\bwget\b|\bfetch\b|\bnc\b",
+    re.I,
+)
+
+_SCR001_MESSAGE = (
+    "Env-read source and network sink coexist in a referenced script — possible "
+    "env-var exfiltration. LOW-RECALL heuristic: it raises attacker cost but is NOT "
+    "a guarantee; absence of this finding does not mean the script is safe."
+)
+_SCR001_SUGGESTION = (
+    "Manually review the referenced script: confirm no environment variable or "
+    "credential is sent to a network destination. This heuristic is advisory, not exhaustive."
+)
+
+
+def scan_script_content(script_path: Path, root: Path) -> list[Finding]:
+    """Scan the CONTENT of an in-repo script referenced by an asset for danger
+    (SCR002), secrets (SCR003), and env-var exfiltration (SCR001).
+
+    safe_read_asset enforces regular-file + size cap + within-root (None → skip).
+    The dangerous/secret scan reuses scan_security with prose=False (a script gets
+    no detection-context exemption). SCR001 is a deliberately LOW-RECALL heuristic:
+    it fires once when an env-read source and a network sink coexist (or a
+    config-supplied env_exfil pattern matches). A curl|sh / base64|sh line that the
+    dangerous pass already reports as SCR002 is NOT double-reported as SCR001."""
+    text = safe_read_asset(script_path, root)
+    if text is None:
+        return []
+
+    cfg = load_config()
+    out: list[Finding] = scan_security(
+        text, script_path, dangerous_id="SCR002", secret_id="SCR003", prose=False
+    )
+    # Lines already flagged by the dangerous pass (e.g. curl|sh) — dedupe so the
+    # env-exfil pass never double-reports the same line for the same construct.
+    dangerous_lines = {f.line for f in out if f.rule_id == "SCR002"}
+
+    seen_scr001_lines: set[int] = set()
+
+    def _emit_scr001(offset: int, message: str, suggestion: str) -> None:
+        line = line_for_offset(text, offset)
+        if line in dangerous_lines or line in seen_scr001_lines:
+            return  # already reported here (as SCR002 or a prior SCR001)
+        seen_scr001_lines.add(line)
+        out.append(finding("SCR001", script_path, line, message, suggestion))
+
+    # Org-extensible env-exfil patterns from config.
+    for label, pattern, suggestion in cfg["env_exfil_patterns"]:
+        for m in pattern.finditer(text):
+            _emit_scr001(m.start(), f"Env-var exfiltration pattern matched: {label}.", suggestion)
+
+    # Built-in heuristic: an env-read source coexisting with a network sink anywhere
+    # in the script. Reported once, at the env-source match line.
+    if _NETWORK_SINK_RE.search(text):
+        env_m = _ENV_SOURCE_RE.search(text)
+        if env_m is not None:
+            _emit_scr001(env_m.start(), _SCR001_MESSAGE, _SCR001_SUGGESTION)
+
+    return out
+
+
+# Markdown link or bare-script reference resolving to an in-repo script (py/sh/ps1).
+_REF_SCRIPT_RE = re.compile(r"(?:^|[^A-Za-z0-9._/-])((?:[A-Za-z0-9._/-]+/)?scripts/[A-Za-z0-9._-]+\.(?:py|sh|ps1))\b")
+
+
+def _referenced_scripts_in_body(text: str, asset_dir: Path, root: Path) -> set[str]:
+    """Return repo-relative posix paths of in-repo scripts referenced by an asset
+    body (markdown links + bare scripts/<name> mentions) that resolve to a real
+    regular file under the audit root."""
+    out: set[str] = set()
+    candidates = [m.group(1) for m in _MD_LINK_RE.finditer(text)]
+    candidates += [m.group(1) for m in _REF_SCRIPT_RE.finditer(text)]
+    for target in candidates:
+        if _is_external_url(target):
+            continue
+        path_part = target.split("#", 1)[0]
+        if not re.search(r"scripts/[A-Za-z0-9._-]+\.(?:py|sh|ps1)$", path_part):
+            continue
+        for base in (asset_dir, root, toolkit_root()):
+            candidate = (base / path_part)
+            if candidate.is_file() and is_within_root(candidate, root):
+                out.add(_norm_rel(as_posix(candidate.resolve()), str(root)))
+                break
+    return out
+
+
 def checks_for(asset_type_name: str, root: Path | None = None):
     """Return [(text, path)->[Finding]] callables for an asset type. scan_hidden_chars
     runs on EVERY non-skill type; the security scan runs on config/agent/hook/script;
@@ -1428,6 +1528,10 @@ def audit_project(
         if skill_text is not None:
             inline.update(_parse_inline_ignores(skill_text, _norm_rel(asset["path"], str(root_path))))
 
+    # Scripts referenced by in-scope asset bodies whose content must be content-scanned
+    # (SCR001-SCR003). Only skill/agent/command bodies carry meaningful script refs.
+    referenced_scripts: set[str] = set()
+
     for asset in discovery["assets"]:
         if asset["type"] == "skill":
             continue
@@ -1437,8 +1541,39 @@ def audit_project(
         if text is None:
             continue
         inline.update(_parse_inline_ignores(text, _norm_rel(asset["path"], str(root_path))))
+        if asset["type"] in ("agent", "command"):
+            referenced_scripts |= _referenced_scripts_in_body(
+                text, Path(asset["path"]).parent, root_path)
         for check in checks_for(asset["type"], root_path):
             findings.extend(check(text, Path(asset["path"])))
+
+    # Collect script references from in-scope SKILL.md bodies too (skills are the
+    # primary asset type that references helper scripts).
+    for asset in discovery["assets"]:
+        if asset["type"] != "skill":
+            continue
+        if not _in_scope(asset["relative_path"], changed_paths):
+            continue
+        skill_text = safe_read_asset(Path(asset["path"]), root_path)
+        if skill_text is not None:
+            referenced_scripts |= _referenced_scripts_in_body(
+                skill_text, Path(asset["path"]).parent, root_path)
+
+    # Transitive-bypass closure: also scan any script whose OWN rel path is in the
+    # changed set, even if referenced only by an UNCHANGED asset. Respect scope:
+    # when changed_paths is set, keep only referenced-by-in-scope-asset OR self-changed.
+    scripts_to_scan: set[str] = set(referenced_scripts)
+    if changed_paths is not None:
+        scripts_to_scan |= {
+            p for p in changed_paths
+            if re.search(r"(?:^|/)scripts/[A-Za-z0-9._-]+\.(?:py|sh|ps1)$", p)
+            or re.fullmatch(r"scripts/[A-Za-z0-9._-]+\.(?:py|sh|ps1)", p)
+        }
+
+    for rel in sorted(scripts_to_scan):
+        script_path = root_path / rel
+        for f in scan_script_content(script_path, root_path):
+            findings.append(f)
 
     ignore_doc = _load_ignore_doc(root_path)
     findings_dicts = _apply_ignores([asdict(f) for f in findings], ignore_doc, inline, root=str(root_path))

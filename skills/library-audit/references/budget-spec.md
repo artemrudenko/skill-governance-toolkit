@@ -25,7 +25,7 @@ Compute:
 1. Total words across always-on files.
 2. Multiply by `WORD_TO_TOKEN_RATIO`.
 3. Compare against the host's stated budget:
-   - Claude Code: 1% of context window (≈ 2000 tokens for 200K windows, with 8000-token fallback).
+   - Claude Code: 1% of context window (≈ 2000 tokens for 200K windows, with 8000-token fallback). Context only — no finding keys off this figure; B2.1/B2.2 below use the 8000/4000 thresholds.
    - Copilot, Codex, Gemini: documented separately; default budget assumed at 8000 tokens for skill-description routing.
 
 **Findings:**
@@ -51,7 +51,7 @@ annotation), re-measure with current files, and compute
 
 ## Pass 2.3 — Per-skill body length
 
-For each `SKILL.md`, count body lines (excluding the YAML frontmatter block, which ends at the second `---` delimiter).
+For each `SKILL.md`, count body lines (excluding the YAML frontmatter block, which ends at the second `---` delimiter). Body = every line strictly after that closing `---`, INCLUDING any in-body horizontal-rule `---` lines — only the frontmatter delimiters are excluded.
 
 **Thresholds are the single source of truth in the gate config**: defaults
 `body_budget: 500` / `body_critical: 600` are hardcoded in the config block of

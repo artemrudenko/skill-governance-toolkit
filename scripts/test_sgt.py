@@ -419,6 +419,28 @@ class GateTests(unittest.TestCase):
         run("add", "-A")
         run("commit", "-qm", "base")
 
+    def test_gate_blocks_on_introduced_high_finding(self) -> None:
+        # The RED path through the facade: an MR-style commit introducing a
+        # high finding (inline token in .mcp.json) must make `sgt gate` exit
+        # non-zero. Previously only the engine-level block (audit.sh P22) was
+        # tested; the facade's exit-code propagation was unverified.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            (root / ".mcp.json").write_text(
+                '{"mcpServers":{"x":{"token":"ghp_012345678901234567890123456789012345"}}}\n',
+                encoding="utf-8")
+            env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                   "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+            subprocess.run(["git", "-C", str(root), "add", "-A"],
+                           capture_output=True, env={**os.environ, **env})
+            subprocess.run(["git", "-C", str(root), "commit", "-qm", "introduce token"],
+                           capture_output=True, env={**os.environ, **env})
+            result = self.run_sgt("--root", str(root), "gate", "--base", "HEAD~1", cwd=root)
+            self.assertNotEqual(result.returncode, 0,
+                                "gate stayed green on an introduced high finding:\n"
+                                + result.stdout + result.stderr)
+
     def test_gate_fails_fast_on_dirty_working_tree(self) -> None:
         # A local `sgt gate` audits committed HEAD only (base...HEAD). An
         # uncommitted change is invisible, so a dirty tree must fail-fast rather

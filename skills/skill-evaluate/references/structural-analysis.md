@@ -18,6 +18,13 @@ land in the Phase 4 report and may cap specific D-scores.
 | `license` | License of the skill content (e.g. `MIT`) |
 | `portability` | Enum: `portable` / `hybrid` / `project-local` (alternative to `compatibility`) |
 
+**Required by this toolkit** (NOT by the universal standard — `name` and
+`description` remain the only universal-standard requirements):
+
+| Field | Requirement | Severity if missing |
+|---|---|---|
+| `metainfo` | Sub-block with `category` (non-empty array, closed vocab) and `tier` (`stable` / `preview` / `experimental` / `internal`) — required since 1.8.0; mirrors AGENTS.md rules 1 & 8 and engine rule `SKILL007` | 🟡 Major |
+
 **Forbidden fields** (universal portability anti-patterns):
 
 | Field | Why forbidden | Severity |
@@ -140,7 +147,7 @@ Cross-checks aligned with `library-audit` Phase 4.5 (but for a single skill):
 **Load patterns from the canonical catalog:** read `$SGT_ROOT/skills/library-audit/references/security-spec.md` — the single source of truth shared with `library-audit` Phase 5 (resolve `$SGT_ROOT` per `references/path-resolution.md`). If `library-audit` was not installed alongside `skill-evaluate`, this catalog is absent — see the SKILL.md "Phase 3.5 dependency" note (install both, or run reduced mode and log it). Apply all three pass-sets, **scoped to the one SKILL.md being evaluated**, NOT the whole library:
 
 - **Pass 3.5.1 — Secret patterns** (rule IDs S1–S10). See security-spec §Pass 5.1 for the regex catalog.
-- **Pass 3.5.2 — Dangerous shell patterns** (rule IDs DS1–DS9). See security-spec §Pass 5.2 for the catalog.
+- **Pass 3.5.2 — Dangerous shell patterns** (rule IDs DS1–DS12). See security-spec §Pass 5.2 for the catalog.
 - **Pass 3.5.3 — Credential file path reads** (rule IDs C1–C9). See security-spec §Pass 5.3 for the catalog.
 
 This skill body deliberately does NOT spell the patterns inline — that would (a) duplicate the canonical doc and drift over time, (b) trigger false positives when the auditor scans this very SKILL.md. All literal patterns live in security-spec.md (which is self-excluded from Phase 5 scanning).

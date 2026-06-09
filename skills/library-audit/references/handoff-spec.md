@@ -59,6 +59,10 @@ skill body, not the frontmatter.
    `Permit` nor `Forbid` and call sites exist → 🟡 H1.5 («role unclear —
    document the policy in Hard rules»).
 
+The `Clarification policy:` declaration line itself is NOT a prompt call
+site; H1.4 fires only when the policy forbids prompting AND an actual phase
+instruction prompts the user.
+
 **Findings:**
 - **H1.4** — Skill declares «no clarification» in Hard rules but uses it
   in body → 🔴 (self-contradiction)

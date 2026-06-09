@@ -179,7 +179,7 @@ remainder count.
 
 ---
 
-## Mode contracts
+## Verbosity contracts
 
 - **`terse`** — Layer 1 (roll-up) + Layer 3 (recommendations) only. Skip
   Layer 2 entirely.

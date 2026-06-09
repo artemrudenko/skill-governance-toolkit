@@ -145,10 +145,10 @@ Validates anti-patterns that break SKILL.md portability across Claude Code / Cop
 
 ### Phase 5 — Security validation
 
-Apply 3 atomic passes per `references/security-spec.md`. Scans **both** `SKILLS_DIRS` (every SKILL.md) **and** `AGENT_DIRS` (every agent .md).
+Apply 3 atomic passes per `references/security-spec.md`. Scans **both** `SKILLS_DIRS` (every `.md` under each skill — SKILL.md + `references/` + `assets/`) **and** `AGENT_DIRS` (every agent .md).
 
 1. **Pass 5.1 — Secret patterns:** regex sweep for vendor credential formats (OpenAI / Anthropic / Slack / GitHub / AWS / Google) + private keys + Bearer tokens; honor documentation-placeholder allowlist. Findings **S1–S10**.
-2. **Pass 5.2 — Dangerous shell patterns:** detect `rm -rf /`, `curl | bash`, `eval`, fork bombs, disk-wipe patterns; skip anti-pattern headings. Findings **DS1–DS9**.
+2. **Pass 5.2 — Dangerous shell patterns:** detect `rm -rf` on system paths, pipe-to-shell installers, `eval`, fork bombs, disk-wipe patterns, force push / `git reset --hard`, approval-bypass phrasing; skip anti-pattern headings. Findings **DS1–DS12**.
 3. **Pass 5.3 — Credential file path reads:** flag references to `~/.aws/credentials`, `~/.ssh/id_rsa`, `~/.gnupg/`, `.netrc`, etc.; distinguish documentation from skill behavior. Findings **C1–C9**.
 
 **Output discipline:** report MUST mask every matched secret (first 5 + last 3 chars; never print raw match). Full regex catalog, allowlists, and per-finding severity in the spec file.
@@ -189,7 +189,7 @@ Compose per-skill records `{skill, phase, rule, severity, evidence}`, apply `STR
 
 **Full output template — exact tables, worked example for «Token budget», report frontmatter schema — lives in `assets/output-template-detailed.md`. Read that file when producing the report.**
 
-### Mode contracts
+### Verbosity contracts
 
 - `terse` — Layer 1 only + Layer 3. Skip per-category blocks.
 - `standard` — previous v1.4 format (roll-up + per-phase findings tables with `{skill, rule, severity, evidence, fix}` columns, no «Why it matters» rationale).

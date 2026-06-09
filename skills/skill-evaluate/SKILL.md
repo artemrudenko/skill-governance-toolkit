@@ -62,6 +62,7 @@ metainfo:
 | `SKILL_TARGET` | string | required | Skill name (e.g. `skill-find`) or direct path to `SKILL.md` |
 | `REWRITE` | boolean | `false` | If true, produce an improved version of the skill |
 | `SAVE_SCORE` | boolean | `true` | If true, append result to `out/scores/index.jsonl` |
+| `REPORT_PATH` | path | `out/skill-evaluate/{SKILL_TARGET}-{YYYY-MM-DD}.md` | Where Phase 6 writes the detailed report file (per AGENTS.md path conventions) |
 | `VERBOSITY` | enum: `terse` / `standard` / `detailed` | `detailed` | Output depth. `terse` = summary table only. `standard` = previous (v1.4) format with rubric anchor + evidence. `detailed` = full 4-part per-dim blocks (What we check / What we found / Why it matters / How to raise the score). |
 
 ---
@@ -235,6 +236,10 @@ Append exactly one line to `out/scores/index.jsonl` — valid JSON, no trailing 
 ```json
 {"date":"YYYY-MM-DD","skill_name":"NAME","skill_path":"PATH","score":NN,"tier":"TIER","safety_gate_triggered":true|false,"lines":NNN,"pattern":"ReAct|ReWOO|Orchestrator-Workers|Evaluator-Optimizer|CodeAct|Procedural","has_frontmatter":true|false,"needs_references":true|false,"name_length":NN,"name_valid":true|false,"description_length":NNN,"description_in_sweet_spot":true|false,"description_answers_what":true|false,"description_answers_when":true|false,"forbidden_frontmatter":["allowed-tools","type"],"canonical_when_to_use":true|false,"activation_coherent":true|false,"has_scripts":true|false,"has_assets":true|false,"scripts_run_pattern":true|false|null,"dims":{"clarity":N,"completeness":N,"specificity":N,"examples":N,"constraints":N,"portability":N,"testability":N,"discoverability":N,"safety":N},"lexical_security":{"secret_hits":N,"dangerous_hits":N,"cred_path_hits":N,"d9_cap_applied":"none|2|3|4"},"writing_quality":{"language_mix_hits":N,"filler_hits":N,"duplicate_paragraph_hits":N,"long_prose_hits":N,"d1_cap_applied":"none|3|4"},"info_flags":{"negative_rule_placement":N},"top_issues":["issue1","issue2","issue3"]}
 ```
+
+**`secret_hits` counting:** one hit per `(line, rule)` pair — a token matching two rules on one line counts twice.
+
+Also write the detailed Phase 4 report to `REPORT_PATH` — in addition to the chat emission and the JSONL score line.
 
 Confirm the line was written. Do not rewrite existing lines.
 

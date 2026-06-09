@@ -1184,6 +1184,9 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
   | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:local
 ```
 
+Score persistence trend: `out/scores/index.jsonl` is the append-only log of
+every `skill-evaluate` run — track per-skill quality trends over time.
+
 ---
 
 ## Writing Rules for Skills

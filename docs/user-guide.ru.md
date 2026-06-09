@@ -293,12 +293,15 @@ flowchart TD
 ```markdown
 ---
 name: {entity}-{action}              # обязательное, ≤ 64 chars
-description: |                       # обязательное, 100–1024 chars
+description: |                       # обязательное, 80–1024 chars (sweet spot 100–400)
   {1–2 sentence WHAT}
   Use when: «trigger phrase 1», «trigger phrase 2», «trigger phrase 3».
   Output: {что скил производит}.
 compatibility: "Claude Code · ..."   # рекомендуется
 license: MIT                          # рекомендуется
+metainfo:                             # обязательное в этом toolkit (с 1.8.0)
+  category: [governance]              # closed-vocab, см. docs/skill-authoring-standard.md
+  tier: preview                       # stable · preview · experimental · internal
 ---
 
 # {Skill Title}

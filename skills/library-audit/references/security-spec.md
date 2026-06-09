@@ -4,9 +4,10 @@ Loaded by `library-audit` Phase 5 (and reused inline by `skill-evaluate` Phase 3
 libraries — detect hardcoded credentials, dangerous shell patterns, and
 references to sensitive credential paths.
 
-**Scope:** runs against **every** `SKILL.md` AND **every** `agents/*.md` file
-in the library. Both can leak secrets equally easily; both are read into
-agent context on every invocation.
+**Scope:** runs against **ALL `.md` files under `skills/`** — every
+`SKILL.md` plus everything in `references/` and `assets/` — AND **every**
+`agents/*.md` file in the library. All of them can leak secrets equally
+easily; all are read into agent context when their skill activates.
 
 **Mode:** detect-only (per ADR-008 validator contract). Never auto-redacts.
 
@@ -63,17 +64,28 @@ shell) AND inline backticked commands.
 
 > Renamed from D1–D9 in 1.18.1 to avoid colliding with the quality dimensions.
 
+The engine table — `DANGEROUS_PATTERNS` in `scripts/agent_audit.py` — is
+**canonical**; this table mirrors its semantics for the skills layer. Never
+edit one without the other.
+
 | ID | Pattern | Why dangerous | Severity |
 |---|---|---|---|
-| **DS1** | `rm -rf /` (with no further qualifier OR with `$VAR` that could be empty) | Catastrophic — wipes filesystem | 🔴 |
-| **DS2** | `curl\s+[^\|]+\|\s*(bash\|sh\|zsh)` | Pipe-to-shell from network — supply-chain attack vector | 🔴 |
-| **DS3** | `wget\s+[^\|]+\|\s*(bash\|sh)` | Same as DS2 | 🔴 |
+| **DS1** | `rm` with `-r` AND `-f` flag clusters in **any order, case, or split** (`-rf`, `-fr`, `-Rf`, `-r -f`) targeting bare `/`, a system top-level dir (`/etc` `/usr` `/var` `/home` `/Users` `/boot` `/bin` `/sbin` `/lib` `/lib64` `/opt` `/root` `/srv` `/System`), `~`, or an **unquoted** `$VAR` that could be empty | Catastrophic — wipes filesystem or home | 🔴 |
+| **DS2** | `curl\s+[^\|]+\|` piped to any shell sink `sh` / `bash` / `zsh` / `dash` / `ksh` / `fish`, with optional `sudo` before the sink | Pipe-to-shell from network — supply-chain attack vector | 🔴 |
+| **DS3** | `wget\s+[^\|]+\|` piped to a shell sink — same sink set and optional `sudo` as DS2 | Same as DS2 | 🔴 |
 | **DS4** | `eval\s+\$\(` or `eval\s+"\$\{` | Arbitrary code execution from variable | 🔴 |
 | **DS5** | `(?i)dd\s+if=/dev/(random\|urandom\|zero)\s+of=` | Disk wipe pattern | 🔴 |
 | **DS6** | `:\(\)\s*\{\s*:\|:\&\s*\}\;:` | Fork bomb | 🔴 |
-| **DS7** | `chmod\s+777` on paths outside `/tmp/` | World-writable on non-tmp | 🟡 |
+| **DS7** | `chmod` + `777` or `0777` (optional flags such as `-R` may sit between `chmod` and the mode) on paths outside `/tmp/` | World-writable on non-tmp | 🟡 |
 | **DS8** | `sudo\s+rm` (any form) | Privileged delete — needs explicit user consent | 🟡 |
 | **DS9** | `>\s*/dev/sda` or similar block device | Raw disk write | 🔴 |
+| **DS10** | `git push` followed by `--force` or `-f` anywhere on the command | Rewrites remote history — needs explicit user approval | 🟡 |
+| **DS11** | `git reset --hard` | Discards local work irrecoverably — do not normalize | 🟡 |
+| **DS12** | `bypass` / `skip` / `circumvent` phrased near `approval(s)` / `sandbox` / `permission(s)` | Instructs agents to defeat safety controls | 🔴 |
+
+**DS1 false-positive budget** (deliberately NOT matched): relative paths,
+`/tmp`, and quoted `"$VAR"` cleanup idioms — DS1 is a tripwire, not a
+boundary.
 
 **Allowlist:** these patterns are acceptable when they appear as
 **anti-pattern examples** under a heading containing `Don't`, `Anti-pattern`,
@@ -114,7 +126,7 @@ For each finding, the audit report must include:
 
 - File path (which SKILL.md or agent file)
 - Line number of the match
-- Phase + rule identifier (S1–S10 / DS1–DS9 / C1–C9)
+- Phase + rule identifier (S1–S10 / DS1–DS12 / C1–C9)
 - Severity emoji (🔴 / 🟡 / 🟢)
 - Quoted snippet (truncate to 120 chars, mask middle of any matched secret
   pattern: `sk-...REDACTED...XyZ`)

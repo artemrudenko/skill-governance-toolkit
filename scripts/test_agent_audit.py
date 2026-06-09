@@ -96,6 +96,42 @@ class AgentAuditBehaviorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
 
+    def test_mcp_initialize_handshake(self) -> None:
+        # Every MCP client session starts with `initialize` — a malformed reply
+        # bricks the whole server surface, so the handshake shape is pinned.
+        responses = self.run_mcp([
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        ])
+        self.assertEqual(len(responses), 1)
+        result = responses[0]["result"]
+        self.assertIn("protocolVersion", result)
+        self.assertEqual(result["serverInfo"]["name"], "agent-governance-audit")
+        self.assertIn("tools", result["capabilities"])
+
+    def test_mcp_unknown_method_and_parse_error(self) -> None:
+        # Unknown method → -32601 with the request id echoed back; a garbage
+        # line must not crash the loop — later valid requests still answer.
+        merged_env = os.environ.copy()
+        payload = (
+            json.dumps({"jsonrpc": "2.0", "id": 5, "method": "no/such-method", "params": {}})
+            + "\nnot-json-at-all\n"
+            + json.dumps({"jsonrpc": "2.0", "id": 6, "method": "tools/list", "params": {}})
+            + "\n"
+        )
+        result = subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "agent_governance_mcp.py")],
+            cwd=ROOT, env=merged_env, input=payload, text=True,
+            capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        responses = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+        by_id = {r.get("id"): r for r in responses}
+        self.assertEqual(by_id[5]["error"]["code"], -32601)
+        self.assertIn("tools", by_id[6].get("result", {}),
+                      "server died on the garbage line instead of recovering")
+        parse_errors = [r for r in responses if r.get("error", {}).get("code") == -32700]
+        self.assertTrue(parse_errors, "garbage line did not produce a -32700 parse error")
+
     def test_bad_skill_reports_findings_and_fail_on_high(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             skill_dir = Path(tmp) / "skills" / "bad"

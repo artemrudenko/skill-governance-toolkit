@@ -438,6 +438,83 @@ class GlobalScopeSafetyTests(unittest.TestCase):
             self.assertTrue((home / ".claude" / "skills" / "skill-find").exists())
 
 
+class ForceModeTests(unittest.TestCase):
+    """--force wipes the managed subdirs before copy (_pre_install_cleanup).
+
+    Documented blast radius (install.sh header + --help): for the claude host the
+    wiped subdirs are skills/ agents/ scripts/ references/ commands/ — in project
+    scope BOTH at TARGET_PROJECT root and under TARGET_PROJECT/.claude/; in global
+    scope under ~/.claude/. A user's own files INSIDE those subdirs are deleted
+    (that is the wipe contract); anything OUTSIDE them must survive untouched.
+    """
+
+    def _seed(self, *paths: Path) -> None:
+        for p in paths:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("USER CONTENT", encoding="utf-8")
+
+    def test_force_project_scope_wipes_managed_subdirs_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            # Inside the blast radius: managed subdirs in the host dir AND at root.
+            host_victim = target / ".claude" / "skills" / "some-user-skill" / "SKILL.md"
+            root_victim = target / "skills" / "another-user-skill" / "SKILL.md"
+            # Outside the managed subdirs — must survive a --force install.
+            host_survivor = target / ".claude" / "my-notes.md"
+            root_survivor = target / "my-notes.md"
+            self._seed(host_victim, root_victim, host_survivor, root_survivor)
+            r = subprocess.run(
+                ["bash", str(ROOT / "scripts" / "install.sh"), "--claude",
+                 "--project", f"--target-project={target}", "--force"],
+                cwd=ROOT, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            # Managed subdirs were wiped: user files inside them are gone.
+            self.assertFalse(host_victim.exists(),
+                             "--force did not wipe .claude/skills/ (documented blast radius)")
+            self.assertFalse(root_victim.exists(),
+                             "--force did not wipe project-root skills/ (documented blast radius)")
+            # ...and reinstalled with toolkit content.
+            self.assertTrue((target / ".claude" / "skills" / "skill-find" / "SKILL.md").exists(),
+                            "toolkit skill missing from .claude/ after --force reinstall")
+            self.assertTrue((target / "skills" / "skill-find" / "SKILL.md").exists(),
+                            "toolkit skill missing from project root after --force reinstall")
+            # Files OUTSIDE the managed subdirs survive verbatim.
+            for survivor in (host_survivor, root_survivor):
+                self.assertTrue(survivor.exists(),
+                                f"--force deleted {survivor} OUTSIDE the managed subdirs")
+                self.assertEqual(survivor.read_text(encoding="utf-8"), "USER CONTENT",
+                                 f"--force clobbered {survivor} OUTSIDE the managed subdirs")
+
+    def test_force_global_scope_wipes_managed_subdirs_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            skill_victim = home / ".claude" / "skills" / "some-user-skill" / "SKILL.md"
+            script_victim = home / ".claude" / "scripts" / "my-helper.py"
+            survivor = home / ".claude" / "my-notes.md"
+            self._seed(skill_victim, script_victim, survivor)
+            env = dict(os.environ, HOME=str(home))
+            r = subprocess.run(
+                ["bash", str(ROOT / "scripts" / "install.sh"),
+                 "--claude", "--global", "--force"],
+                cwd=ROOT, text=True, capture_output=True, check=False, env=env,
+            )
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            # Managed ~/.claude subdirs wiped (skills/ and scripts/ both managed).
+            self.assertFalse(skill_victim.exists(),
+                             "--force did not wipe ~/.claude/skills/ (documented blast radius)")
+            self.assertFalse(script_victim.exists(),
+                             "--force did not wipe ~/.claude/scripts/ (documented blast radius)")
+            # ...and reinstalled with toolkit content.
+            self.assertTrue((home / ".claude" / "skills" / "skill-find" / "SKILL.md").exists(),
+                            "toolkit skill missing from ~/.claude after --force reinstall")
+            # File OUTSIDE the managed subdirs survives verbatim.
+            self.assertTrue(survivor.exists(),
+                            "--force deleted ~/.claude/my-notes.md OUTSIDE the managed subdirs")
+            self.assertEqual(survivor.read_text(encoding="utf-8"), "USER CONTENT",
+                             "--force clobbered a file OUTSIDE the managed subdirs")
+
+
 class PowerShellParityTests(unittest.TestCase):
     """install.ps1 (Windows-native path) must match bash install-safety guards.
 

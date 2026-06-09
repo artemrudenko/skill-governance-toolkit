@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -442,6 +443,92 @@ class GateTests(unittest.TestCase):
                                   "--allow-dirty", cwd=root)
             # HEAD is clean of findings → gate passes (exit 0), guard skipped.
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class GlobalUninstallTests(unittest.TestCase):
+    """`sgt uninstall --scope global` rmtree's under Path.home() — the most
+    destructive sgt path. HOME is redirected to a temp dir (Path.home() honours
+    $HOME on POSIX) so the real home is never touched.
+
+    Toolkit-owned boundary (_plan_install_dir): skill dirs named in the toolkit's
+    skills/INDEX.jsonl + skills/INDEX.jsonl itself, .sgt-owned sidecar entries in
+    agents/references/commands/docs, scripts listed in runtime-manifest.txt, and
+    host root files (CLAUDE.md/AGENTS.md) only when byte-identical to source.
+    Everything else — the user's own skills and scripts — must be preserved.
+    """
+
+    def run_sgt(self, home: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        env = dict(os.environ, HOME=str(home))
+        return subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "sgt.py"), *args],
+            cwd=ROOT, text=True, capture_output=True, check=False, env=env,
+        )
+
+    def _install_global(self, home: Path) -> subprocess.CompletedProcess[str]:
+        env = dict(os.environ, HOME=str(home))
+        return subprocess.run(
+            ["bash", str(ROOT / "scripts" / "install.sh"), "--claude", "--global"],
+            cwd=ROOT, text=True, capture_output=True, check=False, env=env,
+        )
+
+    def _seed_user_content(self, home: Path) -> tuple[Path, Path]:
+        user_skill = home / ".claude" / "skills" / "my-own" / "SKILL.md"
+        user_script = home / ".claude" / "scripts" / "mine.py"
+        for p, body in ((user_skill, "USER SKILL"), (user_script, "print('mine')")):
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(body, encoding="utf-8")
+        return user_skill, user_script
+
+    def test_global_uninstall_removes_toolkit_keeps_user(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            r = self._install_global(home)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            user_skill, user_script = self._seed_user_content(home)
+            claude = home / ".claude"
+            # Sanity: toolkit content landed in ~/.claude.
+            self.assertTrue((claude / "skills" / "skill-find").is_dir())
+            self.assertTrue((claude / "references" / "copilot-tools.md").exists())
+            self.assertTrue((claude / "scripts" / "sgt.py").exists())
+            self.assertTrue((claude / "CLAUDE.md").exists())
+
+            result = self.run_sgt(home, "uninstall", "--scope", "global", "--yes")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            # Toolkit-owned content removed.
+            self.assertFalse((claude / "skills" / "skill-find").exists(),
+                             "toolkit skill not removed by global uninstall")
+            self.assertFalse((claude / "skills" / "INDEX.jsonl").exists(),
+                             "skills/INDEX.jsonl not removed by global uninstall")
+            self.assertFalse((claude / "references" / "copilot-tools.md").exists(),
+                             "toolkit reference not removed by global uninstall")
+            self.assertFalse((claude / "scripts" / "sgt.py").exists(),
+                             "runtime script not removed by global uninstall")
+            self.assertFalse((claude / "CLAUDE.md").exists(),
+                             "host-owned CLAUDE.md (byte-identical to source) not removed")
+            # User content preserved — the boundary that matters.
+            self.assertTrue(user_skill.exists(), "user's own skill deleted by global uninstall")
+            self.assertEqual(user_skill.read_text(encoding="utf-8"), "USER SKILL")
+            self.assertTrue(user_script.exists(), "user's own script deleted by global uninstall")
+            self.assertEqual(user_script.read_text(encoding="utf-8"), "print('mine')")
+
+    def test_global_uninstall_dry_run_removes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self.assertEqual(self._install_global(home).returncode, 0)
+            user_skill, user_script = self._seed_user_content(home)
+            claude = home / ".claude"
+            before = sorted(str(p.relative_to(home)) for p in home.rglob("*"))
+
+            result = self.run_sgt(home, "uninstall", "--scope", "global", "--dry-run")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertRegex(result.stdout, r"(?i)dry.run|would remove")
+
+            after = sorted(str(p.relative_to(home)) for p in home.rglob("*"))
+            self.assertEqual(before, after, "uninstall --dry-run modified the filesystem")
+            self.assertTrue((claude / "skills" / "skill-find").is_dir())
+            self.assertTrue(user_skill.exists())
+            self.assertTrue(user_script.exists())
 
 
 if __name__ == "__main__":

@@ -1,9 +1,38 @@
 #!/usr/bin/env python3
 """Behavior tests for the per-asset security pipeline, config, ignore-list, and delta gate."""
 from __future__ import annotations
-import json, tempfile, unittest
+import contextlib, json, os, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
 import agent_audit
+
+
+@contextlib.contextmanager
+def _temp_catalog_with_overlay(overlay_name: str, overlay_doc: dict):
+    """Yield a TEMP copy of the real rule catalog with `overlay_doc` written as a
+    sibling `audit-config.*.json`. Keeps tests hermetic: the engine globs overlay
+    files next to the rules path, so the overlay lives in a tempdir and the real
+    references/ dir is never written (no crash residue, no parallel-run races)."""
+    real = agent_audit.default_rules_path()
+    with tempfile.TemporaryDirectory() as tmp:
+        catalog = Path(tmp) / real.name
+        shutil.copyfile(real, catalog)
+        (Path(tmp) / overlay_name).write_text(json.dumps(overlay_doc), encoding="utf-8")
+        yield catalog
+
+
+def _engine_eval(snippet: str, catalog: Path) -> str:
+    """Run `snippet` in a fresh engine process pointed at `catalog` via
+    AGENT_GOVERNANCE_RULES_PATH — lru_cache is always cold, config is hermetic."""
+    proc = subprocess.run(
+        [sys.executable, "-c", snippet],
+        cwd=str(Path(__file__).resolve().parent),
+        env={**os.environ, "AGENT_GOVERNANCE_RULES_PATH": str(catalog)},
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise AssertionError(f"engine subprocess failed: {proc.stderr}")
+    return proc.stdout.strip()
+
 
 class _CacheSafe(unittest.TestCase):
     """load_config()/load_rule_catalog() are @lru_cache'd; clear between tests so
@@ -25,17 +54,17 @@ class ConfigNamespaceTests(_CacheSafe):
         self.assertEqual(cfg["scripts_manifest"], "scripts/runtime-manifest.txt")
 
     def test_overlay_file_extends_allowlists(self) -> None:
-        # Write an overlay next to the real catalog, clear cache, assert it merges.
-        import agent_audit as aa
-        refs = aa.default_rules_path().parent
-        overlay = refs / "audit-config.test-tmp.json"
-        overlay.write_text(json.dumps({"allowlists": {"domains": ["example.test"]}}), encoding="utf-8")
-        try:
-            aa.load_config.cache_clear()
-            self.assertIn("example.test", aa.load_config()["allow_domains"])
-        finally:
-            overlay.unlink(missing_ok=True)
-            aa.load_config.cache_clear()
+        # Overlay merges into the config — exercised against a TEMP catalog copy
+        # in a subprocess, so the real references/ dir is never touched.
+        with _temp_catalog_with_overlay(
+                "audit-config.test-tmp.json",
+                {"allowlists": {"domains": ["example.test"]}}) as catalog:
+            out = _engine_eval(
+                "import json, agent_audit; "
+                "print(json.dumps(sorted(agent_audit.load_config()['allow_domains'])))",
+                catalog,
+            )
+            self.assertIn("example.test", json.loads(out))
 
 
 class IgnoreListTests(_CacheSafe):
@@ -493,17 +522,19 @@ class McpConsistencyTests(_CacheSafe):
 
     def test_org_allowlist_server_not_unused_mcp002(self):
         # An org-allowlisted server that is never used must NOT trip MCP002.
-        agent_audit.load_config.cache_clear()
-        refs = agent_audit.default_rules_path().parent
-        overlay = refs / "audit-config.test-mcp.json"
-        overlay.write_text(json.dumps({"allowlists": {"mcp_servers": ["github"]}}), encoding="utf-8")
-        try:
-            agent_audit.load_config.cache_clear()
-            f = agent_audit.scan_mcp_consistency("no mcp here", {"metainfo": {}}, Path("skills/x/SKILL.md"))
-            self.assertEqual([x for x in f if x.rule_id == "MCP002"], [])
-        finally:
-            overlay.unlink(missing_ok=True)
-            agent_audit.load_config.cache_clear()
+        # Hermetic: overlay lives next to a TEMP catalog copy, engine runs in a
+        # subprocess — the real references/ dir is never written.
+        with _temp_catalog_with_overlay(
+                "audit-config.test-mcp.json",
+                {"allowlists": {"mcp_servers": ["github"]}}) as catalog:
+            out = _engine_eval(
+                "import json, agent_audit\n"
+                "from pathlib import Path\n"
+                "f = agent_audit.scan_mcp_consistency('no mcp here', {'metainfo': {}}, Path('skills/x/SKILL.md'))\n"
+                "print(json.dumps([x.rule_id for x in f]))\n",
+                catalog,
+            )
+            self.assertNotIn("MCP002", json.loads(out))
 
 
 class McpCommandTests(_CacheSafe):

@@ -20,7 +20,9 @@
 #
 # Files touched (relative to repo root):
 #   - .claude-plugin/marketplace.json   (owner.name + owner.url)
-#   - README.md                          (any "{your-org}" — install commands)
+#   - README.md                          (any "{your-org}" — short install pointer)
+#   - docs/installation.md               (the canonical install commands, since 1.19.0)
+#   - QUICKSTART.md                      (clone one-liner)
 #
 # Idempotent: re-running with the same args is a no-op.
 
@@ -116,15 +118,19 @@ update_file() {
 update_file "$REPO_ROOT/.claude-plugin/marketplace.json" "REPLACE-ME-ORG" "$ORG"
 update_file "$REPO_ROOT/.claude-plugin/marketplace.json" "{your-org}"     "$ORG"
 update_file "$REPO_ROOT/README.md"                       "{your-org}"     "$ORG"
+update_file "$REPO_ROOT/docs/installation.md"            "{your-org}"     "$ORG"
+update_file "$REPO_ROOT/QUICKSTART.md"                   "{your-org}"     "$ORG"
 
 if [[ -n "$HOST" ]]; then
   echo "Rewriting hardcoded github.com host → $HOST"
   update_file "$REPO_ROOT/.claude-plugin/marketplace.json" "github.com" "$HOST"
   update_file "$REPO_ROOT/README.md"                       "github.com" "$HOST"
+  update_file "$REPO_ROOT/docs/installation.md"            "github.com" "$HOST"
+  update_file "$REPO_ROOT/QUICKSTART.md"                   "github.com" "$HOST"
 fi
 
 echo ""
 echo "Done. Next steps:"
 echo "  · Verify: grep -rn 'REPLACE-ME-ORG\\|{your-org}' . --include='*.json' --include='*.md'"
 echo "  · Commit: git add -p && git commit -m 'chore: configure org → $ORG'"
-echo "  · Publish: see README § 'Distribution & installation'"
+echo "  · Publish: see docs/installation.md"

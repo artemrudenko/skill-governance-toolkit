@@ -52,6 +52,21 @@ git clone https://github.com/{your-org}/skill-governance-toolkit ~/tools/skill-t
 ```
 """
 
+INSTALLATION_FIXTURE = """\
+# Installation
+
+```
+git clone https://github.com/{your-org}/skill-governance-toolkit ~/tools/sgt
+codex plugins install {your-org}/skill-governance-toolkit
+```
+"""
+
+QUICKSTART_FIXTURE = """\
+# Quickstart
+
+`git clone https://github.com/{your-org}/skill-governance-toolkit`
+"""
+
 SENTINELS = ("REPLACE-ME-ORG", "{your-org}")
 
 
@@ -72,6 +87,12 @@ class ConfigureOrgTestBase(unittest.TestCase):
         self.marketplace.write_text(MARKETPLACE_FIXTURE, encoding="utf-8")
         self.readme = self.root / "README.md"
         self.readme.write_text(README_FIXTURE, encoding="utf-8")
+        docs_dir = self.root / "docs"
+        docs_dir.mkdir()
+        self.installation = docs_dir / "installation.md"
+        self.installation.write_text(INSTALLATION_FIXTURE, encoding="utf-8")
+        self.quickstart = self.root / "QUICKSTART.md"
+        self.quickstart.write_text(QUICKSTART_FIXTURE, encoding="utf-8")
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -101,6 +122,25 @@ class SubstitutionTests(ConfigureOrgTestBase):
         self.assertIn('"name": "acme-corp"', market)
         self.assertIn("https://github.com/acme-corp/skill-governance-toolkit", market)
         self.assertIn("acme-corp/skill-governance-toolkit", readme)
+
+    def test_substitution_covers_installation_and_quickstart(self) -> None:
+        # The install-command sentinels moved from README to docs/installation.md
+        # (and QUICKSTART always carried one) in the 1.19.0 docs restructure —
+        # the script must rewrite them there too.
+        result = self._run("acme-corp")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for path in (self.installation, self.quickstart):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("{your-org}", text, path.name)
+            self.assertIn("acme-corp/skill-governance-toolkit", text, path.name)
+
+    def test_host_rewrites_installation_and_quickstart(self) -> None:
+        result = self._run("--host", "gitlab.example.com", "acme-corp")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for path in (self.installation, self.quickstart):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("github.com", text, path.name)
+            self.assertIn("gitlab.example.com/acme-corp", text, path.name)
 
     def test_result_is_valid_json(self) -> None:
         self._run("acme-corp")

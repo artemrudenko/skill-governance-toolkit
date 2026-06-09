@@ -442,8 +442,8 @@ function Copy-OwnedTree {
 # Mirror of ensure_docs_copied() in scripts/install.sh — copy the toolkit's
 # top-level docs/*.md to the project root with conflict-renaming, tracking what
 # WE placed in docs/.sgt-owned so uninstall removes exactly ours and never the
-# user's own docs. Top-level .md only (matches bash; does NOT recurse into
-# docs/plans/).
+# user's own docs. Top-level .md only (matches bash; never recurses into
+# docs/ subdirectories).
 function Ensure-DocsCopied {
     param([string]$Dest)
 

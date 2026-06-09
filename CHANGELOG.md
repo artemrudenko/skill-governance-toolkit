@@ -13,6 +13,91 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.18.0] — 2026-06-09 — private-GitLab deployment + engine/install hardening
+
+Closes the confirmed findings of a six-dimension adversarially-verified repo audit
+(31 majors, 0 refuted). Theme: the toolkit is deployed from a **private GitLab
+instance** — the GitLab path is now first-class end-to-end, three false-green
+engine paths are closed, and every destructive installer path is test-pinned.
+Test suite: 327 → 379 tests.
+
+### 🔴 BREAKING (detection broadening — blocks on next `SGT_REF` bump)
+- **Dangerous-shell patterns** (floor rules SKILL014 / SEC010 / SCR002 / HOOK001)
+  now catch flag/spelling variants: `rm -fr` / `-Rf` / `-r -f`, system-dir and
+  `~`/`$VAR` targets, `chmod -R 0?777`, `git push -f`, pipe-to-`zsh|dash|ksh|fish`
+  and `| sudo bash`. Content that previously slipped past the literal-form regexes
+  will start blocking. The documented false-positive budget is unchanged
+  (relative paths, `/tmp`, quoted `"$VAR"` stay exempt).
+- **post_mr_comment.py refuses non-https API URLs** (the `PRIVATE-TOKEN` header
+  would travel cleartext) — exit 2; escape hatch `--allow-insecure-http`.
+- **install-pre-commit-hook.sh refuses to overwrite a foreign pre-commit hook**
+  (previously it printed "merge manually" and then clobbered it); `--force`
+  backs up and replaces.
+
+### Added
+- **Root `.gitlab-ci.yml`** — the toolkit's own self-CI (audit.sh P1–P36 + the
+  full test suite, pwsh windows-parity job, optional dind MCP smoke) for a
+  GitLab-hosted mirror. Previously the entire suite ran only in GitHub Actions.
+- **GitLab distribution path** in README/QUICKSTART: internal clone URL,
+  `configure_org.sh --host` (rewrites `github.com` in the manifests), deploy-token
+  / `glab` auth, Renovate-on-GitLab / scheduled-pipeline auto-bump.
+- **Consumer gate template auth**: `SGT_REPO` clones via
+  `gitlab-ci-token:${CI_JOB_TOKEN}@…` (no PAT; requires Token Access allowlist on
+  the toolkit project); `sgt ci-init --gitlab` re-injects the prefix into plain
+  https URLs. Job images parameterized (`SGT_IMAGE` / `SGT_NOOP_IMAGE`) for
+  internal registries; git is apt-installed only when the image lacks it.
+- **skill-find** now searches repo-root `./skills/` first and documents a GitLab
+  corporate-source fallback alongside the GitHub one.
+- Confusables table: Armenian, Cherokee and missing Greek lowercase homoglyphs.
+- Tests: `--force` blast radius (project+global), `sgt uninstall --scope global`,
+  rsync-less install (no GNU nesting), `--target-project` flag matrix,
+  configure_org.sh first behavioral suite (17), post_mr_comment PUT-update /
+  HTTPError-sanitization / env-contract, secret-guard case variants.
+
+### Fixed
+- **`--changed-only` false green**: git emits toplevel-relative paths; when the
+  audit root is a repo subdirectory the scope intersection was empty and the gate
+  exited 0 having audited nothing. Paths are now mapped to the audit root.
+- **Scalar `metainfo.category`** passed the engine but was intersected
+  by-character in `filter_skills` (skill silently dropped from `--category`
+  installs) and counted letter-by-letter in `doctor`. Normalized at the INDEX
+  writer + defensively in both readers.
+- **Installer correctness**: cp fallback copies directory contents identically on
+  BSD/GNU (GNU used to nest the source dir inside an existing dest); root
+  `install.sh` accepts `--target-project` (install.ps1 forwards it on
+  macOS/Linux — previously died on "Unknown flag"); leading `~` expanded in
+  `--target-project=`; extensionless conflict-renames match install.ps1.
+- **secret-guard hook**: secret-var matching is case-insensitive (lowercase
+  `$my_secret_token` no longer evades the exfil check); bare `env` matches only
+  in command position (no more false-block on `env/bin/activate`).
+- **Separation of duties**: `secret-guard-hook.py` is CODEOWNERS-gated and
+  enforced by audit.sh P18; CRG fork install pinned to an immutable commit
+  (override: `SGT_CRG_FORK_REF`); Dockerfile base image is a build ARG for
+  digest/internal-registry pinning.
+- **21 cross-file contradictions in the six skills** (counts, thresholds source,
+  phase ordering, prompting-policy violations, worked examples violating their
+  own decision rules, ranking double-count, naming cap ≤2 words unified).
+- **Docs accuracy**: gitlab-onboarding documents the block job's
+  suppression-hygiene steps + `SGT_FAIL_MODE`; cli-reference's validate-config
+  example runs again; floor lists match `SEVERITY_FLOOR` (incl. MCP001) in
+  checks-reference and the suppression runbook; en/ru threshold parity (EN gains
+  the numeric bands and decision criteria; RU's D9 gate note corrected);
+  Renovate example targets `skill-gate.yml`; "scaffolder intentionally absent"
+  claims removed in favor of `sgt new-skill`.
+- **Test hermeticity**: overlay tests run against a temp rule catalog via
+  `AGENT_GOVERNANCE_RULES_PATH` (no test writes into `references/` anymore);
+  secret-guard tests strip pre-set `SGT_*` env; audit.sh quotes its EXIT trap,
+  hardens P6 against `set -u` aborts, and drops the unquoted `$GIT` string.
+
+### Upgrade notes
+- Consumer repos: re-run `sgt ci-init --gitlab --force` (or hand-merge the
+  template) to pick up the CI_JOB_TOKEN clone and image variables, then add the
+  consumer project to the toolkit project's **Token Access** allowlist.
+- Re-audit your skill library before bumping `SGT_REF`: the broadened
+  dangerous-shell patterns may surface previously-missed floor findings.
+
+---
+
 ## [1.17.1] — 2026-06-09 — skill logical-review fixes
 
 Closes the confirmed findings from an adversarially-verified logical review of all

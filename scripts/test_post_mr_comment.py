@@ -89,6 +89,30 @@ class PostMrCommentTests(unittest.TestCase):
         self.assertIn("secret \\| injected", body)
         self.assertNotIn("\n| evil | row |", body)
 
+    def test_post_or_update_paginates_notes_lookup(self) -> None:
+        # The gate note is created early; on a busy MR it drifts past page 1 of
+        # the default 20-per-page descending notes window, so find_marker_note
+        # misses it and post_or_update POSTs a duplicate — breaking idempotency.
+        # The list GET must request a large ascending page so the early note is
+        # found deterministically.
+        calls: list[tuple[str, str]] = []
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append((method, url))
+            return [] if method == "GET" else None
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        try:
+            post_mr_comment.post_or_update(
+                "https://gitlab.example/api/v4", "1", "2", "tok", "body")
+        finally:
+            post_mr_comment._api_request = original
+
+        get_url = next(url for method, url in calls if method == "GET")
+        self.assertIn("per_page=100", get_url)
+        self.assertIn("sort=asc", get_url)
+
     def test_find_marker_note_returns_id(self) -> None:
         notes = [
             {"id": 10, "body": "unrelated review note"},

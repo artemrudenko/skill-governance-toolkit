@@ -122,6 +122,13 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
   to `P33` (two reviews flagged this across releases). New **P35** asserts the documented range
   equals the highest phase label, so adding a phase without updating the doc now fails the gate.
 
+### Fixed (post-review round 3 — minors)
+- **GitLab MR-note lookup now paginates (idempotency).** `post_or_update` listed the notes endpoint
+  with no params, so on a busy MR (>20 newer notes) the early-created gate note dropped off the
+  default descending page-1 window, `find_marker_note` missed it, and a duplicate note was POSTed.
+  The list GET now requests `per_page=100&order_by=created_at&sort=asc`, finding the early note
+  deterministically; covered by a new `test_post_mr_comment` case.
+
 ---
 
 ## [1.16.1] — 2026-06-09 — body-length threshold drift fixed + guarded

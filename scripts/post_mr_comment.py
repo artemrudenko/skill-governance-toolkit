@@ -243,7 +243,12 @@ def _api_request(url: str, token: str, method: str = "GET", payload: dict[str, A
 def post_or_update(api_url: str, project_id: str, mr_iid: str, token: str, body: str) -> str:
     """Create the gate note, or update the existing marker note in place."""
     base = f"{api_url.rstrip('/')}/projects/{project_id}/merge_requests/{mr_iid}/notes"
-    notes = _api_request(base, token) or []
+    # The gate note is created early in the MR's life. List notes oldest-first
+    # with a large page so find_marker_note locates it on page 1 — otherwise it
+    # drifts past the default 20-per-page descending window on a busy MR and we
+    # POST a duplicate, breaking the idempotency contract this module promises.
+    list_url = f"{base}?per_page=100&order_by=created_at&sort=asc"
+    notes = _api_request(list_url, token) or []
     existing = find_marker_note(notes, MARKER)
     if existing is not None:
         _api_request(f"{base}/{existing}", token, method="PUT", payload={"body": body})

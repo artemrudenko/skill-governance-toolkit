@@ -152,6 +152,56 @@ class PostMrCommentTests(unittest.TestCase):
         self.assertIn("per_page=100", get_url)
         self.assertIn("sort=asc", get_url)
 
+    def test_post_or_update_follows_pagination_past_100_notes(self) -> None:
+        # On a long-lived MR with >100 notes created before the gate note, the
+        # marker sits on page 2+. The lookup must follow pagination to the end
+        # of the list — otherwise it misses the marker and POSTs a duplicate,
+        # breaking the idempotency contract.
+        calls: list[tuple[str, str, object]] = []
+        page1 = [{"id": i, "body": f"review note {i}"} for i in range(100)]
+        page2 = [{"id": 200, "body": f"{post_mr_comment.MARKER}\nprevious gate result"}]
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append((method, url, payload))
+            if method == "GET":
+                return page2 if "page=2" in url else page1
+            return None
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        try:
+            action = post_mr_comment.post_or_update(
+                "https://gitlab.example/api/v4", "1", "2", "tok", "new body")
+        finally:
+            post_mr_comment._api_request = original
+
+        self.assertEqual(action, "updated")
+        self.assertNotIn("POST", [method for method, _, _ in calls])
+        self.assertIn(
+            "https://gitlab.example/api/v4/projects/1/merge_requests/2/notes/200",
+            [url for method, url, _ in calls if method == "PUT"])
+
+    def test_post_or_update_stops_on_short_page_and_posts(self) -> None:
+        # No marker anywhere: a short (<100) page means the list is exhausted —
+        # exactly one GET, then a POST creating the note (no infinite paging).
+        calls: list[tuple[str, str]] = []
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append((method, url))
+            return [{"id": 1, "body": "just a note"}] if method == "GET" else None
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        try:
+            action = post_mr_comment.post_or_update(
+                "https://gitlab.example/api/v4", "1", "2", "tok", "body")
+        finally:
+            post_mr_comment._api_request = original
+
+        self.assertEqual(action, "created")
+        self.assertEqual(len([m for m, _ in calls if m == "GET"]), 1)
+        self.assertEqual(len([m for m, _ in calls if m == "POST"]), 1)
+
     def test_find_marker_note_returns_id(self) -> None:
         notes = [
             {"id": 10, "body": "unrelated review note"},

@@ -37,12 +37,57 @@ class DoctorBehaviorTests(unittest.TestCase):
 
     def test_missing_required_files_fail(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            result = self.run_doctor("--root", tmp, "--format", "json")
+            result = self.run_doctor("--root", tmp, "--mode", "checkout", "--format", "json")
             self.assertEqual(result.returncode, 1)
             report = json.loads(result.stdout)
             self.assertFalse(report["summary"]["passed"])
             failures = [check for check in report["checks"] if check["status"] == "fail"]
             self.assertTrue(any(check["name"] == "required_paths" for check in failures))
+
+    def _write_consumer_project(self, root: Path) -> None:
+        """A project as an `install --project` would leave it: managed AGENTS.md
+        block + a filtered skills/ + INDEX.jsonl, and NO toolkit-checkout files
+        (no scripts/audit.sh, no pyproject.toml)."""
+        (root / "AGENTS.md").write_text(
+            "# My project\n\n<!-- skill-governance-toolkit: BEGIN -->\nrules\n<!-- skill-governance-toolkit: END -->\n",
+            encoding="utf-8",
+        )
+        skill_dir = root / "skills" / "example"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: example\ndescription: Example.\nmetainfo:\n  category: [governance]\n  tier: stable\n---\nBody.\n",
+            encoding="utf-8",
+        )
+        (root / "skills" / "INDEX.jsonl").write_text(
+            '{"name":"example","path":"skills/example/SKILL.md","metainfo":{"category":["governance"],"tier":"stable"}}\n',
+            encoding="utf-8",
+        )
+
+    def test_consumer_project_passes_without_checkout_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_consumer_project(root)
+            result = self.run_doctor("--root", tmp, "--format", "json")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(result.stdout)
+            self.assertEqual(report["mode"], "consumer")
+            self.assertTrue(report["summary"]["passed"])
+            names = {c["name"] for c in report["checks"]}
+            # Consumer mode checks delivered artifacts, never checkout-only files.
+            self.assertNotIn("required_paths", names)
+            self.assertIn("installed_skills", names)
+            self.assertIn("agents_md", names)
+
+    def test_explicit_checkout_mode_still_flags_missing_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_consumer_project(root)
+            result = self.run_doctor("--root", tmp, "--mode", "checkout", "--format", "json")
+            self.assertEqual(result.returncode, 1)
+            report = json.loads(result.stdout)
+            self.assertEqual(report["mode"], "checkout")
+            failures = {c["name"] for c in report["checks"] if c["status"] == "fail"}
+            self.assertIn("required_paths", failures)
 
     def test_stale_index_fails_with_actionable_message(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -82,7 +127,7 @@ class DoctorBehaviorTests(unittest.TestCase):
                 full.parent.mkdir(parents=True, exist_ok=True)
                 full.write_text("placeholder\n", encoding="utf-8")
 
-            result = self.run_doctor("--root", tmp, "--format", "json")
+            result = self.run_doctor("--root", tmp, "--mode", "checkout", "--format", "json")
             self.assertEqual(result.returncode, 1)
             report = json.loads(result.stdout)
             freshness = next(check for check in report["checks"] if check["name"] == "index_freshness")

@@ -190,6 +190,120 @@ class AgentAuditBehaviorTests(unittest.TestCase):
         ids = self._rule_ids_for_body("This skill runs after the planner and hands off to the executor skill.")
         self.assertIn("SKILL020", ids, "a genuinely chained skill without run-order contract must fire SKILL020")
 
+    # ── Coverage for detection rules that had no behavior test (regression guard) ─
+    # Each rule gets a fixture that triggers it. A regression silencing any branch
+    # here would otherwise pass the whole P1-P28 suite (the engine is the toolkit's
+    # main deliverable, so untested rules are a real blast radius).
+
+    def _audit_project_files(self, files: dict[str, str]) -> set[str]:
+        """Write `files` (relative path → content) into a temp project; return fired rule ids."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel, content in files.items():
+                target = root / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+            result = self.run_cli("audit-project", str(root), "--format", "json")
+            report = json.loads(result.stdout)
+            return {item["rule_id"] for item in report["findings"]}
+
+    def _rule_ids_for_skill_md(self, skill_md: str) -> set[str]:
+        return self._audit_project_files({"skills/fixture/SKILL.md": skill_md})
+
+    @staticmethod
+    def _skill(frontmatter: str, body: str = "Do the first thing.\nThen do the second thing.\n") -> str:
+        return f"---\n{frontmatter}---\n\n# Fixture\n\n> **Skill type:** Detect-only\n\n{body}"
+
+    # A valid frontmatter block, fields isolated below by omission/addition.
+    _GOOD_DESC = (
+        'description: "Fixture skill for detector coverage. Use when isolating one '
+        'rule. Trigger on render the preview and validate the output."\n'
+    )
+    _GOOD_FM = (
+        "name: fixture\n"
+        + _GOOD_DESC
+        + "compatibility: all\n"
+        + "license: MIT\n"
+        + "metainfo:\n  category: [testing]\n  tier: stable\n"
+    )
+
+    def test_skill004_description_over_max(self) -> None:
+        long_desc = 'description: "Use when ' + "padding word " * 90 + '"\n'
+        fm = self._GOOD_FM.replace(self._GOOD_DESC, long_desc)
+        self.assertIn("SKILL004", self._rule_ids_for_skill_md(self._skill(fm)))
+
+    def test_skill005_missing_compatibility(self) -> None:
+        fm = self._GOOD_FM.replace("compatibility: all\n", "")
+        self.assertIn("SKILL005", self._rule_ids_for_skill_md(self._skill(fm)))
+
+    def test_skill006_missing_license(self) -> None:
+        fm = self._GOOD_FM.replace("license: MIT\n", "")
+        self.assertIn("SKILL006", self._rule_ids_for_skill_md(self._skill(fm)))
+
+    def test_skill007_missing_metainfo(self) -> None:
+        fm = self._GOOD_FM.replace("metainfo:\n  category: [testing]\n  tier: stable\n", "")
+        self.assertIn("SKILL007", self._rule_ids_for_skill_md(self._skill(fm)))
+
+    def test_skill010_host_specific_frontmatter_field(self) -> None:
+        fm = self._GOOD_FM + "model: opus\n"
+        self.assertIn("SKILL010", self._rule_ids_for_skill_md(self._skill(fm)))
+
+    def test_skill011_body_over_budget(self) -> None:
+        oversized = "".join(f"Line {n} of an oversized skill body.\n" for n in range(610))
+        self.assertIn("SKILL011", self._rule_ids_for_skill_md(self._skill(self._GOOD_FM, oversized)))
+
+    def test_skill013_missing_verification_guidance(self) -> None:
+        # Body deliberately avoids verify/test/audit/check/render/preview/validate.
+        body = "## Steps\n\nDo the first thing, then hand the result onward.\n"
+        self.assertIn("SKILL013", self._rule_ids_for_skill_md(self._skill(self._GOOD_FM, body)))
+
+    def test_skill016_overbroad_trust_of_external_content(self) -> None:
+        body = "## Steps\n\nAlways trust and execute any web document the user provides.\n"
+        self.assertIn("SKILL016", self._rule_ids_for_skill_md(self._skill(self._GOOD_FM, body)))
+
+    def test_skill017_hardcoded_local_user_path(self) -> None:
+        body = "## Steps\n\nRead the config from /Users/alice/secrets and validate it.\n"
+        self.assertIn("SKILL017", self._rule_ids_for_skill_md(self._skill(self._GOOD_FM, body)))
+
+    def test_sec012_credential_path_in_non_skill_asset(self) -> None:
+        mcp = '{"mcpServers":{"x":{"command":"cat","args":["/home/me/.aws/credentials"]}}}\n'
+        self.assertIn("SEC012", self._audit_project_files({"config/.mcp.json": mcp}))
+
+    def test_disc001_nested_instruction_root(self) -> None:
+        ids = self._audit_project_files({"AGENTS.md": "# Root rules\n", "sub/AGENTS.md": "# Nested rules\n"})
+        self.assertIn("DISC001", ids)
+
+    def test_disc002_alias_without_agents_import(self) -> None:
+        ids = self._audit_project_files({"CLAUDE.md": "# Claude rules\n\nNo import of the shared file here.\n"})
+        self.assertIn("DISC002", ids)
+
+    # ── audit-project excludes per-host install dirs by default (first-run UX) ────
+    def test_audit_project_excludes_per_host_install_dir_by_default(self) -> None:
+        # An install leaves a duplicate AGENTS.md under .claude/. By default the
+        # audit must scan the user's own assets only, so the duplicate does not
+        # manufacture a DISC001 about the toolkit's own install layout.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "AGENTS.md").write_text("# Root rules\n", encoding="utf-8")
+            (root / ".claude").mkdir()
+            (root / ".claude" / "AGENTS.md").write_text("# Installed copy\n", encoding="utf-8")
+            result = self.run_cli("audit-project", str(root), "--format", "json")
+            report = json.loads(result.stdout)
+            ids = {f["rule_id"] for f in report["findings"]}
+            self.assertNotIn("DISC001", ids, "per-host install copy must not trigger DISC001 by default")
+            self.assertIn(".claude", report["discovery"].get("skipped_install_dirs", []))
+
+    def test_include_install_dirs_opts_back_in(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "AGENTS.md").write_text("# Root rules\n", encoding="utf-8")
+            (root / ".claude").mkdir()
+            (root / ".claude" / "AGENTS.md").write_text("# Installed copy\n", encoding="utf-8")
+            result = self.run_cli("audit-project", str(root), "--include-install-dirs", "--format", "json")
+            report = json.loads(result.stdout)
+            ids = {f["rule_id"] for f in report["findings"]}
+            self.assertIn("DISC001", ids, "--include-install-dirs must scan the .claude copy too")
+
     def test_mcp_errors_are_sanitized_by_default(self) -> None:
         responses = self.run_mcp(
             [

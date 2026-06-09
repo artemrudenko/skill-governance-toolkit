@@ -38,6 +38,14 @@ DEFAULT_THRESHOLDS = {
 }
 DEFAULT_QUALITY_EXCLUDE = {"SKILL015"}
 IGNORED_DIRS = {".git", ".skill-state", "out", "node_modules", "__pycache__"}
+# Per-host install targets. Under these, `audit-project` skips the asset types an
+# install *copies* (a duplicated AGENTS.md, vendored governance skills/agents) so a
+# fresh install doesn't manufacture findings about the toolkit's own layout. It
+# still audits SECURITY configs a user authors there (hooks in .claude/settings.json,
+# .mcp.json, plugin.json) — those are real attack surface, never install noise.
+# Opt back in fully with --include-install-dirs.
+PER_HOST_INSTALL_DIRS = {".claude", ".codex", ".gemini", ".cursor"}
+INSTALL_COPIED_ASSET_TYPES = {"instructions", "runtime-alias", "skill", "agent", "command", "prompt"}
 SEVERITIES = {"high", "medium", "low", "info"}
 SEVERITY_RANK = {"info": 0, "low": 1, "medium": 2, "high": 3}
 # Minimum severity for core safety/structural rules. A custom catalog may not
@@ -410,6 +418,15 @@ def should_skip(path: Path) -> bool:
     return any(part in IGNORED_DIRS for part in path.parts)
 
 
+def install_dir_for(path: Path, root: Path) -> str | None:
+    """The per-host install dir a path lives under (relative to root), or None."""
+    try:
+        parts = path.resolve().relative_to(root.resolve()).parts
+    except (OSError, ValueError):
+        return None
+    return parts[0] if parts and parts[0] in PER_HOST_INSTALL_DIRS else None
+
+
 def is_within_root(path: Path, root: Path) -> bool:
     try:
         path.resolve().relative_to(root.resolve())
@@ -563,9 +580,10 @@ def asset_type(path: Path, root: Path) -> str | None:
     return None
 
 
-def discover_agent_assets(root: str | Path = ".") -> dict[str, Any]:
+def discover_agent_assets(root: str | Path = ".", *, include_install_dirs: bool = True) -> dict[str, Any]:
     root_path = Path(root).expanduser().resolve()
     assets: list[AgentAsset] = []
+    skipped_install_dirs: set[str] = set()
     if not root_path.exists():
         raise FileNotFoundError(f"Root not found: {root_path}")
 
@@ -577,6 +595,13 @@ def discover_agent_assets(root: str | Path = ".") -> dict[str, Any]:
         kind = asset_type(path, root_path)
         if kind is None:
             continue
+        # Skip install-copied governance content under a per-host dir, but keep
+        # auditing security configs (hooks / mcp-config / plugin-config) there.
+        if not include_install_dirs and kind in INSTALL_COPIED_ASSET_TYPES:
+            host_dir = install_dir_for(path, root_path)
+            if host_dir is not None:
+                skipped_install_dirs.add(host_dir)
+                continue
         try:
             text = read_text(path)
             line_count = len(text.splitlines())
@@ -597,6 +622,7 @@ def discover_agent_assets(root: str | Path = ".") -> dict[str, Any]:
         "generated_at": utc_now(),
         "counts": counts,
         "assets": [asdict(asset) for asset in assets],
+        "skipped_install_dirs": sorted(skipped_install_dirs),
     }
 
 
@@ -1789,9 +1815,10 @@ def audit_project(
     root: str | Path = ".",
     profile: str = "release-ready",
     changed_paths: set[str] | None = None,
+    include_install_dirs: bool = False,
 ) -> dict[str, Any]:
     root_path = Path(root).expanduser().resolve()
-    discovery = discover_agent_assets(root_path)
+    discovery = discover_agent_assets(root_path, include_install_dirs=include_install_dirs)
     findings: list[Finding] = []
     skill_reports: list[dict[str, Any]] = []
     # Inline sgt-ignore markers, keyed by normalized rel path + line, collected
@@ -2461,6 +2488,7 @@ def main(argv: list[str] | None = None) -> int:
     p_project.add_argument("--base", default="origin/main", help="Git ref to diff against when --changed-only or --fail-on-new is set.")
     p_project.add_argument("--whole-tree", action="store_true", help="Impact-report mode: force a FULL audit (ignore --changed-only/delta), add a per-rule histogram, and never block (always exit 0).")
     p_project.add_argument("--record", action="store_true", help="Append one JSON line per finding to out/security/findings.jsonl under the audited root (opt-in observability).")
+    p_project.add_argument("--include-install-dirs", action="store_true", help="Also audit per-host install directories (.claude/.codex/.gemini/.cursor). Excluded by default so a fresh install's copied assets don't manufacture findings.")
 
     p_suppress = sub.add_parser("list-suppressions", help="List central + inline suppressions and flag expired/expiring ones.")
     p_suppress.add_argument("--format", choices=["text", "json"], default=argparse.SUPPRESS)
@@ -2505,7 +2533,8 @@ def main(argv: list[str] | None = None) -> int:
             # and never block — a platform owner measures blast radius here before
             # flipping --fail-on-new across repos.
             if args.whole_tree:
-                report = audit_project(args.root, profile=args.profile, changed_paths=None)
+                report = audit_project(args.root, profile=args.profile, changed_paths=None,
+                                       include_install_dirs=args.include_install_dirs)
                 by_rule: dict[str, int] = {}
                 for f in report.get("findings") or []:
                     rid = str(f.get("rule_id", ""))
@@ -2541,7 +2570,18 @@ def main(argv: list[str] | None = None) -> int:
                         file=sys.stderr,
                     )
                     return 2
-            report = audit_project(args.root, profile=args.profile, changed_paths=changed_paths)
+            report = audit_project(args.root, profile=args.profile, changed_paths=changed_paths,
+                                    include_install_dirs=args.include_install_dirs)
+
+            # Non-silent coverage note: if we skipped a host install dir, say so and
+            # name the opt-in flag, so the exclusion never reads as "audited clean".
+            skipped = report.get("discovery", {}).get("skipped_install_dirs") or []
+            if skipped and not args.include_install_dirs:
+                print(
+                    f"agent_audit: skipped per-host install dir(s) {', '.join(skipped)} — "
+                    "pass --include-install-dirs to audit assets you author there.",
+                    file=sys.stderr,
+                )
 
             # Delta gate: tag each HEAD finding `introduced` and gate only on the
             # introduced subset. --fail-on-new limits WHICH findings block;

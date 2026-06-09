@@ -51,12 +51,49 @@ DECISIONS = [
 ]
 
 
+# Commands every install can run (the CLI facade ships into a consumer project).
+COMMON_COMMANDS = [
+    {"label": "Check local readiness", "command": "python3 scripts/sgt.py doctor"},
+    {"label": "Show this guide", "command": "python3 scripts/sgt.py quickstart"},
+]
+# Checkout-only commands: install.sh and the self-audit runner (audit.sh) are NOT
+# delivered into a consumer install, so surfacing them there points at nothing.
+CHECKOUT_COMMANDS = [
+    {"label": "Install interactively", "command": "./install.sh"},
+    {"label": "Preview install plan", "command": "./install.sh --dry-run"},
+    {"label": "Install Claude project defaults non-interactively", "command": "./install.sh --yes-default"},
+    {"label": "Run full self-audit", "command": "python3 scripts/sgt.py audit"},
+]
+# Consumer-only commands: the gate and the installed-skill list are the useful
+# next actions once the toolkit is in your project.
+CONSUMER_COMMANDS = [
+    {"label": "List installed skills", "command": "python3 scripts/sgt.py skills"},
+    {"label": "Run the pre-merge gate", "command": "python3 scripts/sgt.py gate --base main"},
+]
+
+
 def build_quickstart(root: Path) -> dict[str, Any]:
     doctor = run_doctor(root)
-    if doctor["summary"]["fail"]:
+    mode = doctor.get("mode", "checkout")
+    # Absolute path to this facade so suggested commands work from any CWD, not
+    # only from a toolkit checkout (relative `scripts/sgt.py` would not resolve).
+    sgt_cli = Path(__file__).resolve().parent / "sgt.py"
+    uninstalled = doctor.get("installed") is False
+    if doctor["summary"]["fail"] and mode == "consumer" and uninstalled:
+        next_step = {
+            "label": "Toolkit is not installed in this directory — run the installer, "
+                     "or cd into the project where you installed it",
+            "command": f"python3 {sgt_cli} init",
+        }
+    elif doctor["summary"]["fail"]:
         next_step = {
             "label": "Fix health check failures first",
-            "command": "python3 scripts/doctor.py",
+            "command": f"python3 {sgt_cli} doctor",
+        }
+    elif mode == "consumer":
+        next_step = {
+            "label": "Invoke a skill by its trigger phrase",
+            "command": 'ask your agent: «is there a skill for evaluating prompts?»',
         }
     else:
         next_step = {
@@ -64,36 +101,13 @@ def build_quickstart(root: Path) -> dict[str, Any]:
             "command": "./install.sh",
         }
 
+    common = COMMON_COMMANDS + (CHECKOUT_COMMANDS if mode == "checkout" else CONSUMER_COMMANDS)
     return {
         "root": doctor["root"],
+        "mode": mode,
         "doctor_summary": doctor["summary"],
         "next_step": next_step,
-        "common_commands": [
-            {
-                "label": "Check local readiness",
-                "command": "python3 scripts/sgt.py doctor",
-            },
-            {
-                "label": "Show this guide",
-                "command": "python3 scripts/sgt.py quickstart",
-            },
-            {
-                "label": "Install interactively",
-                "command": "./install.sh",
-            },
-            {
-                "label": "Preview install plan",
-                "command": "./install.sh --dry-run",
-            },
-            {
-                "label": "Install Claude project defaults non-interactively",
-                "command": "./install.sh --yes-default",
-            },
-            {
-                "label": "Run full self-audit",
-                "command": "python3 scripts/sgt.py audit",
-            },
-        ],
+        "common_commands": common,
         "decision_tree": DECISIONS,
     }
 
@@ -102,6 +116,7 @@ def print_text(report: dict[str, Any]) -> None:
     summary = report["doctor_summary"]
     print("Skill Governance Toolkit quickstart")
     print(f"Root: {report['root']}")
+    print(f"Mode: {report.get('mode', 'checkout')}")
     print(f"Health: {summary['ok']} ok, {summary['warn']} warn, {summary['fail']} fail")
     print("")
     print(f"Next: {report['next_step']['label']}")

@@ -451,6 +451,40 @@ function Copy-OwnedTree {
     ($nowOwned | Sort-Object) -join "`n" | Set-Content -Path $ownedFile -Encoding UTF8
 }
 
+# Mirror of ensure_docs_copied() in scripts/install.sh — copy the toolkit's
+# top-level docs/*.md to the project root with conflict-renaming, tracking what
+# WE placed in docs/.sgt-owned so uninstall removes exactly ours and never the
+# user's own docs. Top-level .md only (matches bash; does NOT recurse into
+# docs/plans/).
+function Ensure-DocsCopied {
+    param([string]$Dest)
+
+    $srcDocs = Join-Path $RepoRoot 'docs'
+    if (-not (Test-Path $srcDocs)) { return }
+    New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+    $owned = New-Object System.Collections.Generic.List[string]
+
+    Get-ChildItem -Path $srcDocs -Filter '*.md' -File | ForEach-Object {
+        $base = $_.Name
+        $destFile = Join-Path $Dest $base
+        if (-not (Test-Path $destFile)) {
+            Copy-Item -Force $_.FullName $destFile
+            $owned.Add($base)
+        } elseif ((Get-FileHash $_.FullName).Hash -eq (Get-FileHash $destFile).Hash) {
+            $owned.Add($base)                       # content-identical — we own it
+        } else {
+            # Conflict — rename OURS, never touch the user's differing doc.
+            $renamed = "$([System.IO.Path]::GetFileNameWithoutExtension($base)).skill-governance-toolkit.md"
+            Copy-Item -Force $_.FullName (Join-Path $Dest $renamed)
+            $owned.Add($renamed)
+            Write-Warning "conflict: user has docs/$base — saved ours as docs/$renamed"
+        }
+    }
+    if ($owned.Count -gt 0) {
+        ($owned | Sort-Object) -join "`n" | Set-Content -Path (Join-Path $Dest '.sgt-owned') -Encoding UTF8
+    }
+}
+
 function Install-Host {
     param([hashtable]$Target, [string]$ScopePrefix, [string]$Mode)
 
@@ -523,7 +557,21 @@ if ($scopeChoice -eq '2' -and -not $selfInstall) {
     Copy-OwnedTree (Join-Path $RepoRoot 'references') (Join-Path $scopePrefix 'references')
     Copy-RuntimeScripts (Join-Path $scopePrefix 'scripts') $mode
     Copy-OwnedTree (Join-Path $RepoRoot 'commands') (Join-Path $scopePrefix 'commands')
-    Write-Host "  · root layout ready: skills/, agents/, references/, scripts/, commands/"
+
+    # Root manifests so Codex/Claude/Gemini marketplace discovery works at the
+    # project root — mirror of scripts/install.sh ensure_project_root_canonical_dirs.
+    New-Item -ItemType Directory -Force -Path (Join-Path $scopePrefix '.codex-plugin')  | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $scopePrefix '.claude-plugin') | Out-Null
+    Copy-Item -Force (Join-Path $RepoRoot '.codex-plugin/plugin.json')       (Join-Path $scopePrefix '.codex-plugin/plugin.json')
+    Copy-Item -Force (Join-Path $RepoRoot '.claude-plugin/plugin.json')      (Join-Path $scopePrefix '.claude-plugin/plugin.json')
+    Copy-Item -Force (Join-Path $RepoRoot '.claude-plugin/marketplace.json') (Join-Path $scopePrefix '.claude-plugin/marketplace.json')
+    Copy-Item -Force (Join-Path $RepoRoot 'gemini-extension.json')           (Join-Path $scopePrefix 'gemini-extension.json')
+
+    # Project docs (mirror of bash ensure_docs_copied) — the dry-run plan above
+    # promises these; without this the Windows-native path silently skipped them.
+    Ensure-DocsCopied -Dest (Join-Path $scopePrefix 'docs')
+
+    Write-Host "  · root layout ready: skills/, agents/, references/, scripts/, commands/, docs/, manifests/"
     Write-Host ""
 }
 

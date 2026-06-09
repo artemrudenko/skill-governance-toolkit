@@ -36,7 +36,7 @@
 #   P25 — gate-rule rationale coverage (why + checks-reference entry)
 #   P26 — filter_skills --info-summary aggregation
 #   P27 — secret-guard hook + requires_mcp backfill behavior
-#   P28 — install.ps1 PowerShell syntax parity (when pwsh is available)
+#   P28 — install.ps1 PowerShell syntax (pwsh) + docs/manifest content parity (always)
 #   P29 — checkpoint resumable-run state behavior
 #   P30 — install-pre-commit-hook.sh behavior
 #   P31 — init.sh integration-bootstrap behavior
@@ -620,7 +620,23 @@ elif command -v pwsh >/dev/null 2>&1; then
     fail "install.ps1 has PowerShell syntax errors — run: pwsh -Command Parser::ParseFile install.ps1"
   fi
 else
-  warn "pwsh not on PATH — install.ps1 behavioral/syntax parity unverified on this runner"
+  warn "pwsh not on PATH — install.ps1 syntax parsing unverified on this runner"
+fi
+# Static content parity — runs REGARDLESS of pwsh, closing the blind spot that
+# let the native project-scope path silently skip docs/ + root manifests while
+# its own dry-run promised them. Keys on tokens introduced ONLY by that path.
+if [[ -f "$ROOT/install.ps1" ]]; then
+  ps1_parity_missing=""
+  grep -q  'Ensure-DocsCopied'          "$ROOT/install.ps1" || ps1_parity_missing+=" docs-copy"
+  grep -qF '.claude-plugin/marketplace.json' "$ROOT/install.ps1" || ps1_parity_missing+=" .claude-plugin/marketplace.json"
+  grep -qF '.claude-plugin/plugin.json' "$ROOT/install.ps1" || ps1_parity_missing+=" .claude-plugin/plugin.json"
+  grep -qF '.codex-plugin/plugin.json'  "$ROOT/install.ps1" || ps1_parity_missing+=" .codex-plugin/plugin.json"
+  grep -qF 'gemini-extension.json'      "$ROOT/install.ps1" || ps1_parity_missing+=" gemini-extension.json"
+  if [[ -n "$ps1_parity_missing" ]]; then
+    fail "install.ps1 project-scope path omits docs/manifests the bash installer places:$ps1_parity_missing"
+  else
+    pass "install.ps1 mirrors bash docs/ copy + root manifests (content parity, pwsh-independent)"
+  fi
 fi
 
 # ── P29: checkpoint resumable-run state behavior ─────────────────────────────

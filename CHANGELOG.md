@@ -112,6 +112,12 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
   `scripts/audit.sh`, `scripts/sync_version.py`, `scripts/post_mr_comment.py`, and `VERSION` were
   unowned — an author could weaken the self-CI gate in the same MR that ships a skill. **P18**
   was extended to machine-check the enforcement-plane paths, not just policy/engine/CI templates.
+- **`install.ps1` Windows-native project scope now copies `docs/` + root manifests (major).** The
+  native path placed canonical dirs but silently skipped the `docs/` copy and the
+  `.codex-plugin`/`.claude-plugin`/`gemini-extension.json` manifests its own dry-run promised
+  (bash placed them). Added `Ensure-DocsCopied` (conflict-rename + `.sgt-owned`, mirroring bash)
+  and root-manifest placement. **P28** gained a pwsh-independent content-parity check — the blind
+  spot that hid this, since the runner has no `pwsh`.
 
 ---
 

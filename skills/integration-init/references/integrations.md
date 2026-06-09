@@ -10,7 +10,7 @@ Loaded by `integration-init` Phase 3-4. Per-integration: what it is, why integra
 
 Production-ready Python tool that parses your repository with Tree-sitter (24 languages + Jupyter notebooks), stores structural relationships in a SQLite graph (vertices = functions/classes/files; edges = calls/imports/inherits/tests), and exposes graph queries via FastMCP server (28 tools, 5 prompts, 3 slash commands) or CLI commands.
 
-**Headline metric:** 8.2× average token reduction across 6 real open-source repositories (verified eval-runner; reproducible via `code-review-graph eval --all`).
+**Headline metric — external, unreproduced claim:** ~8.2× average token reduction across 6 real open-source repositories, **reported by the CRG upstream project's eval-runner — NOT reproduced by this toolkit**. Treat it as illustrative («non-trivial reduction is achievable when the agent uses graph queries»), never as a guarantee: per-repo results vary with codebase shape (depth, fan-out, language), small repos (< 50 files) often see overhead exceed savings, and MCP mode carries ~12k tokens of schema overhead per session (see tradeoff table below). If you need verified numbers, run the upstream eval methodology (`code-review-graph eval --all`) on your own representative repos.
 
 ### Why integrate
 

@@ -1,8 +1,14 @@
 # Architecture Overview
 
-How the Skill Governance Toolkit is structured and why.
+How the Skill Governance Toolkit is structured and why — instruction layers, install contract, activation flow, and the design decisions behind them.
 
-## Three layers
+> Audience: adopters & contributors · Type: explanation · Prerequisite: none (start here after the [README](../README.md))
+
+## Three instruction layers
+
+These are the **instruction-loading** layers (what the agent reads, when) — not
+to be confused with the audit engine's CLI / MCP / Docker **delivery** layers in
+[agent-governance-engine.md](agent-governance-engine.md).
 
 ```
 L1 — Project rules    (always-on, every turn)
@@ -72,6 +78,22 @@ The install contract distinguishes who can edit each file:
 User content OUTSIDE the markers is NEVER modified by the installer across
 fresh installs, upgrades, and uninstalls.
 
+### Install scopes & file ownership
+
+How the install / upgrade / uninstall contract divides ownership (semantics
+verified against `scripts/install.sh` `_copy_owned_tree` and `sgt.py uninstall`):
+
+```mermaid
+flowchart TD
+    SRC["SOURCE checkout<br/>(toolkit repo / pinned mirror)"] --> INST["installer<br/>install.sh / sgt init"]
+    INST --> M["AGENTS.md · CLAUDE.md · GEMINI.md ·<br/>copilot-instructions.md<br/><b>USER-owned</b> — marker-block merge only"]
+    INST --> O["root canonical dirs + runtime dirs<br/>skills/ agents/ references/ scripts/ docs/ .claude/ …<br/><b>toolkit-owned</b> — tracked in .sgt-owned sidecars"]
+    UP["upgrade (re-run installer)"] -. "overwrites / prunes ONLY<br/>sidecar-tracked files;<br/>name collision → ours renamed<br/>*.skill-governance-toolkit.*" .-> O
+    UN["sgt uninstall"] -. "removes ONLY sidecar-tracked files<br/>+ strips the marker block" .-> O
+    UN -. "user content outside markers<br/>preserved" .-> M
+    NEVER[".skill-state/ · out/ · any user file<br/><b>never touched</b> by install, upgrade, or uninstall"]
+```
+
 ## Skill activation flow
 
 ```mermaid
@@ -97,16 +119,11 @@ Activation cost is determined by:
 ## Resumable runs
 
 Multi-phase skills checkpoint state to `${CWD}/.skill-state/{skill-name}/`
-after every expensive phase. On crash / timeout / re-invocation, the skill
-can resume from the last checkpoint.
-
-| Skill | Resume mode default |
-|---|---|
-| library-audit, skill-evaluate, skill-compare | `auto` (read-mostly, never asks) |
-| skill-build-portable | `auto` (single-skill run; prompts only for the documented in-place confirmation gate) |
-| integration-init | `ask` (gateway, user expects prompts) |
-
-See `references/checkpointing.md` for the canonical pattern + helper CLI.
+after every expensive phase, so a crashed / interrupted run resumes from the
+last checkpoint. The canonical pattern, helper CLI, and the **authoritative
+per-skill resume-mode defaults table** live in
+[`references/checkpointing.md`](../references/checkpointing.md) — do not copy
+that table here; it drifts.
 
 ## Parallelization model
 
@@ -132,6 +149,24 @@ See `AGENTS.md` § Parallelization patterns for the full rule.
   user content outside our markers — see [§ «User-owned vs toolkit-owned
   files»](#user-owned-vs-toolkit-owned-files) above.
 
+## Locally verified properties
+
+Unlike external integration metrics (which the toolkit reports as upstream
+claims, never as verified — see the CRG caveat in
+[`skills/integration-init/references/integrations.md`](../skills/integration-init/references/integrations.md)),
+these structural-correctness properties ARE measured and reproducible here:
+
+- **Every skill body within the configured body budget** — `bash scripts/audit.sh`
+  prints the body-budget table.
+- **0 hardcoded secrets** in skill / agent / reference files — `audit.sh`
+  secret-pattern scan.
+- **All JSON manifests valid** — `audit.sh` manifest phase.
+- **Install smoke test passes** (fresh + idempotent re-run) — `audit.sh`
+  install phase.
+
+These are not performance benchmarks — they are structural invariants the
+self-CI (`scripts/audit.sh`) enforces on every run.
+
 ## Why not multi-agent for skill management
 
 We deliberately chose NOT to make sub-agent orchestration required for
@@ -149,3 +184,11 @@ the meta-skills. Reasons:
 If we add an orchestrator skill (e.g. `library-cleanup`), it stays a skill
 (visible to all 5 runtimes). It may optionally dispatch specialized agents
 on hosts that support them, but it must keep a sequential fallback.
+
+## See also
+
+- [agent-governance-engine.md](agent-governance-engine.md) — go here for the audit engine's CLI / MCP / Docker delivery layers
+- [installation.md](installation.md) — go here to actually run the installer described above
+- [checks-reference.md](checks-reference.md) — go here for every governance check the toolkit applies
+- [`references/checkpointing.md`](../references/checkpointing.md) — go here for the canonical resumable-run pattern
+- [skill-authoring-standard.md](skill-authoring-standard.md) — go here when authoring a new skill for this layout

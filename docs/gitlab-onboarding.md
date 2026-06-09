@@ -1,7 +1,8 @@
 # GitLab Onboarding — Skill Governance Gate
 
-> Hand-off doc for the team that owns the AI Tools Marketplace GitLab repo.
-> Goal: enable the skill-governance merge-request gate on GitLab CI.
+Enable the skill-governance merge-request gate on a GitLab CI repo (hand-off doc for the team that owns the marketplace repo).
+
+> Audience: platform-devops · Type: how-to · Prerequisite: a toolkit mirror reachable from your GitLab instance
 
 ## What this gate does
 
@@ -12,21 +13,52 @@ MCP/plugin manifests, …) is audited by the toolkit's deterministic engine
 | Job | Command | Effect |
 |---|---|---|
 | `skill-gate:block` | `audit-project . --changed-only --base $CI_MERGE_REQUEST_DIFF_BASE_SHA --profile release-ready --fail-on-new high` | **Newly introduced** high-severity findings (secrets, dangerous shell, broken frontmatter, `allowed-tools`) **fail the pipeline → block the merge**; pre-existing high findings on touched legacy assets do not block |
-| `skill-gate:block` (suppression hygiene, same job) | `list-suppressions --root .` on every governed MR; `list-suppressions --expiring-within 30` only when the MR edits `references/audit-ignore.json` | An **already-expired** suppression fails the pipeline on *every* governed MR (the floor finding it silenced has resurfaced — see [security-suppression-runbook.md](security-suppression-runbook.md) § Expiry enforcement); a *soon-to-expire* entry blocks only the MR that touches the suppression file |
+| `skill-gate:block` (suppression hygiene, same job) | `list-suppressions --root .` on every governed MR; `list-suppressions --expiring-within 30` only when the MR edits `references/audit-ignore.json` | **Expired** suppression → fails *every* governed MR; **soon-to-expire** entry → blocks only the MR that edits the suppression file ¹ |
 | `skill-gate:advisory` | same audit with `--fail-on none --format json` + `post_mr_comment.py` | Never blocks; publishes `skill-audit.json` artifact + an idempotent MR comment |
 | `noop` | `echo` on `$SGT_NOOP_IMAGE` | Always-green placeholder so every MR has a pipeline (see "Branch protection" below) |
 
-Kill-switch: set the org/project CI/CD variable **`SGT_FAIL_MODE=advisory`** to
-downgrade the block job to non-blocking fleet-wide without editing the pinned
-template — the engine honors it automatically (exit 0 even on a blocking
-finding). Use it for staged rollout or to unblock the fleet during an incident;
-see [security-rollout-guide.md](security-rollout-guide.md).
+> ¹ An expired entry means the floor finding it silenced has resurfaced — any merge
+> inherits the hole, so every governed MR blocks until it is renewed or removed. A
+> soon-to-expire entry gates only the author already touching suppressions (the
+> right owner to renew it). Full policy: [security-suppression-runbook.md
+> § Expiry enforcement](security-suppression-runbook.md#expiry-enforcement--what-blocks-which-mr).
+
+Kill-switch: the org/project CI/CD variable **`SGT_FAIL_MODE=advisory`** downgrades
+the block job to non-blocking fleet-wide — procedure and when to pull it:
+[security-incident-runbook.md](security-incident-runbook.md).
 
 `--changed-only` diffs the MR's committed HEAD against its merge-base with the
 target branch (`$CI_MERGE_REQUEST_DIFF_BASE_SHA...HEAD`, a three-dot diff), so an
 author is accountable only for the committed assets their MR touches — not for
 legacy assets already in the marketplace. Uncommitted working-tree edits are not
 in scope; the gate audits what the MR introduces.
+
+### MR gate lifecycle
+
+```mermaid
+sequenceDiagram
+    participant Author
+    participant GitLab
+    participant Gate as "Gate jobs (SHA-pinned toolkit)"
+    participant Admin as "CI/CD admin"
+    Author->>GitLab: open MR
+    GitLab->>GitLab: evaluate rules:changes
+    alt no governed path touched
+        GitLab-->>Author: noop job only — pipeline green
+    else governed path touched
+        GitLab->>Gate: clone SGT_REPO@SGT_REF (CI_JOB_TOKEN) + verify SHA
+        Gate->>Gate: block job — list-suppressions --root .
+        Note over Gate: expired suppression → fail
+        Gate->>Gate: block job — audit --changed-only --fail-on-new high
+        Note over Gate: introduced high finding → fail
+        Gate->>GitLab: advisory job — full JSON artifact + idempotent MR comment
+        GitLab-->>Author: verdict + findings on the MR
+        Author->>GitLab: fix the content
+        Author->>GitLab: or inline sgt-ignore (advisory rules only)
+        Author->>GitLab: or central audit-ignore.json + CODEOWNER approval (floor rules)
+    end
+    Admin-->>GitLab: SGT_FAIL_MODE=advisory — fleet kill-switch (incident only)
+```
 
 ## Files involved
 
@@ -58,6 +90,10 @@ In `.gitlab-ci.yml`, `variables:` block:
 | `SGT_REPO` | URL of the toolkit repo on **your** GitLab host. Template placeholder: `https://gitlab-ci-token:${CI_JOB_TOKEN}@REPLACE-WITH-YOUR-GITLAB-HOST/your-group/skill-governance-toolkit.git` — replace the host/group with where your org mirrors the toolkit, keeping the `gitlab-ci-token:${CI_JOB_TOKEN}@` prefix (see "Clone auth" below). |
 | `SGT_REF` | An **immutable 40-char commit SHA**, not a tag. Template placeholder: `REPLACE-WITH-40-CHAR-COMMIT-SHA`. Get the SHA of the toolkit release you want to pin with `git -C <toolkit> rev-parse HEAD`, or let `sgt ci-init --gitlab` fill it in for you (run from a toolkit checkout). |
 
+Why a SHA, not a tag: a re-tagged release could silently change gate behaviour.
+Pin a commit your org has reviewed and approved. Bump the SHA deliberately when
+you adopt a newer toolkit version.
+
 ### 2a. Clone auth (private toolkit mirror)
 
 The template clones the toolkit with the per-job **`CI_JOB_TOKEN`** GitLab
@@ -84,10 +120,6 @@ CI/CD variables:
 | `SGT_IMAGE` | `python:3.12-slim` | An internal-registry image with **python3 + git** preinstalled (skips the apt-get step entirely) |
 | `SGT_NOOP_IMAGE` | `alpine:3.20` | Any minimal internal image with a shell |
 
-Why a SHA, not a tag: a re-tagged release could silently change gate behaviour.
-Pin a commit your org has reviewed and approved. Bump the SHA deliberately when
-you adopt a newer toolkit version.
-
 ### 3. Create a masked CI/CD variable
 
 Settings → CI/CD → Variables → Add variable:
@@ -107,18 +139,24 @@ GitLab auto-provides the rest: `CI_API_V4_URL`, `CI_PROJECT_ID`,
 
 ## Things to keep in sync
 
-- **`rules.changes` path list** in the template must match the asset types the
-  engine governs (`agent_audit.py` `asset_type`). A path the engine audits but
-  CI ignores is a silent coverage gap. Current list: `skills/**`, `agents/**`,
-  `commands/**`, `prompts/**`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`,
-  `.github/copilot-instructions.md`, `gemini-extension.json`, `**/.mcp.json`,
-  `**/mcp.json`, `**/plugin.json`, `.claude/settings.json`,
-  `.claude/settings.local.json`, `hooks/**`, `references/agent-audit-rules.json`,
-  `references/audit-ignore.json` (suppression control-plane), and
-  `references/audit-config.*.json` (so the "config overlay is ignored" warning
-  fires). Keep it in sync with `references/ci/gitlab-ci.yml` `rules:changes`.
-- **`GIT_DEPTH: 0`** is required so the MR merge-base commit is reachable for
-  the diff. Do not lower it.
+The **`rules:changes` path list** in the template must match the asset types the
+engine governs (`agent_audit.py` `asset_type`). A path the engine audits but CI
+ignores is a silent coverage gap. Current list:
+
+| Path | Why governed |
+|---|---|
+| `skills/**`, `agents/**`, `commands/**`, `prompts/**` | Skill / agent / prompt bodies — the primary audited assets |
+| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md` | Always-on rules files injected into every agent turn |
+| `gemini-extension.json`, `**/.mcp.json`, `**/mcp.json`, `**/plugin.json` | MCP / plugin manifests — the tool-exposure surface |
+| `.claude/settings.json`, `.claude/settings.local.json`, `hooks/**` | Hook commands the host executes on agent events |
+| `references/agent-audit-rules.json` | Rule catalog — control-plane, must not change ungoverned |
+| `references/audit-ignore.json` | Suppression control-plane (also triggers the expiring-soon check) |
+| `references/audit-config.*.json` | So the "config overlay is ignored" warning fires |
+
+Keep the table in sync with `references/ci/gitlab-ci.yml` `rules:changes`.
+
+**`GIT_DEPTH: 0`** is required so the MR merge-base commit is reachable for
+the diff. Do not lower it.
 
 ## Branch protection ("Pipelines must succeed")
 
@@ -165,12 +203,10 @@ and engine can be changed by the same author who edits a skill in the same MR.
 ## Base-ref behaviour (edge cases)
 
 - **Empty `--base`** with `--changed-only` (e.g. missing
-  `CI_MERGE_REQUEST_DIFF_BASE_SHA` on the first pipeline of a new MR, or a
-  non-merge-request pipeline) → **exits 2 (fails closed)** with a stderr notice.
-  It refuses to silently audit the whole tree — a silent scope switch could both
-  block unrelated MRs on legacy assets and, under `--fail-on none`, produce a
-  green pipeline that audited nothing. Re-run on a merge-request pipeline, or
-  drop `--changed-only` to audit the full project on purpose.
+  `CI_MERGE_REQUEST_DIFF_BASE_SHA` on a non-merge-request pipeline) → **exits 2
+  (fails closed)** with a stderr notice instead of silently auditing the whole tree.
+  Rationale and the full scoping matrix: [cli-reference.md § `audit-project` flags
+  in depth](cli-reference.md#audit-project-flags-in-depth).
 - **Non-empty but bad/unreachable ref** → exits 2 with a sanitized message.
 
 ## Verify locally before pushing
@@ -204,3 +240,16 @@ python3 scripts/post_mr_comment.py skill-audit.json --dry-run
 
 Re-running a pipeline updates the same note (matched by a hidden HTML marker)
 instead of stacking duplicates.
+
+---
+
+**Next:** [security-rollout-guide.md](security-rollout-guide.md) — staged rollout
+(advisory → enforce) once the gate is wired.
+
+## See also
+
+- [security-incident-runbook.md](security-incident-runbook.md) — go here when the gate blocks merges fleet-wide (kill-switch + re-pin).
+- [security-suppression-runbook.md](security-suppression-runbook.md) — go here when an author reports a false positive.
+- [cli-reference.md](cli-reference.md) — go here for every engine flag, env var, and exit code.
+- [checks-reference.md](checks-reference.md) — go here for what each rule detects and how to fix it.
+- [github-onboarding.md](github-onboarding.md) — go here if the consuming repo lives on GitHub instead.

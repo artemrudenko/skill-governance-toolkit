@@ -1,7 +1,10 @@
 # Checks Reference
 
-Complete catalog of every governance check this toolkit applies, with the
-rationale behind each. Checks come from two engines:
+Complete catalog of every governance check this toolkit applies — engine rules and LLM dimensions — with the rationale behind each.
+
+> Audience: skill authors & gate adopters · Type: reference · Prerequisite: none
+
+Checks come from two engines:
 
 | Engine | Implementation | Determinism | Where it runs |
 |---|---|---|---|
@@ -116,7 +119,11 @@ REF004 is deliberately conservative: anchor-only links (`#section`), `mailto:`, 
 
 Scans the **content** of in-repo scripts (`scripts/<name>.{py,sh,ps1}`) that an asset references. Threat model: an imported skill/agent/command links to a malicious helper script. A reference (REF*) check looks at the link; these checks open the referenced file and scan its source.
 
-**Scope (false-positive control):** only scripts **referenced by an asset body** (skill / agent / command) are scanned — never a blanket sweep of `scripts/`. This is deliberate: the toolkit's own engine scripts legitimately read environment variables and make network calls (e.g. an MR-comment poster), and those must not be flagged unless an asset body actually references them. In `--changed-only` mode a changed script that is referenced **only by an unchanged asset** is still scanned (closing the transitive bypass where a changed malicious helper would otherwise slip through because its referencing asset is out of scope) — but a changed script that **no asset references** is never scanned, so the scope matches whole-tree exactly and a self-contained changed script (e.g. a test fixture) is not a mode-dependent false positive.
+**Scope (false-positive control):**
+
+- Only scripts **referenced by an asset body** (skill / agent / command) are scanned — never a blanket sweep of `scripts/`. The toolkit's own engine scripts legitimately read environment variables and make network calls (e.g. the MR-comment poster); they are flagged only when an asset body actually references them.
+- In `--changed-only` mode a changed script referenced **only by an unchanged asset** is still scanned — closing the transitive bypass where a changed malicious helper would slip through because its referencing asset is out of scope.
+- A changed script that **no asset references** is never scanned, so changed-only scope matches whole-tree exactly and a self-contained changed script (e.g. a test fixture) is not a mode-dependent false positive.
 
 | Rule | Severity | Detects | Why it matters |
 |---|---|---|---|
@@ -130,7 +137,12 @@ Scans the **content** of in-repo scripts (`scripts/<name>.{py,sh,ps1}`) that an 
 
 Cross-checks MCP tool usage against declared servers, and structurally scans MCP server commands. An `mcp__<server>__<tool>` token in a skill body is "usage"; `metainfo.requires.mcp` (a list of server names) plus the org `allowlists.mcp_servers` are "declaration".
 
-**False-positive control (MCP001 is high/floor):** an `mcp__...` token is **not** counted as usage when it sits inside a fenced code block (` ``` `) or on a detection-context line (a line containing `detect`/`scan`/`pattern`/`denylist`/`allowlist`/…). An **inline-code span** (`` `mcp__github__search` ``) **does** count — a tool name written in backticks inside an instruction is a genuine usage (masking it caused an MCP001 false *negative*), so document example-only tool names in a fenced block, not inline. Denylists and detection rules are exempt via the detection-context line check.
+**False-positive control (MCP001 is high/floor):**
+
+- **Not usage:** an `mcp__...` token inside a fenced code block (` ``` `).
+- **Not usage:** a token on a detection-context line (a line containing `detect`/`scan`/`pattern`/`denylist`/`allowlist`/…) — this is how denylists and detection rules are exempt.
+- **IS usage:** an **inline-code span** (`` `mcp__github__search` ``) — a tool name in backticks inside an instruction is genuine usage; masking it caused an MCP001 false *negative*.
+- **Therefore:** document example-only tool names in a fenced block, never inline.
 
 | Rule | Severity | Detects | Why it matters |
 |---|---|---|---|
@@ -181,7 +193,8 @@ apply, so a silent self-approval bypass is impossible.
 Each new rule below, with whether it is a **floor** rule (severity cannot be
 downgraded; inline markers cannot suppress it) and whether it is
 **inline-suppressible** via `<!-- sgt-ignore: RULEID reason=... -->`. Floor set:
-`SKILL001/002/009/014/015`, `SEC001/002/010/011`, `REF002`, `SCR001/002/003`, `MCP001`, `HOOK001/002`.
+`SKILL001/002/009/014/015`, `SEC001/002/010/011`, `REF002`, `SCR001/002/003`, `MCP001`, `HOOK001/002`
+(doc mirror of `SEVERITY_FLOOR` in `scripts/agent_audit.py` — the only other copy allowed).
 
 | Rule | Severity | Floor | Inline-suppressible |
 |---|---|---|---|
@@ -206,7 +219,9 @@ downgraded; inline markers cannot suppress it) and whether it is
 | IGNORE002 | medium | no | no |
 | IGNORE003 | info | no | no |
 
-**SEC001 — bidi control / direction mark.** A right-to-left override hides the
+#### SEC001 — bidi control / direction mark
+
+A right-to-left override hides the
 real command order from a reviewer.
 
 ```text
@@ -220,7 +235,9 @@ Fix — remove the control character; write the command in plain left-to-right t
 run: rm -rf ./build   # plain, no embedded direction marks
 ```
 
-**SEC002 — invisible / format / tag character.** A zero-width space splits a
+#### SEC002 — invisible / format / tag character
+
+A zero-width space splits a
 token so a scanner or reviewer misses it.
 
 ```text
@@ -235,7 +252,9 @@ pipe-to-shell pattern):
 setup: download the installer, review it, then run it locally
 ```
 
-**SEC003 — homoglyph confusable.** A Cyrillic look-alike inside a Latin host
+#### SEC003 — homoglyph confusable
+
+A Cyrillic look-alike inside a Latin host
 reads as a trusted brand but resolves elsewhere.
 
 ```text
@@ -252,7 +271,9 @@ docs: see https://paypal.example for billing
 brand: pаypal  <!-- sgt-ignore: SEC003 reason=quoting a known typosquat in a phishing example -->
 ```
 
-**SEC010 — dangerous instruction in a non-skill asset.** A manifest carries a
+#### SEC010 — dangerous instruction in a non-skill asset
+
+A manifest carries a
 destructive command into the agent's behavior.
 
 ```json
@@ -265,7 +286,9 @@ Fix — scope the command and drop force/recursive-root forms:
 { "name": "cleanup", "command": "rm -rf ./dist" }
 ```
 
-**SEC011 — inline secret in a non-skill asset.** A token is embedded in a config.
+#### SEC011 — inline secret in a non-skill asset
+
+A token is embedded in a config.
 
 ```json
 { "env": { "API_TOKEN": "ghp_AbC123Real0SecretValue456789" } }
@@ -277,7 +300,9 @@ Fix — reference an environment-variable **name**, never the value:
 { "env": { "API_TOKEN": "${GITHUB_TOKEN}" } }
 ```
 
-**SEC012 — credential-file path referenced in a non-skill asset.** An asset
+#### SEC012 — credential-file path referenced in a non-skill asset
+
+An asset
 points the agent at a credential store.
 
 ```json
@@ -290,7 +315,9 @@ Fix — reference the documented config mechanism, not the credential file:
 { "args": ["--profile", "ci"] }   <!-- AWS_PROFILE / standard config resolution -->
 ```
 
-**REF001 — referenced script not in runtime manifest.** A skill body references a
+#### REF001 — referenced script not in runtime manifest
+
+A skill body references a
 real `scripts/` executable that does not ship at user runtime.
 
 ```text
@@ -308,7 +335,9 @@ run: python3 scripts/sgt.py version   # sgt.py is in the runtime manifest
 REF001 is advisory (medium) and inline-suppressible via
 `<!-- sgt-ignore: REF001 reason=... -->`.
 
-**REF002 — link target traverses or escapes repo root.** A link uses `..` to climb
+#### REF002 — link target traverses or escapes repo root
+
+A link uses `..` to climb
 outside the project, or an absolute filesystem path.
 
 ```text
@@ -324,7 +353,9 @@ see [the path-resolution contract](../references/path-resolution.md)
 REF002 is a **floor** rule (high) — suppressible only via the CODEOWNERS-gated
 central `references/audit-ignore.json`, never inline.
 
-**REF003 — external URL not in allowlist.** An imported body links to a host that
+#### REF003 — external URL not in allowlist
+
+An imported body links to a host that
 is not in the audit-config domain allowlist, or uses a punycode host.
 
 ```text
@@ -341,7 +372,9 @@ visit [the spec](https://agentskills.io/specification)   <!-- host added to allo
 REF003 is advisory (info) and inline-suppressible via
 `<!-- sgt-ignore: REF003 reason=... -->`.
 
-**REF004 — link target missing or dangling.** A relative in-repo link points at a
+#### REF004 — link target missing or dangling
+
+A relative in-repo link points at a
 file that does not exist.
 
 ```text
@@ -357,7 +390,9 @@ see [the runbook](references/security-incident-runbook.md)
 REF004 is advisory (medium) and inline-suppressible via
 `<!-- sgt-ignore: REF004 reason=... -->`.
 
-**IGNORE001 — expired or invalid suppression.** A central entry whose `expires`
+#### IGNORE001 — expired or invalid suppression
+
+A central entry whose `expires`
 is in the past (or malformed) no longer suppresses; the finding returns and the
 stale entry is flagged.
 
@@ -371,7 +406,9 @@ Fix — renew with a valid future date, or remove the entry once the finding is 
 { "rule_id": "SEC003", "path": "agents/x.md", "reason": "known example", "expires": "2026-12-31" }
 ```
 
-**IGNORE002 — suppression missing reason.** A central entry without a non-empty
+#### IGNORE002 — suppression missing reason
+
+A central entry without a non-empty
 `reason` does not suppress.
 
 ```json
@@ -384,7 +421,9 @@ Fix — add an audit-trail rationale:
 { "rule_id": "SEC012", "path": "config/.mcp.json", "reason": "documented read-only mount, reviewed 2026-06" }
 ```
 
-**IGNORE003 — inline marker cannot suppress a floor rule.** An inline marker for
+#### IGNORE003 — inline marker cannot suppress a floor rule
+
+An inline marker for
 a `high`/floor finding is ignored (it lives in the attacker-controlled file); the
 attempt becomes a visible `info` record.
 
@@ -502,6 +541,24 @@ Full procedure: [`skills/library-audit/SKILL.md`](../skills/library-audit/SKILL.
 ---
 
 ## Engine vs LLM skills
+
+The two-layer model — when each layer runs and what it can do to a merge:
+
+```mermaid
+flowchart LR
+    subgraph AUTH["Lane 1 — Authoring time (local, LLM)"]
+        SE["skill-evaluate<br/>D1–D9 scoring + caps"]
+    end
+    subgraph CI["Lane 2 — CI time (automatic, deterministic)"]
+        GA["sgt gate / agent_audit<br/>SEC*/REF*/SCR*/MCP*/HOOK* + structure"]
+    end
+    SE -- "advisory — informs the author,<br/>never blocks" --> MR["Merge"]
+    GA -- "blocking — exit 1 on<br/>introduced high findings" --> MR
+```
+
+**Caption: green gate ≠ good skill.** A skill can pass the deterministic gate
+(lane 2) and still be a poorly routed, unclear, or badly designed skill — only
+lane 1 judges that.
 
 **Does the engine give the same depth of evaluation as the LLM skills? No — and
 that is by design.** The two answer different questions:
@@ -713,3 +770,13 @@ a given block ran against.
 | Rule | Retired in | Why |
 |---|---|---|
 | `SKILL012` — Missing `## When to use` section | rules 0.5.0 | The body activation section is now **optional**. Activation is driven by the frontmatter `description` (the routing surface); exclusion triggers belong there, and hard rules in `AGENTS.md`. A missing body section is no longer a finding. Non-breaking for pipelines (it was advisory `low`, never blocked); tooling keying on the id should drop it. |
+
+---
+
+## See also
+
+- [extending-checks.md](extending-checks.md) — go here to add, tune, remove, or contribute a check
+- [cli-reference.md](cli-reference.md) — go here for the flags that run these checks (`--profile`, `--fail-on*`, `validate-config`)
+- [agent-governance-engine.md](agent-governance-engine.md) — go here for how the engine is delivered (CLI / MCP / Docker)
+- [security-suppression-runbook.md](security-suppression-runbook.md) — go here when a finding must be suppressed with an audit trail
+- [skill-authoring-standard.md](skill-authoring-standard.md) — go here for the authoring shape the SKILL* rules enforce

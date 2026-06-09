@@ -1,8 +1,8 @@
 # Security Incident Runbook (OPS2) — "the gate is blocking everything"
 
-What to do when the governance gate starts blocking merges across the fleet — a
-bad toolkit pin, an over-broad org pattern, or a rule regression. Goal: unblock in
-5 minutes, then fix durably.
+What to do when the governance gate starts blocking merges across the fleet (bad toolkit pin, over-broad org pattern, rule regression) — unblock in 5 minutes, then fix durably.
+
+> Audience: platform-devops · Type: how-to · Prerequisite: access to org/project CI/CD variables (or someone who has it — see "Who to page").
 
 ## Detection signals
 
@@ -65,10 +65,9 @@ flowchart TD
 Page the gate owner and the CI/CD admin together. The CI/CD admin can apply the
 kill-switch immediately; the gate owner drives the re-pin and root-cause review.
 
-## Related
+## See also
 
-- [security-suppression-runbook.md](security-suppression-runbook.md) — per-finding
-  exceptions and the OPS5 break-glass (use for one bad finding, **not** a fleet
-  outage).
-- [security-rollout-guide.md](security-rollout-guide.md) — staged rollout and the
-  `SGT_REF` adoption procedure.
+- [security-suppression-runbook.md](security-suppression-runbook.md) — go here for one bad finding (per-finding exceptions, OPS5 break-glass), **not** a fleet outage.
+- [security-rollout-guide.md](security-rollout-guide.md) — go here for staged rollout and the `SGT_REF` adoption procedure.
+- [cli-reference.md](cli-reference.md) — go here for `validate-config`, `sgt gate`, and exit-code semantics.
+- [gitlab-onboarding.md](gitlab-onboarding.md) / [github-onboarding.md](github-onboarding.md) — go here for where `SGT_REF` and the gate workflow live.

@@ -1,7 +1,12 @@
 # Agent Governance CLI, MCP, and Docker
 
-This repository includes a deterministic read-only audit engine for agent
-assets. It is intentionally split into three layers:
+The deterministic read-only audit engine for agent assets, and the three delivery layers it ships in (CLI, MCP server, Docker image).
+
+> Audience: adopters wiring the gate · Type: reference / how-to · Prerequisite: [checks-reference.md](checks-reference.md) for what the engine checks
+
+These are the engine's **delivery** layers — distinct from the three
+*instruction-loading* layers (L1 `AGENTS.md` / L2 `SKILL.md` / L3 `agents/`) in
+[architecture.md](architecture.md). The engine is intentionally split:
 
 | Layer | Entrypoint | Purpose |
 |---|---|---|
@@ -53,14 +58,10 @@ python3 scripts/agent_audit.py explain-rule SKILL009
 default `origin/main`) — the merge-request gate. See the
 [checks reference](checks-reference.md) for every rule and rationale.
 
-Profiles:
-
-| Profile | Use |
-|---|---|
-| `security` | Focus on tool safety, destructive commands, secrets, external trust, hardcoded paths |
-| `quality` | Skill structure and usability checks |
-| `maintainability` | Full rule set, same current behavior as release-ready |
-| `release-ready` | Full rule set for pre-release audits |
+Profiles — `security` (safety subset) · `quality` (structure/usability) ·
+`maintainability` (full set) · `release-ready` (full set, the CI default).
+Exact per-profile rule membership is canonical in
+[checks-reference.md § Profile scope](checks-reference.md#profile-scope).
 
 The JSON report contains (version values below are illustrative — `engine_version`
 tracks the live root `VERSION`, `rules_version` the catalog, so a real report
@@ -103,16 +104,23 @@ reach the fail set.
 ```mermaid
 flowchart TD
     A[discover_agent_assets] --> B{asset_type}
-    B -->|SKILL.md| C[audit_skill<br/>SKILL001–023 + SEC001/002/003]
+    B -->|SKILL.md| C[audit_skill<br/>SKILL001–023 + SEC001/002/003<br/>+ REF001–004 + MCP001/002]
     B -->|mcp/plugin/runtime config,<br/>agent, command, prompt| D[checks_for]
+    B -->|hook<br/>settings hooks, plugin.json hooks, hooks/*| DH[hook-command scan<br/>HOOK001 / HOOK002]
     B -->|instructions / runtime-alias| E[DISC* project checks]
     D --> D1[scan_hidden_chars<br/>SEC001 / SEC002]
     D --> D2[scan_homoglyphs<br/>SEC003]
     D --> D3[scan_security<br/>SEC010 / SEC011 / SEC012]
+    D --> D4[reference safety<br/>REF001–004<br/>agents + commands]
+    C --> SCR[referenced-script content<br/>SCR001–003<br/>scripts the asset body references]
+    D4 --> SCR
     C --> F[raw findings]
     D1 --> F
     D2 --> F
     D3 --> F
+    D4 --> F
+    DH --> F
+    SCR --> F
     E --> F
     F --> G[ignore filter<br/>_apply_ignores: central + inline]
     G --> H{--fail-on-new<br/>and --base set?}
@@ -278,22 +286,13 @@ Inside Docker, pass `root` as `/workspace`.
 
 ## GitHub Actions
 
-The repository includes `.github/workflows/ci.yml` with two baseline jobs:
-
-| Job | Checks |
-|---|---|
-| `audit` | `scripts/audit.sh`, audit-engine behavior tests, and `release-ready` CLI gate |
-| `docker` | Docker build, MCP `tools/list`, and Docker `audit_project /workspace` |
-
-For local reproduction, run the commands in `docs/user-guide.md` or
-`docs/user-guide.ru.md` under the component status section.
+Wiring the engine as a GitHub pull-request gate (workflow template, SHA pinning,
+branch protection): see [github-onboarding.md](github-onboarding.md).
 
 ## GitLab CI
 
-For a GitLab merge-request gate, copy `references/ci/gitlab-ci.yml` into the
-consuming repo as `.gitlab-ci.yml`. It runs `--changed-only` with a tiered
-block/advisory policy and posts findings via `scripts/post_mr_comment.py`. Full
-walk-through: `docs/user-guide.md` § GitLab CI - Merge Request gate.
+Wiring the engine as a GitLab merge-request gate (pipeline template, tiered
+block/advisory policy, MR comments): see [gitlab-onboarding.md](gitlab-onboarding.md).
 
 ## Design constraints
 
@@ -308,3 +307,11 @@ walk-through: `docs/user-guide.md` § GitLab CI - Merge Request gate.
   pattern packs) is overridable via an optional `config` block in the same
   catalog — see `docs/checks-reference.md` § Extending the checks. Detection
   algorithms stay in code; only data is configurable.
+
+## See also
+
+- [checks-reference.md](checks-reference.md) — go here for every rule the engine fires, with rationale
+- [cli-reference.md](cli-reference.md) — go here for the full flag-level CLI reference (`agent_audit.py` + `sgt`)
+- [github-onboarding.md](github-onboarding.md) — go here to wire the GitHub Actions PR gate
+- [gitlab-onboarding.md](gitlab-onboarding.md) — go here to wire the GitLab CI MR gate
+- [extending-checks.md](extending-checks.md) — go here when you want to add or contribute a check

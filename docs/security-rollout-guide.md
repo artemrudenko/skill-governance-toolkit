@@ -1,7 +1,8 @@
 # Security Rollout Guide — enable over an existing library
 
-How to turn on the asset-security suite (`SEC*` rules + delta gate) over a repo
-that already has assets, without an avalanche of failures on day one.
+How to turn on the asset-security suite (`SEC*` rules + delta gate) over a repo that already has assets, without an avalanche of failures on day one.
+
+> Audience: platform-devops · Type: how-to · Prerequisite: complete [github-onboarding.md](github-onboarding.md) or [gitlab-onboarding.md](gitlab-onboarding.md) first.
 
 ## The finding-delta model — why it won't avalanche
 
@@ -61,8 +62,11 @@ findings now block; pre-existing ones remain advisory.
 ## Adopting new rules — re-pin `SGT_REF`
 
 The CI templates pin the toolkit to an immutable 40-char commit SHA (`SGT_REF`),
-not a tag, so gate behavior never changes under you. The asset-security suite ships
-in **rules catalog 0.4.0**. To adopt it (or any future rules), bump the pin:
+never a tag — the rationale lives where the pin is set, in the onboarding setup
+step ([GitLab](gitlab-onboarding.md#2-fill-in-two-variables-in-the-template-header)
+· [GitHub](github-onboarding.md#2-fill-in-two-values-in-the-template-header)). The
+asset-security suite ships in **rules catalog 0.4.0**. To adopt it (or any future
+rules), bump the pin:
 
 ```bash
 # Regenerate the gate workflow with the toolkit's current HEAD SHA pre-filled
@@ -177,25 +181,17 @@ root (so authors can request suppressions), and it is gated by
 only `audit-ignore.json` + the CI gate file in the consumer repo, not the catalog
 or overlays.
 
-### Runbooks
-
-- Kill-switch (fast mitigation when a bumped pin misbehaves):
-  [security-incident-runbook.md](security-incident-runbook.md).
-- Suppressing a finding (inline vs central, SLA, break-glass):
-  [security-suppression-runbook.md](security-suppression-runbook.md).
-
 ## Fast mitigation — the fleet kill-switch
 
-If the gate misbehaves after a rollout (a bad pin, an over-broad org pattern),
-the fastest mitigation is **not** to revert the template or touch CODEOWNERS — set
-one CI variable:
+If the gate misbehaves after a rollout (a bad pin, an over-broad org pattern), the
+fastest mitigation is the CI/CD variable `SGT_FAIL_MODE=advisory` — every pipeline
+stops blocking while still publishing reports. Detection signals, the full
+procedure, and the durable re-pin fix: [security-incident-runbook.md](security-incident-runbook.md).
 
-```bash
-# org or project CI/CD variable
-SGT_FAIL_MODE=advisory
-```
+## See also
 
-Every pipeline immediately stops blocking (exit 0 with a stderr notice) while
-still publishing reports. Then fix the root cause — re-pin `SGT_REF` to the
-last-known-good SHA — and remove the variable. Full procedure:
-[security-incident-runbook.md](security-incident-runbook.md).
+- [security-incident-runbook.md](security-incident-runbook.md) — go here when the gate blocks merges fleet-wide.
+- [security-suppression-runbook.md](security-suppression-runbook.md) — go here for per-finding exceptions (inline vs central, SLA, break-glass).
+- [gitlab-onboarding.md](gitlab-onboarding.md) / [github-onboarding.md](github-onboarding.md) — go here to wire the gate before rolling it out.
+- [cli-reference.md](cli-reference.md) — go here for `--fail-on-new`, `--whole-tree`, and exit-code semantics.
+- [checks-reference.md](checks-reference.md) — go here for what each `SEC*` rule detects.

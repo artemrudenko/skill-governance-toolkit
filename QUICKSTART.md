@@ -34,7 +34,10 @@ python3 ~/tools/sgt/scripts/sgt.py init        # guided: pick host + scope, then
 > Hosted on a private **GitLab** instance? Same flow — clone from your internal
 > host (`git clone https://gitlab.example.com/{your-group}/skill-governance-toolkit ~/tools/sgt`),
 > authenticating via `glab auth login`, a PAT, or a read-only deploy token. See
-> [README § Private GitLab instance](README.md#private-gitlab-instance--hosting--auth-setup).
+> [`docs/installation.md` § Private GitLab](docs/installation.md#private-gitlab).
+
+Full install / upgrade / distribution guide (hosts & scopes, selective install,
+private-repo auth, what upgrades preserve, Windows): [`docs/installation.md`](docs/installation.md).
 
 Non-interactive (CI / scripted):
 ```bash
@@ -78,6 +81,9 @@ sgt new-skill prompt-evaluate --category governance   # 1. governance-clean skel
 #      invoke skill-evaluate on skills/prompt-evaluate/SKILL.md
 python3 scripts/build_index.py                        # 3. re-index so the installer sees it
 ```
+
+The canonical SKILL.md skeleton — required frontmatter, `metainfo` schema, naming
+vocab, body budget: [`docs/skill-authoring-standard.md`](docs/skill-authoring-standard.md).
 
 ## Gate it in CI
 

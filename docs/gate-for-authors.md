@@ -3,6 +3,8 @@
 You landed here from a merge-request comment. This page tells you, in one screen,
 what the gate checks and how to clear a finding.
 
+> Audience: skill author · Type: how-to · Prerequisite: none — this is the page the gate comment links to
+
 ## What the gate checks
 
 Every MR that touches a governed asset (a `SKILL.md`, an agent, an `AGENTS.md`, an
@@ -86,11 +88,10 @@ sgt gate --base main
 It runs the same changed-only delta gate CI runs (`--fail-on-new high`) and exits
 non-zero on the same findings. Green locally → green in CI.
 
-## Links
+## See also
 
-- [checks-reference.md](checks-reference.md) — every rule, with triggering
-  examples and clean fixes.
-- [security-suppression-runbook.md](security-suppression-runbook.md) — false
-  positives, inline vs central, SLA and break-glass.
-- [agent-governance-engine.md](agent-governance-engine.md) — the pipeline, the
-  finding-delta model, and the coverage matrix.
+- [checks-reference.md](checks-reference.md) — go here for every rule, with triggering examples and clean fixes.
+- [security-suppression-runbook.md](security-suppression-runbook.md) — go here for false positives, inline vs central suppression, SLA and break-glass.
+- [agent-governance-engine.md](agent-governance-engine.md) — go here for the pipeline, the finding-delta model, and the coverage matrix.
+- [skill-authoring-standard.md](skill-authoring-standard.md) — go here for the canonical SKILL.md skeleton before you write a new skill.
+- [user-guide.md](user-guide.md) — go here for the local quality workflow (`skill-evaluate`, scoring, rewrite).

@@ -1,8 +1,8 @@
 # Security Suppression Runbook — "I got a false positive"
 
-Author-facing runbook for handling a security finding from the governance gate.
-Read the [checks reference](checks-reference.md) for what each rule detects; read
-[gate-for-authors.md](gate-for-authors.md) for the one-page overview.
+Author-facing runbook for handling a security finding from the governance gate: fix, inline-suppress, or request a central exception.
+
+> Audience: skill author · Type: how-to · Prerequisite: [gate-for-authors.md](gate-for-authors.md) — the one-page gate overview.
 
 ## Decision tree
 
@@ -21,11 +21,12 @@ flowchart TD
 **Default to fixing the content.** Suppression is for genuine false positives and
 sanctioned exceptions — not for silencing a real finding under deadline pressure.
 
-**Floor set** (severity cannot be downgraded; inline markers cannot suppress —
-source of truth is `SEVERITY_FLOOR` in `scripts/agent_audit.py`, mirrored in
-[checks-reference.md § Triggering examples and fixes](checks-reference.md#triggering-examples-and-fixes)):
-`SKILL001/002/009/014/015` · `SEC001/002/010/011` · `REF002` · `SCR001/002/003` ·
-`MCP001` · `HOOK001/002`. Everything else is advisory and inline-suppressible.
+**Floor set** (severity cannot be downgraded; inline markers cannot suppress).
+The two you will hit most often are `SEC011` (secret material) and `SEC010`
+(dangerous shell). The full floor set is mirrored in
+[checks-reference.md § Triggering examples and fixes](checks-reference.md#triggering-examples-and-fixes)
+(source of truth: `SEVERITY_FLOOR` in `scripts/agent_audit.py`). Everything else
+is advisory and inline-suppressible.
 
 ## Mechanism 1 — inline marker (advisory rules only)
 
@@ -122,3 +123,10 @@ sgt gate --base main
 # Confirm the central file is CODEOWNERS-gated
 sgt gate --check-setup
 ```
+
+## See also
+
+- [gate-for-authors.md](gate-for-authors.md) — go here first if you just landed from an MR comment.
+- [checks-reference.md](checks-reference.md) — go here for what each rule detects and the floor set.
+- [security-incident-runbook.md](security-incident-runbook.md) — go here when the gate blocks *everything*, not one finding.
+- [cli-reference.md](cli-reference.md) — go here for `list-suppressions` and `sgt gate` flags.

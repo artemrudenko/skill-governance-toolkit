@@ -5,6 +5,8 @@ standard makes skills predictable to activate across all five supported
 runtimes (Claude Code, Copilot, Cursor, Codex CLI, Gemini CLI) and easier
 for reviewers / `library-audit` to validate.
 
+> Audience: skill authors & reviewers · Type: reference · Prerequisite: none
+
 ## Canonical skeleton
 
 ```markdown
@@ -355,3 +357,10 @@ files; its Hard rules forbid executing any of their scripts.
 `library-audit` Phase 3 (naming) + Phase 4 (portability tag) + Phase 4.5
 (multi-tool compat) enforce many of these mechanically. The remaining
 human-judgment rules are documented here.
+
+## See also
+
+- [gate-for-authors.md](gate-for-authors.md) — go here for what the MR gate enforces on the skill you author.
+- [checks-reference.md](checks-reference.md) — go here for the rule catalog that validates this standard mechanically.
+- [user-guide.md](user-guide.md) — go here for the authoring workflow (evaluate, score, rewrite, audit).
+- [extending-checks.md](extending-checks.md) — go here to add a new deterministic rule or propose an org governance rule.

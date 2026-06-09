@@ -1,6 +1,8 @@
 # CLI Reference
 
-Complete, code-verified reference for the two command-line entry points the toolkit ships.
+Complete, code-verified reference for the two command-line entry points the toolkit ships (`agent_audit.py` engine + `sgt` facade) — every flag, default, and exit code.
+
+> Audience: gate adopters & CI authors · Type: reference · Prerequisite: [agent-governance-engine.md](agent-governance-engine.md) for which delivery mode to use
 
 The deterministic audit **engine** is `scripts/agent_audit.py` — the CLI invoked by CI and by local pre-merge checks. The `sgt` **facade** (`scripts/sgt.py`) is a thin, user-facing wrapper that runs the same engine for the common workflows (install, gate, scaffold). Both share one detector core, so a verdict produced locally matches the one produced in CI.
 
@@ -166,6 +168,24 @@ python3 scripts/agent_audit.py validate-config --config references/agent-audit-c
 ## `audit-project` flags in depth
 
 `audit-project` is the gate command, and it has **two independent scoping layers**. Conflating them is the most common source of confusion.
+
+```mermaid
+flowchart TD
+    A[all discovered assets] --> L1{"Layer 1 — file scope<br/>--changed-only?"}
+    L1 -->|yes| T["touched files only<br/>(git diff base...HEAD)"]
+    L1 -->|no| W[every discovered asset]
+    T --> F[findings]
+    W --> F
+    F --> L2{"Layer 2 — finding scope"}
+    L2 -->|"--fail-on (absolute)"| AB{"any finding ≥ threshold?"}
+    L2 -->|"--fail-on-new (delta vs --base)"| DL{"introduced finding ≥ threshold?"}
+    AB -->|yes| X1["exit 1 — block"]
+    AB -->|no| X0["exit 0 — pass"]
+    DL -->|yes| X1
+    DL -->|no| X0
+    L1 -. "empty --base<br/>fail-closed" .-> X2["exit 2 — refuse to run"]
+    WT["--whole-tree<br/>impact report"] -. "always" .-> X0
+```
 
 ### Layer 1 — file scope: `--changed-only` (which FILES are audited)
 
@@ -388,3 +408,13 @@ their key flags are summarized here so the reference is complete.
 
 These are also documented inline where they appear in [`user-guide.md`](user-guide.md);
 this table is the consolidated flag-level view.
+
+---
+
+## See also
+
+- [checks-reference.md](checks-reference.md) — go here for what each rule a flag gates actually checks
+- [agent-governance-engine.md](agent-governance-engine.md) — go here to pick a delivery mode (CLI / MCP / Docker)
+- [github-onboarding.md](github-onboarding.md) — go here to wire these flags into a GitHub Actions gate
+- [gitlab-onboarding.md](gitlab-onboarding.md) — go here to wire these flags into a GitLab CI gate
+- [extending-checks.md](extending-checks.md) — go here when `validate-config` rejects your org pattern or you want a new rule

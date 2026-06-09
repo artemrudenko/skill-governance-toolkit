@@ -1,8 +1,8 @@
 # GitHub Onboarding — Skill Governance Gate
 
-> Hand-off doc for the team that owns the AI Tools Marketplace GitHub repo.
-> Goal: enable the skill-governance pull-request gate on GitHub Actions.
-> This is the GitHub counterpart of [`gitlab-onboarding.md`](gitlab-onboarding.md) — same engine, same delta semantics, same SHA pin.
+Enable the skill-governance pull-request gate on GitHub Actions — the GitHub counterpart of [gitlab-onboarding.md](gitlab-onboarding.md) (same engine, same delta semantics, same SHA pin).
+
+> Audience: platform-devops · Type: how-to · Prerequisite: a toolkit mirror your workflows can clone
 
 ## What this gate does
 
@@ -67,9 +67,9 @@ python3 scripts/sgt.py ci-init --github --ref "$(git -C /path/to/toolkit rev-par
 
 ### 3. (Optional) Kill-switch variable
 
-Set the org or repo **Actions variable** `SGT_FAIL_MODE=advisory` to downgrade
-the gate to non-blocking fleet-wide **without editing the pinned template**. The
-engine honors it automatically (exit 0 even on a blocking finding).
+The org/repo **Actions variable** `SGT_FAIL_MODE=advisory` downgrades the gate to
+non-blocking fleet-wide without editing the pinned template — procedure and when
+to pull it: [security-incident-runbook.md](security-incident-runbook.md).
 
 ### 4. Done
 
@@ -87,12 +87,14 @@ GitHub only blocks a merge when a check is a **required status check**:
    against the current base.
 
 Because the workflow uses `on: pull_request` with a `paths:` filter, a PR that
-touches no governed asset does not run the job. If you make the check *required*,
-add a always-green companion job (or use `paths-ignore` strategy) so unrelated
-PRs are not blocked waiting on a check that never starts. The GitLab template
-solves this with an explicit `noop` job; on GitHub the common pattern is to keep
-the gate **not** required and instead enforce via CODEOWNERS review + a required
-job that always runs. Pick one and document it for your org.
+touches no governed asset does not run the job — a *required* check that never
+starts blocks the merge forever. Pick one pattern and document it for your org:
+
+1. **Keep the gate not-required** and enforce via CODEOWNERS review plus a
+   required job that always runs (the common GitHub pattern).
+2. **Make the gate required** and add an always-green companion job (or a
+   `paths-ignore` mirror job) so unrelated PRs still get a passing check —
+   the GitLab template closes the same gap with its explicit `noop` job.
 
 ## Separation of duties (CODEOWNERS)
 
@@ -114,7 +116,8 @@ mirror the same ownership in the consuming repo.
   `origin/$GITHUB_BASE_REF` explicitly and uses `fetch-depth: 0` so the merge-base
   is reachable. A shallow clone breaks the three-dot diff — keep `fetch-depth: 0`.
 - On the very first push of a new branch with no base resolvable, the engine
-  **fails closed** (exit non-zero) rather than silently auditing the whole tree.
+  **fails closed** (exit non-zero) rather than silently auditing the whole tree —
+  rationale: [cli-reference.md § `audit-project` flags in depth](cli-reference.md#audit-project-flags-in-depth).
 
 ## Verify locally before pushing
 
@@ -141,3 +144,16 @@ delta semantics, SHA pin, and suppression hygiene are identical across both
 platforms; only the advisory comment presentation differs. If your team needs a
 consolidated GitHub PR comment, post `skill-audit.json` via the GitHub REST API
 in a follow-up step (a `pull_request` comment), or rely on the annotations.
+
+---
+
+**Next:** [security-rollout-guide.md](security-rollout-guide.md) — staged rollout
+(advisory → enforce) once the gate is wired.
+
+## See also
+
+- [security-incident-runbook.md](security-incident-runbook.md) — go here when the gate blocks merges fleet-wide (kill-switch + re-pin).
+- [security-suppression-runbook.md](security-suppression-runbook.md) — go here when an author reports a false positive.
+- [cli-reference.md](cli-reference.md) — go here for every engine flag, env var, and exit code.
+- [checks-reference.md](checks-reference.md) — go here for what each rule detects and how to fix it.
+- [gitlab-onboarding.md](gitlab-onboarding.md) — go here if the consuming repo lives on GitLab instead.

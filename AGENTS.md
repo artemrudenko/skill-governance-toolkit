@@ -55,7 +55,7 @@ The toolkit itself follows the universal pattern it enforces — it can be loade
 5. **`description` is mission-critical** — write 2–5 explicit trigger phrases in the user's natural language. Skill descriptions are how the agent decides when to activate.
 6. **Naming convention:** `{entity}-{action}[-{qualifier}]`, kebab-case, ≤ 2 words after the entity (action + optional qualifier). Closed-vocabulary action verbs: `find`, `audit`, `evaluate`, `compare`, `build`, `extend`, `frame`, `ingest`, `mark`, `plan`, `query`, `init`. Optional qualifier disambiguates within the same verb (e.g. `skill-build-portable` vs `skill-build`).
 7. **Discovery / scan skills require a bounded scope parameter.** Open-ended «scan all» without `SCOPE_WINDOW` (last N sessions, since YYYY-MM-DD, sprint X) must fail-fast in Phase 0.
-8. **`metainfo.category` and `metainfo.tier` are required** (since 1.8.0). Closed-vocab categories: `code-review` · `docs` · `testing` · `governance` · `discovery` · `research` · `delivery`. Tier enum: `stable` · `preview` · `experimental` · `internal`. The installer reads these from `skills/INDEX.jsonl` to support `--category`/`--tier`/`--skill` selective install. New skills should start at `tier: preview`; promote to `stable` after ≥1 release without breaking changes. `library-audit` Phase 5.5 enforces both presence and closed-vocab compliance.
+8. **`metainfo.category` and `metainfo.tier` are required** (since 1.8.0; closed vocab — new skills start at `tier: preview`). Schema, vocab, and promotion contract: `docs/skill-authoring-standard.md` § metainfo.
 
 ### Sub-agent rules
 
@@ -226,6 +226,6 @@ See `skills/integration-init/references/integrations.md` for the full per-tool c
 
 - `README.md` — quick start for adopting this toolkit in a new project
 - `skills/{any}/SKILL.md` — see how skills are structured in practice
-- [`docs/contributing-rules.md`](docs/contributing-rules.md) — propose an org governance rule (advisory-first, reserved id, `stability` marker)
+- [`docs/extending-checks.md`](docs/extending-checks.md) — add / remove / tune a check; propose an org governance rule (advisory-first, reserved id, `stability` marker)
 - [agentskills.io/specification](https://agentskills.io/specification) — the open SKILL.md standard
 - [agents.md](https://agents.md) — the open AGENTS.md format

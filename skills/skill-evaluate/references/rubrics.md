@@ -212,6 +212,21 @@ description: "Review full PRs for bugs and style. Not for single-file lint — u
 The negative scope is in the routing layer already. No finding — this is the
 shape the triggering examples should be relocated *to*.
 
+**Near-miss — `don't` inside the canonical activation sections (NO finding, mandated):**
+
+```text
+## When to use
+**Skip / Don't use for:**
+- Single-file lint — use the linter.
+
+## When not to use
+This skill is for full PRs, not one-off snippets.
+```
+
+These sections are **required** by 3.0b and coherence-checked by 3.7 — they are
+the sanctioned in-body home for negative scope. 3.8 must **not** flag them;
+doing so would contradict the structure checks that mandate them.
+
 ## D9 — Safety / Risk Awareness
 
 Does the skill identify and document mitigations for safety-critical concerns? This dimension evaluates **behavioral design**, not lexical content (lexical secret/dangerous-pattern scanning lives in `library-audit` Phase 5).

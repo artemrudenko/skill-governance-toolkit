@@ -141,7 +141,7 @@ Each sub-check is detect-only; findings appear in the Phase 4 report.
 | 3.5 — Lexical security scan | reuses `skills/library-audit/references/security-spec.md` | **caps D9 ≤ 2 / 3 / 4** |
 | 3.6 — Writing quality scan | language consistency, filler density, duplicate paragraphs, long prose | **caps D1 ≤ 3 / 4** |
 | 3.7 — Activation coherence | `description` positive triggers vs body `Skip / When not to use` (semantic) | **caps D8 ≤ 3** |
-| 3.8 — Negative-rule placement | passive prose prohibitions buried in body (semantic) | 🔵 **info — never caps** |
+| 3.8 — Negative-rule placement | passive prose prohibitions **outside** the canonical When-to-use sections (semantic) | 🔵 **info — never caps** |
 
 **Self-exclusion:** `skills/skill-evaluate/**` files exempt from Phase 3.5 + 3.6 + 3.7 + 3.8 scanning of their own bodies (they document the patterns; would trivially self-flag).
 

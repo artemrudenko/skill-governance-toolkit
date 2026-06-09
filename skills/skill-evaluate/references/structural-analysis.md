@@ -218,12 +218,17 @@ Rationale: D8 (Discoverability) asks «will the right need activate this skill, 
 | Form in body | Verdict | Recommended relocation |
 |---|---|---|
 | Negative boundary already in `description` (anti-trigger) | ✅ reward — no finding | — (already in the routing layer) |
-| **Activation** prohibition as prose («do not use this skill if/when X», «не используй для X») after `## When to use` | 🔵 info | move the scope into `description` (prevents *selection*; body loads only *after* the wrong choice is made) |
+| **Activation** prohibition as prose in a **non-canonical** section («do not use this skill if/when X» in `## Notes` or mid-Phase prose) | 🔵 info | move the scope into `description` (prevents *selection*; body loads only *after* the wrong choice is made) |
 | **Safety/execution** prohibition as prose («never push to read-only», «always update this file») | 🔵 info | hoist to `AGENTS.md` (always-on, loaded every turn — survives long runs) |
+| `Skip / Don't use for` or `## When not to use` content inside the **canonical** activation sections | ✅ no finding | — (the sanctioned in-body refinement — see scope-out below) |
 | Executable **Phase-0 gate** (a check that fails fast with a message) | ✅ no finding | — (a gate *does* something at the moment of decision; it cannot be skipped) |
 | **In-flow branch** conditional read at its point of use («on the fast path, skip if diff touches migrations») | ✅ no finding | — (read in the execution flow where it applies) |
 
-**Detection.** Scan the body **after** the `## When to use` section. Candidate lines: passive prohibitions (`do not use`, `don't use`, `never use this`, `не используй`, `не делай`) **not** inside a fenced code block and **not** part of a Phase-0 gate (no accompanying fail-fast action + message). For each candidate, judge the form per the table above. The robust form of a body-level «don't» is an executable gate; passive prose is the weak form this check surfaces.
+**Scope-out — do NOT conflict with the structure checks.** The canonical activation sections are the **sanctioned** in-body home for negative scope: `## When to use` and all its subsections (including `**Skip / Don't use for:**` and `**Don't skip when:**`) and `## When not to use`. These are **required** by [3.0b](#30b--body-structure), rewarded by the gate rule `SKILL012`, inserted by `skill-build-portable` S2, and coherence-checked by [3.7](#37--activation-coherence-this-skill). **3.8 never flags content inside them** — flagging a mandated section would pit one check against another. 3.8 fires only on prohibitions **outside** these sections.
+
+**Defer to 3.7.** A `Skip` / `When not to use` line that *contradicts* the `description`'s positive scope is 3.7's concern (caps D8) — 3.8 does **not** double-flag it. 3.8 is about *placement of a stray prohibition*, not coherence.
+
+**Detection.** Scan the body **excluding** the canonical sections named in Scope-out. Candidate lines: passive prohibitions (`do not use`, `don't use`, `never use this`, `не используй`, `не делай`) **not** inside a fenced code block and **not** part of a Phase-0 gate (no accompanying fail-fast action + message). For each candidate, judge the form per the table above. The robust form of a body-level «don't» is an executable gate; passive prose is the weak form this check surfaces.
 
 | Pass | What we check | Detection | Severity |
 |---|---|---|---|

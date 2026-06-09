@@ -52,16 +52,38 @@ class CatalogConsistencyTests(unittest.TestCase):
             "info_flags not documented in skill-evaluate JSONL schema",
         )
 
+    def _section_38(self) -> str:
+        m = re.search(r"##\s+3\.8\s+—.*?(?=^##\s|\Z)", self.struct_text, re.S | re.M)
+        self.assertIsNotNone(m, "3.8 section not found")
+        return m.group(0).lower()
+
     def test_info_contract_states_no_cap(self) -> None:
         """The info severity contract must explicitly state it never caps / affects score."""
-        # 3.8 section must declare the info contract (does not cap any dimension).
-        m = re.search(r"##\s+3\.8\s+—.*?(?=^##\s|\Z)", self.struct_text, re.S | re.M)
-        self.assertIsNotNone(m, "3.8 section not found for info-contract assertion")
-        section = m.group(0).lower()
+        section = self._section_38()
         self.assertTrue(
             ("info" in section)
             and ("does not cap" in section or "never cap" in section or "no cap" in section),
             "3.8 must declare the info contract: info-severity finding does NOT cap a dimension",
+        )
+
+    def test_38_scopes_out_canonical_sections(self) -> None:
+        """No-conflict guard: 3.8 must exclude the canonical When-to-use sections that
+        3.0b mandates and 3.7 coherence-checks — else one check flags what another requires."""
+        section = self._section_38()
+        self.assertIn(
+            "when not to use",
+            section,
+            "3.8 must name `## When not to use` in its scope-out (sanctioned section)",
+        )
+        self.assertIn(
+            "skip / don't use for",
+            section,
+            "3.8 must name the `Skip / Don't use for` subsection in its scope-out",
+        )
+        # Must reference the checks it must not contradict.
+        self.assertTrue(
+            "3.0b" in section and "3.7" in section,
+            "3.8 scope-out must reference 3.0b (requires the sections) and 3.7 (coherence)",
         )
 
 

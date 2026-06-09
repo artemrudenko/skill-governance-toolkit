@@ -99,6 +99,14 @@ Anti-pattern: a passive prose «do not use this skill if…» sitting in a mid-b
 `## Notes`. `skill-evaluate` 3.8 surfaces these as `info` findings and names the
 layer to move each to. The robust body-level «don't» is a gate, not a sentence.
 
+**This does NOT mean «remove the body's activation sections».** The canonical
+`## When to use` (with `**Skip / Don't use for:**`) and `## When not to use` are
+still **required** (3.0b) and are the *sanctioned* in-body refinement of scope —
+`description` routes activation, those sections narrow it after activation, and
+3.7 checks the two agree. 3.8 only concerns a **stray** prohibition placed
+*outside* those sanctioned sections; it never flags — and never asks you to
+remove — the activation sections the standard mandates.
+
 ## metainfo block (required since 1.8.0)
 
 `metainfo:` is a **namespaced sub-block** in frontmatter — top-level fields

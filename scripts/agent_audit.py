@@ -1872,16 +1872,29 @@ def audit_project(
             referenced_scripts |= _referenced_scripts_in_body(
                 skill_text, Path(asset["path"]).parent, root_path)
 
-    # Transitive-bypass closure: also scan any script whose OWN rel path is in the
-    # changed set, even if referenced only by an UNCHANGED asset. Respect scope:
-    # when changed_paths is set, keep only referenced-by-in-scope-asset OR self-changed.
+    # Transitive-bypass closure: also scan a CHANGED script even if it is referenced
+    # only by an UNCHANGED asset (its own ref would otherwise be out of scope). The
+    # closure is intersected with the FULL referenced-script set (across ALL assets,
+    # ignoring scope): a changed script no asset references is not an agent attack
+    # surface, and whole-tree mode never scans it — without this intersection a
+    # standalone changed script (e.g. a test fixture with deliberate fake secrets)
+    # would be flagged in changed-only but not whole-tree, a mode-dependent false
+    # positive. SCR rules apply to REFERENCED scripts only (see checks-reference.md).
     scripts_to_scan: set[str] = set(referenced_scripts)
     if changed_paths is not None:
-        scripts_to_scan |= {
+        all_referenced: set[str] = set()
+        for asset in discovery["assets"]:
+            if asset["type"] not in ("skill", "agent", "command"):
+                continue
+            body = safe_read_asset(Path(asset["path"]), root_path)
+            if body is not None:
+                all_referenced |= _referenced_scripts_in_body(
+                    body, Path(asset["path"]).parent, root_path)
+        changed_scripts = {
             p for p in changed_paths
             if re.search(r"(?:^|/)scripts/[A-Za-z0-9._-]+\.(?:py|sh|ps1)$", p)
-            or re.fullmatch(r"scripts/[A-Za-z0-9._-]+\.(?:py|sh|ps1)", p)
         }
+        scripts_to_scan |= (changed_scripts & all_referenced)
 
     for rel in sorted(scripts_to_scan):
         script_path = root_path / rel

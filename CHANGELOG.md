@@ -33,10 +33,12 @@ Rules catalog bumped `0.1.0 → 0.4.0`.
   in-repo link (`REF004`). Resolution mirrors `safe_read_asset`; anchors,
   `mailto:`, and gitignored output dirs are excluded.
 - **Referenced-script content scan (`SCR001`–`SCR003`).** Scripts that an asset
-  body references (or that are themselves changed) are read and scanned for an
-  env-var exfiltration heuristic (`SCR001` — explicitly low-recall, absence ≠
-  safe), dangerous shell (`SCR002`), and secret references (`SCR003`). Scope is
-  referenced-or-changed only — never a blanket `scripts/` sweep.
+  body references are read and scanned for an env-var exfiltration heuristic
+  (`SCR001` — explicitly low-recall, absence ≠ safe), dangerous shell (`SCR002`),
+  and secret references (`SCR003`). In changed-only mode a changed script is
+  scanned only when some asset references it (changed or not) — never a blanket
+  `scripts/` sweep, and never a standalone changed script no asset loads, so the
+  scope matches whole-tree exactly (a self-contained test fixture is not flagged).
 - **MCP tool↔server consistency (`MCP001`/`MCP002`).** A skill using `mcp__server__*`
   must declare the server in `metainfo.requires.mcp` (or the org `allow_mcp_servers`
   allowlist); used-but-undeclared is `MCP001` (high), declared-but-unused is `MCP002`

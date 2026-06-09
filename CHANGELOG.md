@@ -15,7 +15,7 @@ each before upgrading.
 Extends the deterministic engine from skill-structure checks to a **content
 security** scan over every governed asset, plus a **finding-delta gate** so the
 new rules can be enabled over a legacy library without an avalanche of failures.
-Rules catalog bumped `0.1.0 → 0.2.0`.
+Rules catalog bumped `0.1.0 → 0.3.0`.
 
 ### Added
 - **Per-asset content security pipeline.** Non-skill assets (MCP configs, plugin
@@ -23,6 +23,17 @@ Rules catalog bumped `0.1.0 → 0.2.0`.
   dangerous instructions (`SEC010`), inline secret values (`SEC011`), and
   credential-file paths (`SEC012`). The asset-type → checks routing lives in
   `agent_audit.py` `checks_for`.
+- **Reference-safety rules (`REF001`–`REF004`).** Asset bodies are scanned for
+  unsafe references: a referenced shipping script not in the runtime manifest
+  (`REF001`), a link target that traverses/escapes the repo root (`REF002`,
+  high/floor), an external URL not in the allowlist (`REF003`), and a dangling
+  in-repo link (`REF004`). Resolution mirrors `safe_read_asset`; anchors,
+  `mailto:`, and gitignored output dirs are excluded.
+- **Referenced-script content scan (`SCR001`–`SCR003`).** Scripts that an asset
+  body references (or that are themselves changed) are read and scanned for an
+  env-var exfiltration heuristic (`SCR001` — explicitly low-recall, absence ≠
+  safe), dangerous shell (`SCR002`), and secret references (`SCR003`). Scope is
+  referenced-or-changed only — never a blanket `scripts/` sweep.
 - **Hidden-character scan (`SEC001`/`SEC002`) on every asset.** Catches bidi
   controls / direction marks (`SEC001`) and invisible/format/tag/variation
   characters (`SEC002`) used to smuggle instructions past a human reviewer. The

@@ -159,20 +159,24 @@ enable the suite over a legacy library without an avalanche; see
 Which checks run on which asset type, derived from `checks_for` (non-skills) and
 `audit_skill` (skills). `✓` = runs; blank = does not run.
 
-| Asset type | Hidden-char<br/>SEC001/002 | Homoglyph<br/>SEC003 | Security<br/>SEC010/011/012 | Skill structure<br/>SKILL/D1–D9 |
-|---|---|---|---|---|
-| `skill` (`SKILL.md`) | ✓ | ✓ | | ✓ (SKILL001–023; LLM D1–D9 via `skill-evaluate`) |
-| `agent` (`agents/*.md`) | ✓ | ✓ | ✓ | |
-| `mcp-config` (`.mcp.json`) | ✓ | ✓ | ✓ | |
-| `plugin-config` (`*-plugin/plugin.json`) | ✓ | ✓ | ✓ | |
-| `runtime-config` (`gemini-extension.json`) | ✓ | ✓ | ✓ | |
-| `command` (`commands/*.md`) | ✓ | ✓ | ✓ | |
-| `prompt` (`prompts/*`) | ✓ | ✓ | ✓ | |
+| Asset type | Hidden-char<br/>SEC001/002 | Homoglyph<br/>SEC003 | Security<br/>SEC010/011/012 | References<br/>REF001–004 | Skill structure<br/>SKILL/D1–D9 |
+|---|---|---|---|---|---|
+| `skill` (`SKILL.md`) | ✓ | ✓ | | ✓ | ✓ (SKILL001–023; LLM D1–D9 via `skill-evaluate`) |
+| `agent` (`agents/*.md`) | ✓ | ✓ | ✓ | ✓ | |
+| `mcp-config` (`.mcp.json`) | ✓ | ✓ | ✓ | | |
+| `plugin-config` (`*-plugin/plugin.json`) | ✓ | ✓ | ✓ | | |
+| `runtime-config` (`gemini-extension.json`) | ✓ | ✓ | ✓ | | |
+| `command` (`commands/*.md`) | ✓ | ✓ | ✓ | ✓ | |
+| `prompt` (`prompts/*`) | ✓ | ✓ | ✓ | | |
 
 > Skills run the **skill-only** secret/dangerous detectors (`SKILL014`/`SKILL015`)
 > with the prose exemption enabled, not the non-skill `SEC010`/`SEC011`. Non-skill
 > assets disable that prose exemption — a config is not documentation. The D1–D9
 > dimensions are LLM-scored by `skill-evaluate`, not by the deterministic engine.
+>
+> **Referenced-script content (`SCR001`–`SCR003`)** is not a per-asset-type column:
+> it scans the *scripts an asset body references* (or scripts changed in the MR),
+> resolved within the repo root — never a blanket `scripts/` sweep.
 
 ## MCP server
 

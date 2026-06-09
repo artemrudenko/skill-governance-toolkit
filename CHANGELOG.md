@@ -15,7 +15,7 @@ each before upgrading.
 Extends the deterministic engine from skill-structure checks to a **content
 security** scan over every governed asset, plus a **finding-delta gate** so the
 new rules can be enabled over a legacy library without an avalanche of failures.
-Rules catalog bumped `0.1.0 → 0.3.0`.
+Rules catalog bumped `0.1.0 → 0.4.0`.
 
 ### Added
 - **Per-asset content security pipeline.** Non-skill assets (MCP configs, plugin
@@ -34,6 +34,16 @@ Rules catalog bumped `0.1.0 → 0.3.0`.
   env-var exfiltration heuristic (`SCR001` — explicitly low-recall, absence ≠
   safe), dangerous shell (`SCR002`), and secret references (`SCR003`). Scope is
   referenced-or-changed only — never a blanket `scripts/` sweep.
+- **MCP tool↔server consistency (`MCP001`/`MCP002`).** A skill using `mcp__server__*`
+  must declare the server in `metainfo.requires.mcp` (or the org `allow_mcp_servers`
+  allowlist); used-but-undeclared is `MCP001` (high), declared-but-unused is `MCP002`
+  (low). `mcp__` tokens inside fenced/inline code or detection-context lines are
+  ignored. MCP server `command + args` are also joined and dangerous-scanned so a
+  payload split across argv elements is caught.
+- **Hook-command audit (`HOOK001`/`HOOK002`).** `.claude/settings*.json`, `plugin.json`
+  `hooks` blocks, and `hooks/*` scripts are a new governed `hook` asset type; each
+  hook command is scanned for dangerous shell (`HOOK001`) and secret/env-exfil
+  (`HOOK002`). CI `rules:changes` extended to cover the hook paths.
 - **Hidden-character scan (`SEC001`/`SEC002`) on every asset.** Catches bidi
   controls / direction marks (`SEC001`) and invisible/format/tag/variation
   characters (`SEC002`) used to smuggle instructions past a human reviewer. The

@@ -177,6 +177,11 @@ Which checks run on which asset type, derived from `checks_for` (non-skills) and
 > **Referenced-script content (`SCR001`–`SCR003`)** is not a per-asset-type column:
 > it scans the *scripts an asset body references* (or scripts changed in the MR),
 > resolved within the repo root — never a blanket `scripts/` sweep.
+>
+> **MCP consistency (`MCP001`/`MCP002`)** runs on `skill` assets (tool usage vs
+> `metainfo.requires.mcp`); MCP server `command + args` in `mcp-config` assets get
+> a structural dangerous-scan. **Hook commands (`HOOK001`/`HOOK002`)** run on the
+> `hook` asset type — `.claude/settings*.json`, `plugin.json` `hooks`, and `hooks/*`.
 
 ## MCP server
 

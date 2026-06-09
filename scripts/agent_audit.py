@@ -53,6 +53,7 @@ SEVERITY_FLOOR = {
     "SEC002": "high",
     "SEC010": "high",
     "SEC011": "high",
+    "REF002": "high",
 }
 # Upper bound on an org-supplied regex length — a coarse ReDoS / footgun guard.
 MAX_PATTERN_LENGTH = 500
@@ -89,6 +90,10 @@ ENGINE_RULE_IDS = {
     "SEC010",
     "SEC011",
     "SEC012",
+    "REF001",
+    "REF002",
+    "REF003",
+    "REF004",
     "IGNORE001",
     "IGNORE002",
     "IGNORE003",
@@ -535,7 +540,7 @@ def frontmatter_text(text: str) -> str:
     return match.group(1) if match else ""
 
 
-def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, Any]:
+def audit_skill(path: str | Path, profile: str = "release-ready", root: str | Path | None = None) -> dict[str, Any]:
     skill_path = Path(path).expanduser().resolve()
     text = read_text(skill_path)
     body = body_without_frontmatter(text)
@@ -747,6 +752,13 @@ def audit_skill(path: str | Path, profile: str = "release-ready") -> dict[str, A
     if isinstance(fm_lang, str) and fm_lang.lower() in LANG_TO_SCRIPT:
         allow_scripts.add(LANG_TO_SCRIPT[fm_lang.lower()])
     findings.extend(scan_homoglyphs(text, skill_path, allow_scripts=allow_scripts, host_aware=True))
+
+    # Reference-safety scan (REF001-REF004): unsafe script refs + link path-safety.
+    # Resolve relative targets against the audit root when known, else the skill's
+    # own install/toolkit root — both REF002/REF004 also fall back to the skill dir.
+    ref_root = Path(root).expanduser().resolve() if root is not None else toolkit_root()
+    findings.extend(scan_references(text, skill_path, ref_root,
+                                    set(load_manifest_basenames()), set(cfg["allow_domains"])))
 
     if profile == "security":
         kept = [f for f in findings if f.rule_id in cfg["security_profile"]]
@@ -977,14 +989,175 @@ def scan_homoglyphs(text: str, path: Path, allow_scripts: set[str], host_aware: 
     return out
 
 
-def checks_for(asset_type_name: str):
+def toolkit_root() -> Path:
+    """The toolkit install root — where scripts/ and references/ live. Resolved from
+    the rule-catalog path so script-existence checks (REF001) work even when the audit
+    root is a user project, not the toolkit itself."""
+    return default_rules_path().parents[1]
+
+
+@lru_cache(maxsize=1)
+def load_manifest_basenames() -> frozenset[str]:
+    """Runtime-manifest basenames (one per line; `#` comments + blanks ignored).
+    Used by REF001 to decide whether a referenced script ships at user runtime."""
+    manifest_rel = load_config()["scripts_manifest"]
+    path = toolkit_root() / manifest_rel
+    names: set[str] = set()
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                names.add(Path(line).name)
+    except OSError:
+        return frozenset()
+    return frozenset(names)
+
+
+# Markdown inline link: [label](target). Target stops at whitespace or close-paren so
+# a trailing " \"title\"" or nested text does not bleed into the captured path.
+_MD_LINK_RE = re.compile(r"\[[^\]]*\]\(\s*([^)\s]+)")
+# Bare scripts/<name>.{py,sh,ps1} mention anywhere in prose (not only inside a link).
+_SCRIPT_REF_RE = re.compile(r"\bscripts/[A-Za-z0-9._-]+\.(?:py|sh|ps1)\b")
+# Hosts that are gitignored output / generated locations — excluded from REF004.
+_REF004_EXCLUDE_PREFIXES = ("out/", "node_modules/", ".git/", "dist/", "build/", "__pycache__/")
+
+
+def _is_external_url(target: str) -> bool:
+    return target.lower().startswith(("http://", "https://"))
+
+
+def _url_host(target: str) -> str:
+    """Lowercased host of an http(s) URL, sans scheme/path/port/credentials."""
+    rest = target.split("://", 1)[1] if "://" in target else target
+    authority = rest.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
+    authority = authority.split("@", 1)[-1]  # drop user:pass@
+    return authority.rsplit(":", 1)[0].lower() if authority else ""
+
+
+def scan_references(
+    text: str,
+    path: Path,
+    root: Path,
+    manifest: set[str] | frozenset[str],
+    allow_domains: set[str],
+) -> list[Finding]:
+    """Detect unsafe references inside an asset body: external URLs (REF003),
+    path-escaping links (REF002), dangling in-repo links (REF004), and shipping
+    scripts referenced off the runtime whitelist (REF001).
+
+    Resolution mirrors safe_read_asset: a relative target is resolved against the
+    asset's own directory first, then against the audit root, so a link that points
+    at a sibling reference resolves the same way the runtime would load it. A target
+    that resolves nowhere is a dangling REF004. REF002 (path escape) is the only
+    floor rule here — it fires on any `..`-escape or absolute filesystem path."""
+    out: list[Finding] = []
+    asset_dir = path.parent
+    tk_root = toolkit_root()
+
+    # Collect (target, offset) candidates: markdown links + bare script mentions.
+    candidates: list[tuple[str, int]] = [(m.group(1), m.start(1)) for m in _MD_LINK_RE.finditer(text)]
+    candidates += [(m.group(0), m.start()) for m in _SCRIPT_REF_RE.finditer(text)]
+
+    seen: set[tuple[str, str]] = set()  # (rule_id, target) — dedupe repeated references
+
+    def _emit(rule_id: str, offset: int, message: str, suggestion: str, target: str) -> None:
+        key = (rule_id, target)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(finding(rule_id, path, line_for_offset(text, offset), message, suggestion))
+
+    for target, offset in candidates:
+        # Anchor-only links and pure fragments are not paths.
+        if not target or target.startswith("#"):
+            continue
+        if target.startswith("mailto:"):
+            continue
+
+        if _is_external_url(target):
+            host = _url_host(target)
+            if not host:
+                continue
+            if host.startswith("xn--") or ".xn--" in host:
+                _emit("REF003", offset,
+                      f"External URL host '{host}' uses punycode (xn--) — verify it is not a homoglyph/typosquat.",
+                      "Confirm the destination host and add it to the audit-config domains allowlist if trusted.",
+                      target)
+            elif host not in allow_domains:
+                _emit("REF003", offset,
+                      f"External URL host '{host}' is not in the domain allowlist.",
+                      "Verify the destination is trusted; add the host to the audit-config domains allowlist if intentional.",
+                      target)
+            continue
+
+        # Strip any anchor fragment from a path target (file.md#section -> file.md).
+        path_part = target.split("#", 1)[0]
+        if not path_part:
+            continue  # was a pure #fragment after split
+
+        # REF001: a referenced shipping script off the whitelist. Resolve script
+        # existence against the TOOLKIT root (scripts/ lives there, not the user project).
+        script_m = re.fullmatch(r"scripts/([A-Za-z0-9._-]+\.(?:py|sh|ps1))", path_part)
+        if script_m:
+            basename = script_m.group(1)
+            script_exists = (tk_root / "scripts" / basename).is_file()
+            if script_exists and basename not in manifest:
+                _emit("REF001", offset,
+                      f"Referenced script '{path_part}' is not in the runtime manifest.",
+                      "Add it to scripts/runtime-manifest.txt or remove the reference to an unshipped script.",
+                      target)
+            # A script reference is still a path — fall through for REF002/REF004 checks.
+
+        # REF002: absolute filesystem path or `..`-escape outside root.
+        is_abs = path_part.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", path_part)
+        candidate_asset = (asset_dir / path_part)
+        candidate_root = (root / path_part)
+        escapes = is_abs or (
+            ".." in Path(path_part).parts
+            and not is_within_root(candidate_asset, root)
+            and not is_within_root(candidate_root, root)
+        )
+        if escapes:
+            _emit("REF002", offset,
+                  f"Link target '{target}' resolves outside the repository root.",
+                  "Use a repo-relative path that stays within the project.",
+                  target)
+            continue
+
+        # REF004: in-repo target that exists nowhere. Conservative — resolve against
+        # the asset dir, the audit root, AND the toolkit/install root (where shared
+        # references/ + scripts/ live per the path-resolution contract). Flag only
+        # when the target resolves nowhere.
+        norm = path_part.lstrip("./")
+        if norm.startswith(_REF004_EXCLUDE_PREFIXES):
+            continue
+        if candidate_asset.exists() or candidate_root.exists() or (tk_root / path_part).exists():
+            continue
+        _emit("REF004", offset,
+              f"Link target '{path_part}' does not exist in the repository.",
+              "Fix the path or create the target file.",
+              target)
+
+    return out
+
+
+def checks_for(asset_type_name: str, root: Path | None = None):
     """Return [(text, path)->[Finding]] callables for an asset type. scan_hidden_chars
-    runs on EVERY non-skill type; the security scan runs on config/agent/hook/script."""
+    runs on EVERY non-skill type; the security scan runs on config/agent/hook/script;
+    the reference scan runs on agent/command (skills get it directly in audit_skill)."""
     cfg = load_config()
     allow = cfg["allow_unicode_scripts"]
     default = [lambda text, path: scan_hidden_chars(text, path),
                lambda text, path: scan_homoglyphs(text, path, allow_scripts=allow, host_aware=True)]
     security_types = {"mcp-config", "plugin-config", "agent", "runtime-config", "command", "prompt"}
+    # Reference-safety scan runs on asset types where links/script refs are meaningful.
+    reference_types = {"agent", "command"}
+    if asset_type_name in reference_types:
+        ref_root = root if root is not None else Path(".")
+        manifest = load_manifest_basenames()
+        allow_domains = cfg["allow_domains"]
+        default = default + [lambda text, path: scan_references(
+            text, path, ref_root, set(manifest), set(allow_domains))]
     if asset_type_name in security_types:
         return default + [lambda text, path: scan_security(text, path, dangerous_id="SEC010",
                                                            secret_id="SEC011", prose=False)]
@@ -1248,7 +1421,7 @@ def audit_project(
             continue
         if not _in_scope(asset["relative_path"], changed_paths):
             continue
-        report = audit_skill(asset["path"], profile=profile)
+        report = audit_skill(asset["path"], profile=profile, root=root_path)
         skill_reports.append(report)
         findings.extend(Finding(**f) for f in report["findings"])
         skill_text = safe_read_asset(Path(asset["path"]), root_path)
@@ -1264,7 +1437,7 @@ def audit_project(
         if text is None:
             continue
         inline.update(_parse_inline_ignores(text, _norm_rel(asset["path"], str(root_path))))
-        for check in checks_for(asset["type"]):
+        for check in checks_for(asset["type"], root_path):
             findings.extend(check(text, Path(asset["path"])))
 
     ignore_doc = _load_ignore_doc(root_path)

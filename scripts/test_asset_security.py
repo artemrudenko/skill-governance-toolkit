@@ -11,6 +11,7 @@ class _CacheSafe(unittest.TestCase):
     def setUp(self) -> None:
         agent_audit.load_config.cache_clear()
         agent_audit.load_rule_catalog.cache_clear()
+        agent_audit.load_manifest_basenames.cache_clear()
     tearDown = setUp
 
 
@@ -120,6 +121,69 @@ class HomoglyphTests(_CacheSafe):
     def test_plain_ascii_clean(self):
         self.assertEqual(agent_audit.scan_homoglyphs("normal english text and a url https://example.com",
                           Path("x.md"), allow_scripts={"Latin", "Common"}), [])
+
+
+class ReferenceTests(_CacheSafe):
+    def _scan(self, text, root="."):
+        return agent_audit.scan_references(
+            text, Path("skills/x/SKILL.md"), Path(root),
+            manifest={"checkpoint.py"}, allow_domains={"agentskills.io"})
+
+    def _ids(self, text, root="."):
+        return {f.rule_id for f in self._scan(text, root)}
+
+    def test_traversal_link_is_high(self):
+        self.assertIn("REF002", self._ids("see [x](../../../etc/passwd)"))
+
+    def test_absolute_fs_path_link_is_high(self):
+        self.assertIn("REF002", self._ids("see [x](/etc/passwd)"))
+
+    def test_external_url_not_allowlisted_is_info(self):
+        self.assertIn("REF003", self._ids("visit [x](https://evil.test/page)"))
+
+    def test_allowlisted_url_clean(self):
+        self.assertNotIn("REF003", self._ids("visit [x](https://agentskills.io/spec)"))
+
+    def test_punycode_host_is_ref003(self):
+        # An xn-- punycode host is flagged regardless, with a note.
+        findings = self._scan("visit [x](https://xn--80ak6aa92e.com/page)")
+        ref003 = [f for f in findings if f.rule_id == "REF003"]
+        self.assertTrue(ref003)
+        self.assertIn("punycode", ref003[0].message.lower())
+
+    def test_anchor_link_not_flagged(self):
+        self.assertEqual(self._scan("jump to [x](#section)"), [])
+
+    def test_mailto_not_flagged(self):
+        self.assertEqual(self._scan("mail [x](mailto:a@b.test)"), [])
+
+    def test_unwhitelisted_existing_script_is_ref001(self):
+        # references a real repo script that is NOT in the passed manifest set
+        self.assertIn("REF001", self._ids("run [s](scripts/sync_version.py)"))
+
+    def test_whitelisted_script_clean(self):
+        self.assertNotIn("REF001", self._ids("run [s](scripts/checkpoint.py)"))
+
+    def test_bare_script_mention_ref001(self):
+        # bare 'scripts/<name>' mention (not a markdown link) is parsed too
+        self.assertIn("REF001", self._ids("invoke scripts/sync_version.py to bump"))
+
+    def test_nonexistent_script_not_ref001(self):
+        # a referenced script that does not exist under scripts/ is not a REF001
+        # (governance gap only applies to a real shipping script off the whitelist)
+        self.assertNotIn("REF001", self._ids("run [s](scripts/does_not_exist.py)"))
+
+    def test_dangling_inrepo_link_is_ref004(self):
+        self.assertIn("REF004", self._ids("see [x](references/does-not-exist.md)"))
+
+    def test_existing_inrepo_link_clean(self):
+        # a REAL existing reference link must NOT flag REF004/REF002
+        ids = self._ids("see [x](references/path-resolution.md)")
+        self.assertNotIn("REF004", ids)
+        self.assertNotIn("REF002", ids)
+
+    def test_out_dir_link_excluded_from_ref004(self):
+        self.assertNotIn("REF004", self._ids("see [x](out/report.md)"))
 
 
 class DeltaGateTests(_CacheSafe):

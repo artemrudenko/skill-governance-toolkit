@@ -99,6 +99,19 @@ Content scans applied to non-skill assets (MCP configs, plugin manifests, agents
 | SEC011 | high | Inline secret value embedded in a non-skill asset | Tokens belong in environment variables, never inline in configs or manifests |
 | SEC012 | medium | Credential-file path (`.aws/credentials`, `.ssh/id_*`, `.kube/config`) referenced in a non-skill asset | Assets should reference credentials by documented config, not by inline credential-store paths |
 
+### Reference-safety rules (`REF*`)
+
+Scans the **bodies** of skills, agents, and commands for unsafe references — markdown links `[label](target)` and bare `scripts/<name>` mentions. Threat model: imported content that links to external/malicious targets or references un-reviewed scripts. Resolution mirrors `safe_read_asset`: a relative target resolves against the asset's own directory, then the audit root, then the toolkit install root (where shared `references/` + `scripts/` live), so a legitimate sibling link never false-flags.
+
+| Rule | Severity | Detects | Why it matters |
+|---|---|---|---|
+| REF001 | medium | A referenced shipping `scripts/<name>` that exists under `scripts/` but is **not** in the runtime manifest | A referenced script outside the whitelist is a governance gap — either it should ship (add it to the manifest) or the reference is stale |
+| REF002 | high | A link target that uses `..` traversal escaping the repo root, or an absolute filesystem path | Path-escaping references point the runtime/reader outside the project — a traversal/exfiltration vector |
+| REF003 | info | An external `http(s)` URL whose host is not in the audit-config domain allowlist, or any punycode (`xn--`) host | Imported content can paste links to attacker-controlled or homoglyph/typosquat hosts |
+| REF004 | medium | A relative in-repo link whose target file does not exist anywhere | Dangling links break docs and can mask a renamed/removed shared reference |
+
+REF004 is deliberately conservative: anchor-only links (`#section`), `mailto:`, and paths under gitignored/generated dirs (`out/`, `node_modules/`, `dist/`, `build/`, `__pycache__/`, `.git/`) are excluded. REF001's existence check resolves against the toolkit install root, since `scripts/` lives there even when the audit root is a user project.
+
 ### Suppression-visibility rules (`IGNORE*`)
 
 The engine supports two finding-suppression mechanisms, both fail-safe — a broken
@@ -124,7 +137,7 @@ apply, so a silent self-approval bypass is impossible.
 Each new rule below, with whether it is a **floor** rule (severity cannot be
 downgraded; inline markers cannot suppress it) and whether it is
 **inline-suppressible** via `<!-- sgt-ignore: RULEID reason=... -->`. Floor set:
-`SKILL001/002/009/014/015`, `SEC001/002/010/011`.
+`SKILL001/002/009/014/015`, `SEC001/002/010/011`, `REF002`.
 
 | Rule | Severity | Floor | Inline-suppressible |
 |---|---|---|---|
@@ -134,6 +147,10 @@ downgraded; inline markers cannot suppress it) and whether it is
 | SEC010 | high | yes | no |
 | SEC011 | high | yes | no |
 | SEC012 | medium | no | yes |
+| REF001 | medium | no | yes |
+| REF002 | high | yes | no |
+| REF003 | info | no | yes |
+| REF004 | medium | no | yes |
 | IGNORE001 | medium | no | no (it *is* the suppression-failure record) |
 | IGNORE002 | medium | no | no |
 | IGNORE003 | info | no | no |
@@ -221,6 +238,73 @@ Fix — reference the documented config mechanism, not the credential file:
 ```json
 { "args": ["--profile", "ci"] }   <!-- AWS_PROFILE / standard config resolution -->
 ```
+
+**REF001 — referenced script not in runtime manifest.** A skill body references a
+real `scripts/` executable that does not ship at user runtime.
+
+```text
+# triggering — sync_version.py exists in the repo but is dev-only (not in the manifest)
+run: python3 scripts/sync_version.py to bump the version
+```
+
+Fix — either add the script to `scripts/runtime-manifest.txt` (if it must ship) or
+drop the reference / point at a shipped helper:
+
+```text
+run: python3 scripts/sgt.py version   # sgt.py is in the runtime manifest
+```
+
+REF001 is advisory (medium) and inline-suppressible via
+`<!-- sgt-ignore: REF001 reason=... -->`.
+
+**REF002 — link target traverses or escapes repo root.** A link uses `..` to climb
+outside the project, or an absolute filesystem path.
+
+```text
+see [the host passwd file](../../../etc/passwd)
+```
+
+Fix — use a repo-relative path that stays within the project:
+
+```text
+see [the path-resolution contract](../references/path-resolution.md)
+```
+
+REF002 is a **floor** rule (high) — suppressible only via the CODEOWNERS-gated
+central `references/audit-ignore.json`, never inline.
+
+**REF003 — external URL not in allowlist.** An imported body links to a host that
+is not in the audit-config domain allowlist, or uses a punycode host.
+
+```text
+visit [the dashboard](https://evil.example/login)
+```
+
+Fix — link only to trusted hosts; add intentional external hosts to the
+audit-config `allowlists.domains`, or drop the link:
+
+```text
+visit [the spec](https://agentskills.io/specification)   <!-- host added to allowlists.domains -->
+```
+
+REF003 is advisory (info) and inline-suppressible via
+`<!-- sgt-ignore: REF003 reason=... -->`.
+
+**REF004 — link target missing or dangling.** A relative in-repo link points at a
+file that does not exist.
+
+```text
+see [the runbook](references/does-not-exist.md)
+```
+
+Fix — correct the path or create the target file:
+
+```text
+see [the runbook](references/security-incident-runbook.md)
+```
+
+REF004 is advisory (medium) and inline-suppressible via
+`<!-- sgt-ignore: REF004 reason=... -->`.
 
 **IGNORE001 — expired or invalid suppression.** A central entry whose `expires`
 is in the past (or malformed) no longer suppresses; the finding returns and the

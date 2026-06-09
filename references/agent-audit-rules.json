@@ -188,6 +188,30 @@
       "description": "Non-skill assets should reference credential files by documented config, not by inline credential-store paths."
     },
     {
+      "rule_id": "REF001",
+      "severity": "medium",
+      "title": "Referenced script not in runtime manifest",
+      "description": "An asset references a shipping scripts/ executable that is not listed in the runtime manifest. A referenced script outside the whitelist is a governance gap — add it to scripts/runtime-manifest.txt or drop the reference."
+    },
+    {
+      "rule_id": "REF002",
+      "severity": "high",
+      "title": "Link target traverses or escapes repo root",
+      "description": "A link or reference target uses .. traversal or an absolute filesystem path that resolves outside the repository root. Use a repo-relative path that stays within the project."
+    },
+    {
+      "rule_id": "REF003",
+      "severity": "info",
+      "title": "External URL not in allowlist",
+      "description": "An external http(s) URL points at a host outside the configured allowlist (or uses a punycode host). Verify the destination is trusted and add the host to the audit-config domains allowlist if intentional."
+    },
+    {
+      "rule_id": "REF004",
+      "severity": "medium",
+      "title": "Link target missing or dangling",
+      "description": "A relative in-repo link points at a file that does not exist. Fix the path or create the target."
+    },
+    {
       "rule_id": "IGNORE001",
       "severity": "medium",
       "title": "Expired or invalid suppression",

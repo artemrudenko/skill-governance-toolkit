@@ -67,7 +67,7 @@ Compare a **local** skill against similar skills in a **corporate** (or any exte
 | `LOCAL_SKILL` | string | required | Path or name of the local skill to analyze |
 | `CORPORATE_DIR` | path | check `AGENTS.md`, then `.{tool}/config.yml`, then fail-fast | Path to corporate skills directory. Non-interactive contract: if unresolved, stop with a clear message naming the expected input. |
 | `PROJECT_NAME` | string | required if `RULES_FILE` outcome | Identifier used in `rules/{PROJECT_NAME}.md` (e.g. `acme-billing`) |
-| `MODE` | enum: `auto` / `compare-only` | `auto` | `compare-only` skips Phase 4 recommendation and Phase 5 outputs |
+| `MODE` | enum: `auto` / `compare-only` | `auto` | Both run the full comparison (Phases 1–3); `compare-only` then stops, skipping the Phase 4 recommendation and Phase 5 outputs |
 | `OUTPUT_DIR` | path | none | Optional directory for draft artifacts. If omitted, draft merged skill / rules content is embedded in the report only. |
 
 ---
@@ -80,7 +80,7 @@ Resolve `LOCAL_SKILL` to a full path (same search order as `skill-evaluate` Phas
 
 ## Phase 1 — Find candidates
 
-For each corporate skill, extract three signals (topic keywords, phase names, input/output types) and compute overlap with the local skill. Assign an overlap tier — **High** (>50%), **Medium** (20–50%), **Low** (<20%). Present the top 3 Medium/High candidates ranked by overlap. If `MODE = auto`, proceed with the top candidate. If `MODE = compare-only`, emit the ranked candidate list and stop; the user can re-run with a specific corporate target or `MODE=auto`.
+For each corporate skill, extract three signals (topic keywords, phase names, input/output types) and compute overlap with the local skill. Assign an overlap tier — **High** (>50%), **Medium** (20–50%), **Low** (<20%). Present the top 3 Medium/High candidates ranked by overlap. If no candidate reaches Medium (all Low), report that no comparable corporate skill was found and stop. Otherwise proceed with the top candidate — **both modes run the full comparison (Phases 2–3)**. The modes differ only at the end: `auto` then produces the Phase 4 recommendation + Phase 5 outputs; `compare-only` stops after the Phase 3 comparison report, skipping Phases 4–5.
 
 ---
 
@@ -105,12 +105,18 @@ For each row of the Phase 2 table, assign a per-item action:
 
 ## Phase 4 — Recommendation
 
-Choose **one** primary recommendation based on Phase 3 classifications:
+Evaluate all four candidates against the Phase 3 classifications and collect every one whose condition holds (these conditions are **not** mutually exclusive):
 
 - **USE_CORPORATE** — adopt the corporate version; archive the local one. (LOCAL_ONLY ≤ 1 AND corporate quality ≥ local.)
 - **KEEP_LOCAL** — local is more complete; propose improvements upstream. (LOCAL_ONLY > 5 OR local clearly exceeds corporate.)
 - **MERGE** — both have unique valuable content; combine. (CORPORATE_ONLY ≥ 2 AND LOCAL_ONLY ≥ 2 AND no unresolved conflicts.)
 - **RULES_FILE** — adopt corporate core; isolate project additions in a rules file. (3+ LOCAL_ONLY items are project-specific.)
+
+Then resolve:
+
+- **Exactly one holds** → that is the primary recommendation.
+- **Several hold** → do NOT silently pick one. Emit the comparison and list every matching recommendation as a ranked choice (most-specific first: RULES_FILE → KEEP_LOCAL → MERGE → USE_CORPORATE) for the user to choose, then stop (per the never-prompt clarification policy).
+- **None holds** → emit the comparison with no automated recommendation; name the missing deciding signal and suggest the closest option (MERGE when an unresolved CONFLICT exists, so it surfaces; otherwise KEEP_LOCAL), then stop for the user to decide.
 
 ---
 

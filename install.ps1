@@ -364,18 +364,6 @@ function Copy-FilteredSkills {
         -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 }
 
-function Copy-Tree {
-    param([string]$Src, [string]$Dest, [string]$Mode)
-
-    if ($Mode -in 'force','upgrade' -and (Test-Path $Dest)) {
-        Remove-Item -Recurse -Force $Dest
-    }
-    New-Item -ItemType Directory -Force -Path $Dest | Out-Null
-    Copy-Item -Recurse -Force -Path (Join-Path $Src '*') -Destination $Dest
-    Get-ChildItem -Path $Dest -Recurse -Force -Include '.DS_Store','__pycache__','.skill-state' `
-        -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
-}
-
 # Mirror of _copy_runtime_scripts() in scripts/install.sh — copy ONLY the
 # whitelisted runtime scripts (scripts/runtime-manifest.txt) into $Dest.
 # Dev/test/release tooling is never shipped.

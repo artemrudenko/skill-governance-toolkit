@@ -111,8 +111,9 @@ If `scripts/` directories contain Python helpers, run them with `python3` and st
 A skill that shells out to a toolkit script (`scripts/*.py|sh`) or reads a shared
 reference (`references/*.md`) MUST resolve the install root first — the runtime
 CWD is the user's project, not the install dir. Resolution order: `$CLAUDE_PLUGIN_ROOT`
-→ `$CODEX_HOME` → `$SGT_ROOT` → the dir of the active `AGENTS.md` → `$PWD`. Full
-contract and a copy-paste bash resolver: [`references/path-resolution.md`](references/path-resolution.md).
+→ `$SGT_ROOT` → CWD walk-up for a `scripts/`+`skills/` pair (the active `AGENTS.md`
+dir) → `$CODEX_HOME` → `$PWD`. Full contract and a copy-paste bash resolver:
+[`references/path-resolution.md`](references/path-resolution.md).
 Only whitelisted runtime scripts ship into installs — see [`scripts/runtime-manifest.txt`](scripts/runtime-manifest.txt).
 
 ---

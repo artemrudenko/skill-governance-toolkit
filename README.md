@@ -586,7 +586,8 @@ For the full architectural reasoning — including anti-patterns like `allowed-t
 │   ├── architecture.md                ← three-layer architecture, install contract, parallelization
 │   ├── skill-authoring-standard.md    ← canonical SKILL.md skeleton
 │   ├── contributing-rules.md          ← propose an org governance rule (advisory-first + stability marker)
-│   └── benchmarks.md                  ← external claim caveats (CRG 8.2× etc.)
+│   ├── benchmarks.md                  ← external claim caveats (CRG 8.2× etc.)
+│   └── …                              ← cli-reference, gate-for-authors, github/gitlab-onboarding, security-* runbooks
 ├── CHANGELOG.md                       ← per-version history with breaking-change markers
 ├── LICENSE                            ← MIT
 ├── install.sh                         ← interactive one-command installer (bash, recommended)
@@ -642,11 +643,16 @@ For the full architectural reasoning — including anti-patterns like `allowed-t
 │   └── code-reviewer.md               ← TypeScript reviewer (5 categories, severity tiers)
 │
 └── scripts/                           ← stdlib-only helpers
+    ├── sgt.py                          ← the `sgt` command facade (audit/gate/init/ci-init/new-skill/…)
+    ├── agent_audit.py                  ← deterministic audit engine (audit-skill/audit-project/gate)
+    ├── doctor.py                       ← install health check (consumer/checkout auto-detect)
+    ├── quickstart.py                   ← post-install next-steps guidance
     ├── build_index.py                 ← regenerate skills/INDEX.jsonl
     ├── checkpoint.py                  ← resumable-run state helper (start/save-phase/complete/list)
     ├── install.sh                     ← multi-runtime installer (advanced; flags-driven)
     ├── init.sh                        ← bash fallback for integration-init (CI/non-interactive)
-    └── install-pre-commit-hook.sh     ← optional pre-commit graph-freshness check (CRG)
+    ├── install-pre-commit-hook.sh     ← optional pre-commit graph-freshness check (CRG)
+    └── …                              ← filter_skills.py, sync_version.py, agent_governance_mcp.py, audit.sh + tests
 ```
 
 ---

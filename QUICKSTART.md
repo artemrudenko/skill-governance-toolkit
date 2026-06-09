@@ -77,9 +77,13 @@ python3 scripts/build_index.py                        # 3. re-index so the insta
 ## Gate it in CI
 
 ```bash
-sgt ci-init --github     # writes .github/workflows/skill-gate.yml, SHA pre-filled
+sgt ci-init --github     # writes .github/workflows/skill-gate.yml (SHA auto-filled from a toolkit checkout)
 sgt ci-init --gitlab     # writes .gitlab-ci.yml
 ```
+> From a **project-local install** `sgt` can't auto-resolve the toolkit's pinned
+> SHA — pass `--ref <toolkit-sha>`, or run `ci-init` from your toolkit checkout
+> against the project (`<toolkit>/scripts/sgt.py --root . ci-init --github`).
+
 The command prints the exact remaining setup (token scope, branch protection,
 CODEOWNERS). Full walkthrough: [`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).
 

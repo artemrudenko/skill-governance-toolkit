@@ -2,6 +2,13 @@
 # test/behavior suite on every push/PR to this repo. It is NOT the template a
 # consuming marketplace repo should copy. Consumers want the changed-only PR gate:
 #   GitHub: references/ci/github-pr.yml   GitLab: references/ci/gitlab-ci.yml
+#
+# Action pinning: the third-party `actions/*` below use floating major tags
+# (@v4/@v5), NOT 40-char SHAs — a deliberate, accepted residual risk. The
+# immutable-SHA rule the toolkit enforces targets SGT_REF (the gate-logic source
+# an attacker could re-tag to change verdicts); these are first-party
+# GitHub-owned helper actions whose compromise implies GitHub itself is breached.
+# Bump to SHA pins here if your threat model requires it.
 name: CI
 
 on:

@@ -13,20 +13,22 @@ install root. Under a plugin install it never does. Resolve a root first.
 
 ## SGT_ROOT — resolution order (first match wins)
 
+This table mirrors the copy-paste resolver below exactly — same order, same fallbacks.
+
 | Order | Source | When it applies |
 |---|---|---|
 | 1 | `$CLAUDE_PLUGIN_ROOT` | Claude Code plugin install (set by the host) |
-| 2 | `$CODEX_HOME` (default `~/.codex`) | Codex CLI — no plugin-root var exists; the install lives under `$CODEX_HOME` |
-| 3 | `$SGT_ROOT` | explicit override the user may export |
-| 4 | dir containing the active `AGENTS.md` | script-install, project or per-host scope |
-| 5 | `$PWD` | last-resort fallback |
+| 2 | `$SGT_ROOT` | explicit override the user may export |
+| 3 | CWD walk-up for a `scripts/`+`skills/` pair (the active `AGENTS.md` dir) | script-install, project or per-host scope |
+| 4 | `$CODEX_HOME` (default `~/.codex`) | Codex CLI — no plugin-root var exists; last-resort anchor when set |
+| 5 | `$PWD` | final fallback |
 
 Then the toolkit assets are at `$SGT_ROOT/scripts/…` and `$SGT_ROOT/references/…`.
 
 > Codex note: Codex exposes no `CODEX_PLUGIN_ROOT`. The documented Codex pattern
 > anchors on `$CODEX_HOME` (e.g. `export TOOL="$CODEX_HOME/skills/.../scripts/<tool>.py"`).
 > The toolkit's Codex install lands under `$CODEX_HOME/.codex`-style dirs, so the
-> AGENTS.md-dir rule (4) covers it; (2) is the explicit anchor when known.
+> CWD walk-up rule (3) covers it; `$CODEX_HOME` (4) is the explicit anchor when known.
 
 ## Copy-paste resolver (bash)
 

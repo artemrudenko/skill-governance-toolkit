@@ -139,6 +139,21 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
   the fragile branches — block scalars, the deep 6-space `requires.mcp` list, scalar-vs-list
   `category`, flow-style lists (incl. the documented quoted-comma limitation), `write_index`
   round-trip — and is wired into `audit.sh` as **P36**.
+- **Path-resolution order doc now matches the resolver.** `references/path-resolution.md`'s table and
+  the `AGENTS.md` prose listed `CODEX_HOME` before `SGT_ROOT`, but the shipped copy-paste resolver
+  checks `SGT_ROOT` first and uses `CODEX_HOME` only as the last-resort fallback. Both now state the
+  code's actual order: `CLAUDE_PLUGIN_ROOT → SGT_ROOT → CWD walk-up (scripts/+skills/) → CODEX_HOME → PWD`.
+- **QUICKSTART CI section documents the consumer `--ref`.** It showed bare `sgt ci-init --github`
+  with "SHA pre-filled", but from a project-local install that fails — `sgt` can only auto-resolve
+  the toolkit SHA from a toolkit checkout. Added the `--ref <toolkit-sha>` note mirroring `README.md`.
+- **README repository-layout tree refreshed.** Added the primary entry-point scripts (`sgt.py`,
+  `agent_audit.py`, `doctor.py`, `quickstart.py`) and an explicit `…` ellipsis to the `scripts/` and
+  `docs/` subtrees, so the illustrative tree no longer omits the toolkit's most user-facing files.
+- **Removed dead `Copy-Tree` from `install.ps1`** (defined, never called — all copies go through
+  `Copy-FilteredSkills` / `Copy-OwnedTree` / `Copy-RuntimeScripts`).
+- **Documented the deliberate action-pinning asymmetry.** `.github/workflows/ci.yml` and
+  `references/ci/github-pr.yml` note that the floating `actions/*` major tags are an accepted
+  residual risk, distinct from the immutable-SHA `SGT_REF` rule that protects the gate-logic source.
 
 ---
 

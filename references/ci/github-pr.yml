@@ -19,6 +19,11 @@
 # downgrade the gate to non-blocking fleet-wide WITHOUT editing this pinned
 # template. It is passed into the block step's env below; the engine honors it
 # automatically (exit 0 even on a blocking finding).
+#
+# Action pinning: the `actions/*` steps use floating major tags (@v4/@v5), not
+# 40-char SHAs. The immutable-SHA rule this template enforces targets SGT_REF
+# (the toolkit gate-logic source). These first-party GitHub-owned helper actions
+# are an accepted residual risk; pin them to SHAs too if your org requires it.
 
 name: skill-governance-gate
 

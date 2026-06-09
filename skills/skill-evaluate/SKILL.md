@@ -34,7 +34,7 @@ metainfo:
 **ESPECIALLY when:**
 - Skill body exceeds 200 lines without a `references/` directory — overload signal.
 - Frontmatter contains `allowed-tools:` (forbidden for portable skills).
-- `description` is shorter than 80 chars or longer than 600 chars (sweet spot is 100–400).
+- `description` is shorter than 80 chars or longer than 600 chars (sweet spot is 100–400). The 600-char ceiling is an advisory heuristic, intentionally stricter than the engine gate's `description_max` (1024) — don't "fix" the gap.
 - Body lacks a `## When to Use` section, or that section lacks the canonical sub-structure.
 
 **Skip / Don't use for:**

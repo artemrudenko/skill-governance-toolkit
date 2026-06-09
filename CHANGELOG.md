@@ -29,7 +29,8 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
   message instead of silently emitting a broken workflow.
 
 ### Added
-- **`doctor` / `quickstart` auto-detect consumer vs checkout** (`--mode auto|checkout|consumer`).
+- **`doctor` / `quickstart` auto-detect consumer vs checkout.** `--mode auto|checkout|consumer`
+  is a `doctor` flag; `quickstart` reuses doctor's detected mode (it has no own `--mode`).
   In a consumer project they check only delivered artifacts (installed skills,
   managed `AGENTS.md` block, index validity, python) instead of false-flagging on
   checkout-only files (`scripts/audit.sh`, `pyproject.toml`, `README`/`LICENSE`).

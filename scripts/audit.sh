@@ -499,6 +499,8 @@ GOVERNED_GLOBS=(
   "AGENTS.md"
   "**/.mcp.json"
   "**/plugin.json"
+  ".claude/settings.json"
+  "hooks/**"
   "references/agent-audit-rules.json"
 )
 for tpl in references/ci/gitlab-ci.yml references/ci/github-pr.yml; do

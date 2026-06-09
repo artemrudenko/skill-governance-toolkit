@@ -39,6 +39,9 @@ on:
       - "**/plugin.json"
       - "**/.mcp.json"
       - "**/mcp.json"
+      - ".claude/settings.json"
+      - ".claude/settings.local.json"
+      - "hooks/**"
       - "references/agent-audit-rules.json"
 
 permissions:

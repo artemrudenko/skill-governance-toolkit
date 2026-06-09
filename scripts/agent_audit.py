@@ -58,6 +58,8 @@ SEVERITY_FLOOR = {
     "SCR002": "high",
     "SCR003": "high",
     "MCP001": "high",
+    "HOOK001": "high",
+    "HOOK002": "high",
 }
 # Upper bound on an org-supplied regex length — a coarse ReDoS / footgun guard.
 MAX_PATTERN_LENGTH = 500
@@ -103,6 +105,8 @@ ENGINE_RULE_IDS = {
     "SCR001",
     "SCR002",
     "SCR003",
+    "HOOK001",
+    "HOOK002",
     "IGNORE001",
     "IGNORE002",
     "IGNORE003",
@@ -500,6 +504,12 @@ def asset_type(path: Path, root: Path) -> str | None:
         return "plugin-config"
     if name == "gemini-extension.json":
         return "runtime-config"
+    # Hooks: Claude Code settings files carry a `hooks` block, and any file directly
+    # under a `hooks/` directory is a hook script (executed on tool events).
+    if name in {"settings.json", "settings.local.json"} and path.parent.name == ".claude":
+        return "hook"
+    if path.parent.name == "hooks":
+        return "hook"
     return None
 
 
@@ -1019,6 +1029,99 @@ def scan_mcp_command(text: str, path: Path) -> list[Finding]:
                 seen.add(key)
                 out.append(finding("SEC010", path, 1,
                                    f"Potentially dangerous MCP server command detected: {label}.", suggestion))
+    return out
+
+
+def _hook_commands_from_json(data: Any) -> list[str]:
+    """Collect every `command` string from a Claude Code `hooks` structure.
+
+    Shape: `hooks` -> event name -> list of matcher dicts -> each matcher's `hooks`
+    list of `{type, command}`. Defensive about every level (missing keys, wrong
+    types, non-string commands) — never raises on a malformed tree."""
+    commands: list[str] = []
+    if not isinstance(data, dict):
+        return commands
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return commands
+    for matchers in hooks.values():
+        if not isinstance(matchers, list):
+            continue
+        for matcher in matchers:
+            if not isinstance(matcher, dict):
+                continue
+            inner = matcher.get("hooks")
+            if not isinstance(inner, list):
+                continue
+            for entry in inner:
+                if isinstance(entry, dict):
+                    cmd = entry.get("command")
+                    if isinstance(cmd, str) and cmd:
+                        commands.append(cmd)
+    return commands
+
+
+def _env_exfil_in_command(cmd: str) -> bool:
+    """True when a command both reads env/credentials AND contacts a network sink —
+    the same low-recall env-exfil signature used for referenced scripts (SCR001)."""
+    return bool(_NETWORK_SINK_RE.search(cmd) and _ENV_SOURCE_RE.search(cmd))
+
+
+def scan_hook(path: Path, root: Path) -> list[Finding]:
+    """Audit hook command sources for dangerous shell (HOOK001) and secret/env-exfil
+    (HOOK002).
+
+    Two source shapes:
+    - JSON settings/plugin file: parse and walk the `hooks` block, collecting every
+      command string. Malformed JSON is tolerated (returns []), never crashes.
+    - hooks/ script file: the whole file body is the command text.
+
+    Each command runs through scan_security (prose=False — a hook command is code,
+    not documentation), the env-source/network-sink exfil heuristic, scan_hidden_chars,
+    and every configured `hook_deny` pattern. Findings are deduped by (rule_id, line,
+    message)."""
+    text = safe_read_asset(path, root)
+    if text is None:
+        return []
+
+    if path.suffix == ".json":
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            return []
+        commands = _hook_commands_from_json(data)
+    else:
+        # A hooks/ script file: the entire body is the command.
+        commands = [text]
+
+    cfg = load_config()
+    out: list[Finding] = []
+    seen: set[tuple[str, int, str]] = set()
+
+    def _add(f: Finding) -> None:
+        key = (f.rule_id, f.line, f.message)
+        if key not in seen:
+            seen.add(key)
+            out.append(f)
+
+    for cmd in commands:
+        # Dangerous shell -> HOOK001, secret -> HOOK002. prose=False: no detection-
+        # context exemption for executable hook commands.
+        for f in scan_security(cmd, path, dangerous_id="HOOK001", secret_id="HOOK002", prose=False):
+            _add(f)
+        # Env-var exfiltration heuristic (env source + network sink) -> HOOK002.
+        if _env_exfil_in_command(cmd):
+            _add(finding("HOOK002", path, 1,
+                         "Hook command reads environment/credentials and contacts a network sink — possible env-var exfiltration.",
+                         "Confirm the hook does not send any secret to a network destination."))
+        # Invisible/bidi characters smuggled into a command -> SEC001/SEC002.
+        for f in scan_hidden_chars(cmd, path):
+            _add(f)
+        # Org-supplied hook denylist patterns -> HOOK001.
+        for label, pattern, suggestion in cfg["hook_deny"]:
+            if pattern.search(cmd):
+                _add(finding("HOOK001", path, 1,
+                             f"Hook command matches a denied pattern: {label}.", suggestion))
     return out
 
 
@@ -1677,6 +1780,15 @@ def audit_project(
         if asset["type"] in ("agent", "command"):
             referenced_scripts |= _referenced_scripts_in_body(
                 text, Path(asset["path"]).parent, root_path)
+        # Hooks need structural JSON-walking, not just text scanning, so scan_hook
+        # is special-cased here (it reads + parses on its own from path+root) rather
+        # than routed through the text-only checks_for callables.
+        if asset["type"] == "hook":
+            findings.extend(scan_hook(Path(asset["path"]), root_path))
+        # plugin.json stays type plugin-config, but a `hooks` block inside it carries
+        # the same threat — scan it for hook commands in addition to the config checks.
+        if asset["type"] == "plugin-config":
+            findings.extend(scan_hook(Path(asset["path"]), root_path))
         for check in checks_for(asset["type"], root_path):
             findings.extend(check(text, Path(asset["path"])))
 

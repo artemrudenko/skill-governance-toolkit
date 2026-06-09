@@ -75,6 +75,9 @@ variables:
         - "**/.mcp.json"
         - "**/mcp.json"
         - "**/plugin.json"
+        - ".claude/settings.json"
+        - ".claude/settings.local.json"
+        - "hooks/**"
         - "references/agent-audit-rules.json"
 
 # Blocking gate: NEWLY introduced high-severity findings (secrets, dangerous

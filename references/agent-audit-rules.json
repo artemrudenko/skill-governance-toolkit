@@ -242,6 +242,18 @@
       "description": "A script referenced by an asset embeds an inline secret value or credential-store path. Referenced scripts must reference credentials by documented environment variable names, never inline."
     },
     {
+      "rule_id": "HOOK001",
+      "severity": "high",
+      "title": "Dangerous shell in hook command",
+      "description": "A hook command (in .claude/settings.json, .claude/settings.local.json, a plugin.json hooks block, or a hooks/ script) contains a destructive or unsafe shell construct (rm -rf, curl|sh, eval on argv, disk-wipe, force push, approval bypass) or matches an org hook-deny pattern. Hooks run arbitrary shell on tool events with the agent's privileges, so the dangerous-pattern baseline applies to their command text."
+    },
+    {
+      "rule_id": "HOOK002",
+      "severity": "high",
+      "title": "Secret or env-exfil in hook command",
+      "description": "A hook command embeds an inline secret/credential reference, or both reads environment variables/credentials and contacts a network sink (urllib/requests/socket/curl/wget/fetch). An imported settings or plugin bundle carrying such a hook can exfiltrate secrets on the next tool event. Reference credentials by documented environment variable names and never pipe them to a network destination."
+    },
+    {
       "rule_id": "IGNORE001",
       "severity": "medium",
       "title": "Expired or invalid suppression",

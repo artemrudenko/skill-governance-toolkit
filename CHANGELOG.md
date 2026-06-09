@@ -108,6 +108,10 @@ installer filter / destructive runtime scripts, and GitHub/GitLab parity.
   that resolves the *user's* HEAD, the exact failure the 1.17.0 engine fix prevents. It now
   shows the toolkit-checkout auto-fill form and a `git -C <toolkit> rev-parse HEAD` consumer
   form. New self-CI **P34** fails any onboarding `--ref` command that omits `git -C`.
+- **CODEOWNERS now gates the toolkit's own enforcement plane (major).** `.github/workflows/ci.yml`,
+  `scripts/audit.sh`, `scripts/sync_version.py`, `scripts/post_mr_comment.py`, and `VERSION` were
+  unowned — an author could weaken the self-CI gate in the same MR that ships a skill. **P18**
+  was extended to machine-check the enforcement-plane paths, not just policy/engine/CI templates.
 
 ---
 

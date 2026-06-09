@@ -37,3 +37,14 @@
 # --- Security baseline + the checks reference ---
 /skills/library-audit/references/security-spec.md  @skill-governance-owners
 /docs/checks-reference.md                   @skill-governance-owners
+
+# --- The toolkit's OWN enforcement plane (the gate cannot weaken itself) ---
+# Without code-owner review here, an author could disable the self-CI gate,
+# rewrite the release/version machinery, or neuter the MR poster in the SAME
+# merge request that ships a skill — silently weakening the gate meant to review
+# that very change. audit.sh P18 machine-checks this list stays covered.
+/.github/workflows/ci.yml                   @skill-governance-owners
+/scripts/audit.sh                           @skill-governance-owners
+/scripts/sync_version.py                    @skill-governance-owners
+/scripts/post_mr_comment.py                 @skill-governance-owners
+/VERSION                                    @skill-governance-owners

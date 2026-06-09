@@ -26,7 +26,7 @@
 #   P15 — VERSION metadata synchronization
 #   P16 — MR comment poster behavior
 #   P17 — externalized audit config behavior
-#   P18 — CODEOWNERS covers the governance control-plane paths
+#   P18 — CODEOWNERS covers the control plane + the toolkit's own enforcement plane
 #   P19 — marker_block managed-block writer behavior
 #   P20 — asset-security unit tests
 #   P21 — validate-config + explain behavior
@@ -415,6 +415,13 @@ else
   for critical in "references/agent-audit-rules.json" "scripts/agent_audit.py" "references/ci/gitlab-ci.yml"; do
     grep -qF "$critical" "$ROOT/CODEOWNERS" || missing_owners+=" $critical"
   done
+  # The toolkit's OWN enforcement plane must be code-owner-gated too — else an
+  # author could disable the self-CI gate, rewrite the release/version machinery,
+  # or neuter the MR poster in the SAME merge request that ships a skill. That is
+  # the "gate cannot weaken itself" invariant applied to the gate's own files.
+  for critical in ".github/workflows/ci.yml" "scripts/audit.sh" "scripts/sync_version.py" "scripts/post_mr_comment.py" "VERSION"; do
+    grep -qF "$critical" "$ROOT/CODEOWNERS" || missing_owners+=" $critical"
+  done
   # The suppression list MUST be code-owner-gated when it exists, so an MR
   # author can't self-approve silencing their own security finding.
   if [[ -f "$ROOT/references/audit-ignore.json" ]]; then
@@ -423,7 +430,7 @@ else
   if [[ -n "$missing_owners" ]]; then
     fail "CODEOWNERS does not cover critical paths:$missing_owners"
   else
-    pass "CODEOWNERS covers policy, engine, CI gate, and the suppression list"
+    pass "CODEOWNERS covers policy, engine, CI gate, enforcement plane, and the suppression list"
   fi
 fi
 

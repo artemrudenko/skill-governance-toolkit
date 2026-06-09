@@ -133,9 +133,11 @@ the body against this list (∪ the org `allowlists.mcp_servers`):
 - A server **declared but never used** → `MCP002` (low). Remove the stale entry or
   add the usage. (Org-allowlist servers are exempt from MCP002.)
 
-Tokens inside fenced/inline code or on a detection-context line do not count as
-usage, so documenting an MCP tool in an example never trips `MCP001`. See
-[`checks-reference.md` § MCP consistency rules](checks-reference.md#mcp-consistency-rules-mcp).
+A token inside a **fenced** code block, or on a detection-context line, does not
+count as usage — so a fenced example never trips `MCP001`. An **inline-code**
+token (`` `mcp__github__search` ``) **does** count: a backticked tool name in an
+instruction is real usage, so put example-only tool names in a fenced block, not
+inline. See [`checks-reference.md` § MCP consistency rules](checks-reference.md#mcp-consistency-rules-mcp).
 
 ### Closed vocabulary — `category:`
 

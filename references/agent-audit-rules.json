@@ -173,7 +173,7 @@
       "rule_id": "MCP001",
       "severity": "high",
       "title": "MCP tool used but server not declared",
-      "description": "A skill body uses an `mcp__<server>__<tool>` MCP tool whose server is neither listed in `metainfo.requires.mcp` nor in the org `allowlists.mcp_servers`. Declare the server so reviewers and runtimes can provision and gate it. Tokens inside fenced/inline code or on a detection-context line are not counted as usage."
+      "description": "A skill body uses an `mcp__<server>__<tool>` MCP tool whose server is neither listed in `metainfo.requires.mcp` nor in the org `allowlists.mcp_servers`. Declare the server so reviewers and runtimes can provision and gate it. A token inside a fenced code block (```), or on a detection-context line (one containing detect/scan/pattern/denylist/allowlist/…), is not counted as usage. A token in an inline-code span (`mcp__github__search`) DOES count — a tool name in backticks is a real usage, so wrap example-only tool names in a fenced block, not inline."
     },
     {
       "rule_id": "MCP002",

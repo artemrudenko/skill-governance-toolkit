@@ -92,6 +92,21 @@ finding returns and `IGNORE001` flags the stale entry.
 State the ticket in `reason`. When `expires` lapses, `IGNORE001` re-surfaces the
 finding so the exception cannot quietly become permanent.
 
+## Expiry enforcement — what blocks which MR
+
+The CI gate splits suppression-expiry enforcement so a feature MR is never blocked
+on someone else's soon-to-expire entry:
+
+| Condition | Scope | Rationale |
+|---|---|---|
+| A suppression is **already expired** (`expires` < today, or malformed date) | Blocks **every** governed MR | The floor finding it silenced has resurfaced and the gate is OFF for that rule/path right now — any merge inherits the hole. Renew or remove it. |
+| A suppression **expires within 30 days** | Blocks **only an MR that edits `references/audit-ignore.json`** | The author touching suppressions is the right owner to renew them. Unrelated MRs are not gated on a third party's future expiry. |
+| Proactive fleet-wide expiry sweep | A **scheduled** pipeline running `list-suppressions --root . --expiring-within 30` | Catches drift before entries lapse, without adding per-MR friction. Add a `schedule:` trigger (GitLab) / `on: schedule` workflow (GitHub) running the same command. |
+
+This is deliberate fleet hygiene policy, not a missing check: expired = broken now
+(block everyone), expiring-soon = owner's job (block the suppression author) or a
+scheduled sweep.
+
 ## Verify a suppression locally
 
 ```bash

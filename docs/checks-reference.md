@@ -130,7 +130,7 @@ Scans the **content** of in-repo scripts (`scripts/<name>.{py,sh,ps1}`) that an 
 
 Cross-checks MCP tool usage against declared servers, and structurally scans MCP server commands. An `mcp__<server>__<tool>` token in a skill body is "usage"; `metainfo.requires.mcp` (a list of server names) plus the org `allowlists.mcp_servers` are "declaration".
 
-**False-positive control (MCP001 is high/floor):** an `mcp__...` token is **not** counted as usage when it sits inside a fenced code block (` ``` `), an inline-code span (`` ` ``), or on a detection-context line (a line containing `detect`/`scan`/`pattern`/`denylist`/`allowlist`/…). Adopters routinely document MCP tool names in examples and denylists — those must not block a merge.
+**False-positive control (MCP001 is high/floor):** an `mcp__...` token is **not** counted as usage when it sits inside a fenced code block (` ``` `) or on a detection-context line (a line containing `detect`/`scan`/`pattern`/`denylist`/`allowlist`/…). An **inline-code span** (`` `mcp__github__search` ``) **does** count — a tool name written in backticks inside an instruction is a genuine usage (masking it caused an MCP001 false *negative*), so document example-only tool names in a fenced block, not inline. Denylists and detection rules are exempt via the detection-context line check.
 
 | Rule | Severity | Detects | Why it matters |
 |---|---|---|---|

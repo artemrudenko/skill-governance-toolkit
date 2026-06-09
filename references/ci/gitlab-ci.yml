@@ -79,9 +79,12 @@ variables:
         - ".claude/settings.local.json"
         - "hooks/**"
         - "references/agent-audit-rules.json"
-        # Control-plane data: a suppression-only or config-overlay MR must still
-        # get a gate verdict (otherwise it silently weakens the gate ungated).
+        # Suppression control-plane: a suppression-only MR must still get a gate
+        # verdict (otherwise it silently weakens the gate ungated).
         - "references/audit-ignore.json"
+        # Config overlays load from the PINNED TOOLKIT MIRROR, not the audited
+        # repo — a consumer-side audit-config.*.json is IGNORED by the engine.
+        # Triggered here only so the "config overlay is ignored" warning fires.
         - "references/audit-config.*.json"
 
 # Blocking gate: NEWLY introduced high-severity findings (secrets, dangerous
@@ -94,14 +97,32 @@ skill-gate:block:
   extends: .sgt_base
   stage: validate
   script:
-    # Suppression hygiene: a suppression-only MR (editing audit-ignore.json) has no
-    # changed asset to audit, so this is its real verdict. Exits non-zero on any
-    # expired suppression or one expiring within 30 days — blocks merging a stale
-    # or about-to-expire silencing of a finding. `.` is the audited consumer root,
-    # where audit-ignore.json lives (loaded via _load_ignore_doc, not $SGT_DIR).
+    # Suppression hygiene — block on already-EXPIRED suppressions on every governed
+    # MR: an expired entry means the floor finding it silenced has resurfaced and the
+    # gate is OFF for that rule/path now; any merge inherits the hole. No
+    # --expiring-within, so a merely soon-to-expire entry never blocks an unrelated
+    # MR. `.` is the audited consumer root, where audit-ignore.json lives (loaded via
+    # _load_ignore_doc, not $SGT_DIR — the mirror holds only the catalog + overlays).
     - >
-      python3 "$SGT_DIR/scripts/agent_audit.py" list-suppressions
-      --root . --expiring-within 30
+      python3 "$SGT_DIR/scripts/agent_audit.py" list-suppressions --root .
+    # Expiring-soon early-warning (within 30 days) blocks ONLY when THIS MR edits the
+    # suppression file — the author touching suppressions is the right owner to renew
+    # or remove them. The fleet is never blocked on a third party's soon-to-expire
+    # entry. For a proactive fleet-wide sweep, run this same command on a scheduled
+    # pipeline ($CI_PIPELINE_SOURCE == "schedule").
+    - >
+      if git diff --name-only "$CI_MERGE_REQUEST_DIFF_BASE_SHA" HEAD | grep -qx "references/audit-ignore.json"; then
+      python3 "$SGT_DIR/scripts/agent_audit.py" list-suppressions --root . --expiring-within 30;
+      fi
+    # Config-overlay warning: a consumer-side audit-config.*.json is IGNORED (overlays
+    # load from the pinned mirror, $SGT_DIR). Warn loudly but never block — the file
+    # is inert, the real verdict is the audit-project step below.
+    - >
+      changed=$(git diff --name-only "$CI_MERGE_REQUEST_DIFF_BASE_SHA" HEAD | grep -E '^references/audit-config\..*\.json$' || true);
+      if [ -n "$changed" ]; then
+      echo "WARNING: consumer-side audit-config overlay is IGNORED by the engine — overlays must live in the pinned toolkit mirror (SGT_REF), not the audited repo:";
+      echo "$changed";
+      fi
     - >
       python3 "$SGT_DIR/scripts/agent_audit.py" audit-project .
       --changed-only --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"

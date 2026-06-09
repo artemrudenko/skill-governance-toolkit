@@ -679,6 +679,13 @@ python3 scripts/agent_audit.py audit-project . --changed-only --base main --fail
 запись `IGNORE001/002/003` всплывает. Полная процедура, SLA и break-glass:
 [`security-suppression-runbook.md`](security-suppression-runbook.md).
 
+> **Язык findings.** Сообщения и suggestions движка — **только на английском**
+> (locale-overlay пока нет). Объяснения правил на русском см. в этом разделе и
+> [`checks-reference.md`](checks-reference.md); для конкретного finding'а
+> `python3 scripts/agent_audit.py explain-finding <RULE_ID>` печатает fix и путь
+> подавления (rule_id и severity — language-neutral). Будущий
+> `references/agent-audit-rules.ru.json` overlay — планируемое полное решение.
+
 ### Инструменты оператора
 
 ```bash

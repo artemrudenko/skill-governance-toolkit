@@ -6,7 +6,10 @@ format is `[X.Y.Z] — YYYY-MM-DD — short headline`. Format follows
 `Removed` / `Fixed` sections per release.
 
 Breaking changes are marked **🔴 BREAKING** — read the Upgrade notes for
-each before upgrading.
+each before upgrading. A **rule severity escalation or floor addition** counts as
+breaking even when no new rule is added: it makes previously-advisory findings
+start blocking on the next `SGT_REF` bump (see
+[checks-reference.md § Rule lifecycle](docs/checks-reference.md#rule-lifecycle--deprecation-policy)).
 
 ---
 

@@ -649,3 +649,50 @@ requires a detector in [`scripts/agent_audit.py`](../scripts/agent_audit.py)
 (`audit_skill` / `audit_project`) plus a catalog entry. This is deliberate: a
 full config-driven rule DSL would be more complex and less safe than a small
 Python function.
+
+---
+
+## Rule lifecycle & deprecation policy
+
+Consumers pin the toolkit to an immutable SHA (`SGT_REF`) so gate behavior never
+changes under them. That guarantee only holds if catalog changes are versioned
+honestly. The dividing line is **does this change start blocking something that
+did not block before**.
+
+### Change classes
+
+| Change | Catalog bump | Breaking? | Why |
+|---|---|---|---|
+| Add a new **advisory** rule (non-floor, `medium`/`low`/`info`) | minor | no | A new advisory finding surfaces in the report but never fails a pipeline — adopters absorb it at their own pace |
+| **Increase a rule's severity** (e.g. `medium → high`) | **migration-note minor or major** | **yes** | Findings that were previously advisory now meet the `--fail-on`/`--fail-on-new` threshold and start **blocking** on the next `SGT_REF` bump — a stealth breaking change |
+| **Add a rule to the floor** | **migration-note minor or major** | **yes** | A floor rule can no longer be downgraded or inline-suppressed; a finding that an adopter previously suppressed inline starts blocking, with no inline escape |
+| Tighten a detection pattern so it catches more cases | minor if rule stays advisory; **migration-note** if it can block | depends | Same test: if a previously-passing asset can now fail the gate, it is breaking |
+| Reword a `title`/`description`, fix a false positive (narrow detection) | patch/minor | no | No new blocking surface |
+| Remove a rule | **migration-note minor or major** | yes (for tooling that keys on the rule_id) | Document the removal so config/suppressions referencing it can be cleaned up |
+
+**The rule of thumb:** a change is breaking **iff** a previously-passing,
+already-pinned consumer can fail the gate after they bump `SGT_REF` — even though
+they changed none of their own content. A severity increase and a floor addition
+both meet that test even though they add no new *rule*.
+
+### Advisory window before floor
+
+Recommended: ship a new rule **advisory-first** and leave it advisory for **at
+least one minor release** before promoting it to the floor (or raising it to
+`high`). The advisory window lets adopters see the finding in their reports —
+without merges being blocked — and pay down the backlog before the rule starts
+blocking. This mirrors the `tier: preview → stable` promotion contract for skills
+(see [skill-authoring-standard.md § tier](skill-authoring-standard.md#tier-semantics)).
+
+A new core-safety rule that is breaking on day one (no advisory window) is allowed
+only with an explicit **🔴 BREAKING** CHANGELOG entry and upgrade notes.
+
+### CHANGELOG convention
+
+The CHANGELOG's existing **🔴 BREAKING** marker now **explicitly covers severity
+escalations and floor additions**, not only renames and schema bumps. Any catalog
+change that can make a previously-passing pinned consumer fail the gate MUST carry
+a **🔴 BREAKING** entry with upgrade notes naming the affected rule(s) and the
+recommended advisory window. The `rules_version` stamped in every report ties a
+verdict back to the exact catalog, so an adopter can confirm which lifecycle stage
+a given block ran against.

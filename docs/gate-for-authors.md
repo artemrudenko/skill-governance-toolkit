@@ -31,6 +31,23 @@ Not sure which? Run `sgt explain-finding` is not a thing — use the engine:
 correct suppression path. Details and break-glass:
 [security-suppression-runbook.md](security-suppression-runbook.md).
 
+## Language of findings
+
+Rule messages and suggestions are emitted in **English only** — the engine carries
+no locale overlay. For non-English teams this is friction: the finding text on a
+blocked MR is English even when the rest of the workflow is not.
+
+Russian-speaking authors should read the bilingual
+[user-guide.ru.md § Use case 4.5](user-guide.ru.md#use-case-45--проверки-безопасности-артефактов-и-delta-gate-с-1120)
+for the suppression model in Russian, and [checks-reference.md](checks-reference.md)
+for the rule catalog. For any specific finding,
+`python3 scripts/agent_audit.py explain-finding <RULE_ID>` prints the fix and the
+correct suppression path (the rule id and severity are language-neutral).
+
+> **Future work:** a `references/agent-audit-rules.ru.json` message overlay is the
+> planned full solution. Until then this acknowledgment plus the bilingual runbook
+> is the documented minimum — there is no locale switch today.
+
 ## The one local command
 
 Reproduce the exact CI block verdict before you push:

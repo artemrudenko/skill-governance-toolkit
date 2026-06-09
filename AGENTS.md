@@ -217,5 +217,6 @@ See `skills/integration-init/references/integrations.md` for the full per-tool c
 
 - `README.md` — quick start for adopting this toolkit in a new project
 - `skills/{any}/SKILL.md` — see how skills are structured in practice
+- [`docs/contributing-rules.md`](docs/contributing-rules.md) — propose an org governance rule (advisory-first, reserved id, `stability` marker)
 - [agentskills.io/specification](https://agentskills.io/specification) — the open SKILL.md standard
 - [agents.md](https://agents.md) — the open AGENTS.md format

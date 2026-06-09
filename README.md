@@ -579,6 +579,7 @@ For the full architectural reasoning — including anti-patterns like `allowed-t
 │   ├── checks-reference.md            ← every governance check + rationale (engine rules + LLM dims)
 │   ├── architecture.md                ← three-layer architecture, install contract, parallelization
 │   ├── skill-authoring-standard.md    ← canonical SKILL.md skeleton
+│   ├── contributing-rules.md          ← propose an org governance rule (advisory-first + stability marker)
 │   └── benchmarks.md                  ← external claim caveats (CRG 8.2× etc.)
 ├── CHANGELOG.md                       ← per-version history with breaking-change markers
 ├── LICENSE                            ← MIT

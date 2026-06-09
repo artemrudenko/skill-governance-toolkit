@@ -75,6 +75,88 @@ Every audit report stamps `rules_version` so you can confirm which catalog a giv
 verdict ran against. Bump deliberately and review the [CHANGELOG](../CHANGELOG.md)
 entry for the target SHA before adopting.
 
+## Fleet rollout
+
+Rolling a ruleset across many repositories at once needs two extra moves: measure
+the blast radius **before** flipping the gate, and automate the `SGT_REF` bump so
+each repo gets an auto-PR when the org publishes a new approved toolkit SHA.
+
+### Impact preview before flipping a ruleset
+
+Before you enable `--fail-on-new` (or raise a rule to the floor) across a fleet,
+measure how many findings each repo already carries. The `--whole-tree` mode runs
+a **full** audit (ignoring `--changed-only`), emits a per-rule histogram under
+`summary.by_rule`, and **never blocks** (always exits 0) — so it is safe to run in
+a read-only reporting job:
+
+```bash
+python3 scripts/agent_audit.py audit-project . --whole-tree --format json
+```
+
+Look at `summary.by_rule` — the per-rule histogram of every finding in the tree:
+
+```json
+{
+  "summary": {
+    "total": 37,
+    "by_rule": { "SEC003": 21, "SEC012": 9, "REF004": 5, "SEC011": 2 }
+  }
+}
+```
+
+This is the blast radius. A high `SEC011`/`SEC010` count (floor rules) means the
+delta gate will block the **next** MR that touches those assets — pay that backlog
+down, or stage centrally-approved suppressions, before enabling `--fail-on-new`.
+Advisory-only rules (`SEC003`, `REF004`) never block, so a large count there is
+backlog to triage, not a rollout blocker. Add `--record` to append one JSON line
+per finding to `out/security/findings.jsonl`, then `report-trends` to summarize
+across runs.
+
+### Renovate auto-bump of `SGT_REF`
+
+The CI templates pin the toolkit to an immutable 40-hex commit SHA (`SGT_REF`). To
+roll a newly-approved org SHA across every repo without hand-editing each pipeline,
+let [Renovate](https://docs.renovatebot.com/) track the pin and open an auto-PR.
+Add a `customManagers` (formerly `regexManagers`) entry to each repo's
+`renovate.json`:
+
+```json
+{
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^\\.gitlab-ci\\.yml$", "^\\.github/workflows/github-pr\\.yml$"],
+      "matchStrings": ["SGT_REF:\\s*\"(?<currentDigest>[0-9a-f]{40})\""],
+      "depNameTemplate": "skill-governance-toolkit",
+      "packageNameTemplate": "https://github.com/your-org/skill-governance-toolkit",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    }
+  ]
+}
+```
+
+Renovate watches `main` of the toolkit repo and opens a PR bumping `SGT_REF` to the
+new 40-hex `currentDigest` whenever the tracked ref advances. The `git-refs`
+datasource resolves the branch to its commit SHA, so the PR carries an immutable
+pin — never a moving tag.
+
+**Manual approval is still required.** The Renovate PR only *proposes* the new pin;
+it does not bypass review. The CI template files (`.gitlab-ci.yml` / the gate
+workflow) are covered by [`CODEOWNERS`](../CODEOWNERS), so the governance owner
+group must approve the bump before it merges — the same control-plane gate that
+stops the gate from weakening itself. Pair the Renovate bump with an
+[impact preview](#impact-preview-before-flipping-a-ruleset) on the target SHA, and
+review the [CHANGELOG](../CHANGELOG.md) entry (severity escalations / floor
+additions are marked **🔴 BREAKING**) before approving.
+
+### Runbooks
+
+- Kill-switch (fast mitigation when a bumped pin misbehaves):
+  [security-incident-runbook.md](security-incident-runbook.md).
+- Suppressing a finding (inline vs central, SLA, break-glass):
+  [security-suppression-runbook.md](security-suppression-runbook.md).
+
 ## Fast mitigation — the fleet kill-switch
 
 If the gate misbehaves after a rollout (a bad pin, an over-broad org pattern),

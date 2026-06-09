@@ -62,7 +62,7 @@ findings now block; pre-existing ones remain advisory.
 
 The CI templates pin the toolkit to an immutable 40-char commit SHA (`SGT_REF`),
 not a tag, so gate behavior never changes under you. The asset-security suite ships
-in **rules catalog 0.2.0**. To adopt it (or any future rules), bump the pin:
+in **rules catalog 0.4.0**. To adopt it (or any future rules), bump the pin:
 
 ```bash
 # Regenerate the gate workflow with the toolkit's current HEAD SHA pre-filled

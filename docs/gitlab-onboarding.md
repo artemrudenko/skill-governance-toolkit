@@ -110,15 +110,19 @@ token is simply ignored and no setup is needed.
 
 ### 2b. Job images (egress-restricted runners)
 
-The template's job images default to public Docker Hub (`python:3.12-slim`,
-`alpine:3.20`), and the base job apt-installs `git` only when the image lacks
-it. On an air-gapped or egress-restricted instance, override as group/project
+The template's job images default to public Docker Hub, **digest-pinned** —
+the same «the gate cannot change silently» discipline as `SGT_REF` (a floating
+tag can be repushed upstream). The base job apt-installs `git` only when the
+image lacks it. A pinned digest does not receive upstream CVE patches — bump
+it deliberately; the template comment documents the procedure (resolve the new
+manifest-list digest with `docker buildx imagetools inspect`, review, commit).
+On an air-gapped or egress-restricted instance, override as group/project
 CI/CD variables:
 
 | Variable | Default | Override with |
 |---|---|---|
-| `SGT_IMAGE` | `python:3.12-slim` | An internal-registry image with **python3 + git** preinstalled (skips the apt-get step entirely) |
-| `SGT_NOOP_IMAGE` | `alpine:3.20` | Any minimal internal image with a shell |
+| `SGT_IMAGE` | `python:3.12-slim@sha256:<pinned digest>` | An internal-registry image with **python3 + git** preinstalled (skips the apt-get step entirely) |
+| `SGT_NOOP_IMAGE` | `alpine:3.20@sha256:<pinned digest>` | Any minimal internal image with a shell |
 
 ### 3. Create a masked CI/CD variable
 

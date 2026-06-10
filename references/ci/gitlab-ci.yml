@@ -54,14 +54,24 @@ variables:
   SGT_REPO: "https://gitlab-ci-token:${CI_JOB_TOKEN}@REPLACE-WITH-YOUR-GITLAB-HOST/your-group/skill-governance-toolkit.git"
   SGT_REF: "REPLACE-WITH-40-CHAR-COMMIT-SHA"
   SGT_DIR: "/tmp/sgt"
-  # Job images. Defaults pull from public registries (Docker Hub) — on an
-  # air-gapped or egress-restricted GitLab instance, override these as group/
-  # project CI/CD variables to point at your internal registry mirror, e.g.
-  #   SGT_IMAGE: registry.example.com/mirrors/python:3.12-slim
+  # Job images — digest-pinned by default, same «the gate cannot change
+  # silently» discipline as SGT_REF (a floating tag like python:3.12-slim can
+  # be repushed upstream and alter gate behaviour with no diff here).
+  # Bump procedure (deliberate, after review):
+  #   1. Resolve the new manifest-list digest:
+  #        docker buildx imagetools inspect python:3.12-slim
+  #      (or query the registry API for Docker-Content-Digest)
+  #   2. Replace the digest below and commit — the MR diff IS the review trail.
+  # Trade-off: a pinned digest does not receive upstream CVE patches; schedule
+  # periodic bumps. On an air-gapped or egress-restricted GitLab instance,
+  # override these as group/project CI/CD variables to point at your internal
+  # registry mirror, e.g.
+  #   SGT_IMAGE: registry.example.com/mirrors/python:3.12-slim@sha256:<digest>
   # SGT_IMAGE needs python3 + git (if git is missing the job apt-installs it,
   # which requires Debian repo access — a mirrored image with git avoids that).
-  SGT_IMAGE: "python:3.12-slim"
-  SGT_NOOP_IMAGE: "alpine:3.20"
+  # Digests resolved 2026-06-10 (python:3.12-slim / alpine:3.20 manifest lists).
+  SGT_IMAGE: "python:3.12-slim@sha256:090ba77e2958f6af52a5341f788b50b032dd4ca28377d2893dcf1ecbdfdfe203"
+  SGT_NOOP_IMAGE: "alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
 
 # Shared setup: only run on merge requests that touch governed entities.
 .sgt_base:

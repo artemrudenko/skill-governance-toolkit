@@ -252,7 +252,7 @@ Rationale: D8 (Discoverability) asks «will the right need activate this skill, 
 
 **Defer to 3.7.** A `Skip` / `When not to use` line that *contradicts* the `description`'s positive scope is 3.7's concern (caps D8) — 3.8 does **not** double-flag it. 3.8 is about *placement of a stray prohibition*, not coherence.
 
-**Detection.** Scan the body **excluding** the canonical sections named in Scope-out. Candidate lines: passive prohibitions (`do not use`, `don't use`, `never use this`, `не используй`, `не делай`) **not** inside a fenced code block and **not** part of a Phase-0 gate (no accompanying fail-fast action + message). For each candidate, judge the form per the table above. The robust form of a body-level «don't» is an executable gate; passive prose is the weak form this check surfaces.
+**Detection.** Scan the body **excluding** the canonical sections named in Scope-out. Candidate lines: passive prohibitions (`do not use`, `don't use`, `never use this`, `не используй`, `не делай` — the Cyrillic entries are deliberate detection patterns for skills written in Russian, a sanctioned script mix exempt from the single-language rule) **not** inside a fenced code block and **not** part of a Phase-0 gate (no accompanying fail-fast action + message). For each candidate, judge the form per the table above. The robust form of a body-level «don't» is an executable gate; passive prose is the weak form this check surfaces.
 
 | Pass | What we check | Detection | Severity |
 |---|---|---|---|

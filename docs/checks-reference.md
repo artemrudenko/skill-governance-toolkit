@@ -137,7 +137,9 @@ Scans the **content** of in-repo scripts (`scripts/<name>.{py,sh,ps1}`) that an 
 
 Cross-checks MCP tool usage against declared servers, and structurally scans MCP server commands. An `mcp__<server>__<tool>` token in a skill body is "usage"; `metainfo.requires.mcp` (a list of server names) plus the org `allowlists.mcp_servers` are "declaration".
 
-**False-positive control (MCP001 is high/floor):**
+**False-positive control (MCP001 is high/floor — a *floor* rule's severity
+cannot be downgraded and it cannot be inline-suppressed; full definition in
+[Triggering examples and fixes](#triggering-examples-and-fixes)):**
 
 - **Not usage:** an `mcp__...` token inside a fenced code block (` ``` `).
 - **Not usage:** a token on a detection-context line (a line containing `detect`/`scan`/`pattern`/`denylist`/`allowlist`/…) — this is how denylists and detection rules are exempt.

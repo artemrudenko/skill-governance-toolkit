@@ -66,6 +66,24 @@ changes; no governance-rule severity changes (non-breaking).
   (404 at install time). Correct package is `serena-agent`; the CLI entry
   point remains `serena`. Fixed in `init.sh`, integration-init references,
   and uninstall hints.
+- **MR gate note can no longer be hijacked by a pre-seeded marker** —
+  `post_mr_comment.py` updates only a marker note authored by the API token's
+  own user (resolved via `GET /user`; on failure it degrades to the legacy
+  marker-only match with a warning, never crashing the gate). An impostor
+  note containing `<!-- skill-governance-gate -->` is ignored and a fresh
+  note is posted. +3 tests.
+- **`sync_version.py` works from any CWD** — `--root` now defaults to the
+  repo root derived from the script location, eliminating the spurious
+  "metadata drift" failure when `audit.sh` ran outside the repo root. +1 test.
+- Documentation polish from the review's LOW findings: `{your-org}` clone
+  placeholder explained next to first use (README/QUICKSTART, pointing at
+  `configure_org.sh`), Claude pin example gains the required
+  `/plugin marketplace add` step, `sgt quickstart` surfaced in QUICKSTART's
+  task table, «floor» defined at first use (checks-reference), «enforcement
+  plane» defined in the CODEOWNERS section (gitlab-onboarding), tier/metainfo
+  jargon explained in the lite-adoption path, and the Cyrillic detection
+  patterns in `structural-analysis.md` annotated as a sanctioned script-mix
+  exemption.
 
 ### Upgrade notes
 - Re-running the installer over an existing install upgrades the injected

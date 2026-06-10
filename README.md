@@ -49,10 +49,15 @@ cd ~/your-project
 python3 ~/tools/sgt/scripts/sgt.py init        # guided install + verify; undo with `sgt uninstall`
 ```
 
+> `{your-org}` is a placeholder — clone from your org's fork/mirror; in the fork,
+> `bash scripts/configure_org.sh --host <git-host> <org>` rewrites it across all
+> checked-in docs and manifests.
+
 Pin a release for reproducibility:
 ```bash
-/plugin install skill-governance-toolkit@1.20.0    # Claude
-gemini extensions install ...@1.20.0                # Gemini
+/plugin marketplace add {your-org}/skill-governance-toolkit   # Claude — once per machine
+/plugin install skill-governance-toolkit@1.20.0               # Claude
+gemini extensions install ...@1.20.0                           # Gemini
 ```
 
 A project install adds top-level `skills/`, `agents/`, `references/`, `scripts/`,

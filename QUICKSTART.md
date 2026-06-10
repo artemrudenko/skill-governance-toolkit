@@ -31,6 +31,10 @@ cd ~/my-project
 python3 ~/tools/sgt/scripts/sgt.py init        # guided: pick host + scope, then verifies
 ```
 
+> `{your-org}` is a placeholder — clone from your org's fork/mirror of the
+> toolkit. In the fork, `bash scripts/configure_org.sh --host <git-host> <org>`
+> rewrites the placeholder across all checked-in docs and manifests.
+
 > Hosted on a private **GitLab** instance? Same flow — clone from your internal
 > host (`git clone https://gitlab.example.com/{your-group}/skill-governance-toolkit ~/tools/sgt`),
 > authenticating via `glab auth login`, a PAT, or a read-only deploy token. See
@@ -69,6 +73,7 @@ Then just ask your agent a trigger phrase: «is there a skill for evaluating pro
 | Goal | Command |
 |---|---|
 | Guided install + verify | `sgt init` |
+| **Not sure what's next?** | `sgt quickstart` — doctor summary + the recommended next command |
 | List installed skills | `sgt skills` |
 | Health check | `sgt doctor` |
 | Score a skill | invoke `skill-evaluate` on a `SKILL.md` (or `agent_audit.py audit-skill <path>`) |
@@ -139,8 +144,11 @@ for sandboxed/reproducible runs. Decision guide:
 You don't have to adopt everything. A minimal path:
 
 1. `sgt init` for one host.
-2. Use `skill-find` + `skill-evaluate` interactively — skip CI, tiers, and metainfo
-   ceremony until you actually have a library worth gating.
+2. Use `skill-find` + `skill-evaluate` interactively — skip CI, tiers (skill
+   maturity labels: stable / preview / experimental / internal), and `metainfo:`
+   ceremony (the toolkit's frontmatter extension block) until you actually have
+   a library worth gating. Both are defined in
+   [`docs/skill-authoring-standard.md`](docs/skill-authoring-standard.md).
 3. Add `sgt ci-init` only when more than one person edits skills.
 
 Install just the discovery skills: `sgt init --category discovery --yes`.

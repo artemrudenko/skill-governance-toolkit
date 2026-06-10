@@ -180,9 +180,12 @@ jobs still run only on the MRs that touch governed assets. Do not add a
 
 The repo ships a root `CODEOWNERS` (GitLab reads `CODEOWNERS`, `.gitlab/CODEOWNERS`,
 or `docs/CODEOWNERS` — the root file covers both GitLab and GitHub). It gates the
-control-plane paths — the rule catalog, the engine, the CI template, and the
-suppression list (`references/audit-ignore.json`) — so an MR author can't
-self-approve silencing their own security finding. Replace `@skill-governance-owners`
+**enforcement plane** — the full set of files that control gate behaviour: the
+rule catalog, the engine, the CI template, the suppression list
+(`references/audit-ignore.json`), the secret-guard hook, and the gate's own
+machinery (`audit.sh`, `sync_version.py`, `post_mr_comment.py`, `VERSION`) — so
+an MR author can't self-approve silencing their own security finding or weaken
+the gate in the same MR it blocks. Replace `@skill-governance-owners`
 with your real group.
 
 **This guarantee is advisory until you enforce it.** CODEOWNERS only *blocks* a

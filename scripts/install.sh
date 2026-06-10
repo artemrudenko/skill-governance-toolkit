@@ -153,9 +153,13 @@ Targets (one or more):
 Scope (one):
   --global       Install per-host files to ~/.{host}/ (project root files skipped)
   --project      Install per-host files to TARGET_PROJECT/.{host}/ AND upsert a
-                 managed marker-block into TARGET_PROJECT/AGENTS.md, CLAUDE.md,
-                 GEMINI.md, .github/copilot-instructions.md (content outside the
-                 markers is preserved verbatim).
+                 managed marker-block into TARGET_PROJECT/AGENTS.md plus the
+                 alias files of the SELECTED hosts only (CLAUDE.md for --claude,
+                 GEMINI.md for --gemini, .github/copilot-instructions.md for
+                 --copilot; plugin manifests likewise). Content outside the
+                 markers is preserved verbatim. The injected AGENTS.md is the
+                 consumer variant (toolkit-repo prose rewritten for YOUR repo).
+                 Also ensures out/ and .skill-state/ entries in .gitignore.
 
 Project target (optional, only meaningful with --project):
   --target-project=PATH    Where YOUR project lives. Default: current working directory.
@@ -248,6 +252,16 @@ done
 [[ -z "$TIER_FILTER" ]] && TIER_FILTER="stable,preview"
 
 # ── Resolve per-runtime base dir ──────────────────────────────────────────────
+
+# _host_selected NAME — true when NAME is among the requested install targets.
+# Root alias files and plugin manifests are written only for selected hosts.
+_host_selected() {
+  local t
+  for t in "${TARGETS[@]}"; do
+    [[ "$t" == "$1" ]] && return 0
+  done
+  return 1
+}
 
 resolve_runtime_dir() {
   local runtime="$1"
@@ -355,11 +369,22 @@ print_dry_run_plan() {
     if [[ "$SOURCE" -ef "$TARGET_PROJECT" ]]; then
       echo "  project root:    source == target; marker blocks, root dirs, docs, and per-host dirs would be skipped"
     else
+      local root_files="AGENTS.md (consumer variant)"
+      _host_selected claude  && root_files+=", CLAUDE.md"
+      _host_selected gemini  && root_files+=", GEMINI.md"
+      _host_selected copilot && root_files+=", .github/copilot-instructions.md"
+      local manifests=""
+      _host_selected codex  && manifests+=" .codex-plugin/"
+      _host_selected claude && manifests+=" .claude-plugin/"
+      _host_selected gemini && manifests+=" gemini-extension.json"
       echo "  project root:"
-      echo "    · upsert marker blocks in AGENTS.md, CLAUDE.md, GEMINI.md, .github/copilot-instructions.md"
+      echo "    · upsert marker blocks in: $root_files"
       echo "    · copy filtered skills/ plus agents/, references/, scripts/, commands/"
       echo "    · copy docs/ with conflict-renaming"
-      echo "    · place .codex-plugin/, .claude-plugin/, gemini-extension.json manifests"
+      echo "    · ensure out/ and .skill-state/ entries in .gitignore"
+      if [[ -n "$manifests" ]]; then
+        echo "    · place manifests:$manifests"
+      fi
     fi
   else
     echo "  project root:    skipped for global scope"
@@ -471,6 +496,27 @@ _copy_owned_tree() {
   printf '%s' "$now_list" | grep -v '^$' | sort > "$owned_file"
 }
 
+# ── Consumer AGENTS.md (generated once per run) ──────────────────────────────
+# The canonical AGENTS.md describes the TOOLKIT's own repository (self-CI
+# commands like `bash scripts/audit.sh` that never ship, repo architecture).
+# Every install — root marker block AND per-host runtime copies — must carry
+# the consumer variant instead: toolkit-repo prose rewritten, skill table
+# trimmed to the installed subset. See generate_subset_agents_md.py.
+AGENTS_FOR_INSTALL="$SOURCE/AGENTS.md"   # fallback: canonical
+_TMP_AGENTS=""
+trap '[[ -n "$_TMP_AGENTS" ]] && rm -f "$_TMP_AGENTS"' EXIT
+
+generate_consumer_agents_md() {
+  local skill_csv; skill_csv=$(IFS=,; echo "${SELECTED_SKILLS[*]}")
+  _TMP_AGENTS=$(mktemp)
+  if python3 "$SOURCE/scripts/generate_subset_agents_md.py" "$SOURCE/AGENTS.md" "$skill_csv" > "$_TMP_AGENTS"; then
+    AGENTS_FOR_INSTALL="$_TMP_AGENTS"
+  else
+    echo "  ! consumer AGENTS.md generation failed — falling back to canonical AGENTS.md" >&2
+    rm -f "$_TMP_AGENTS"; _TMP_AGENTS=""
+  fi
+}
+
 # ── Ensure project root user-owned files (only for --project scope) ──────────
 # These four files are USER-OWNED. The installer NEVER overwrites them — it
 # manages a single block between BEGIN/END markers. User edits outside the
@@ -492,33 +538,14 @@ ensure_project_root_user_files() {
     return 0
   fi
   echo "── Ensuring user-owned files at project root (append-with-markers) ──"
-  # When a filter is active (--category/--tier/--skill) and the resolved
-  # subset is smaller than the full library, the canonical AGENTS.md (which
-  # lists all skills) would mislead the agent into routing to skills not
-  # actually installed. Generate a subset-aware copy whose skill table only
-  # contains installed rows, plus a clear «scoped install» notice.
-  local agents_src="$SOURCE/AGENTS.md"
-  local full_count; full_count=$(python3 "$SOURCE/scripts/filter_skills.py" --index "$SOURCE/skills/INDEX.jsonl" --tier "stable,preview,experimental,internal,unknown" | wc -l | tr -d ' ')
-  if [[ "${#SELECTED_SKILLS[@]}" -lt "$full_count" ]]; then
-    local skill_csv; skill_csv=$(IFS=,; echo "${SELECTED_SKILLS[*]}")
-    local tmp_agents; tmp_agents=$(mktemp)
-    if python3 "$SOURCE/scripts/generate_subset_agents_md.py" "$SOURCE/AGENTS.md" "$skill_csv" > "$tmp_agents"; then
-      agents_src="$tmp_agents"
-      echo "  · AGENTS.md tailored for subset install (${#SELECTED_SKILLS[@]}/$full_count skills)"
-    else
-      echo "  ! subset AGENTS.md generation failed — falling back to canonical AGENTS.md" >&2
-    fi
-  fi
-  _upsert_marker_block "$agents_src" "$TARGET_PROJECT/AGENTS.md"
-  _upsert_marker_block "$SOURCE/CLAUDE.md" "$TARGET_PROJECT/CLAUDE.md"
-  _upsert_marker_block "$SOURCE/GEMINI.md" "$TARGET_PROJECT/GEMINI.md"
-  _upsert_marker_block "$SOURCE/.github/copilot-instructions.md" "$TARGET_PROJECT/.github/copilot-instructions.md"
-  # Clean up temp file if used. Use `if` (always exits 0) instead of `[[ ]] && rm`
-  # (which exits 1 when the [[ test is false → function returns 1 → set -e
-  # aborts the whole installer before per-host installs run). Subtle but fatal.
-  if [[ -n "${tmp_agents:-}" && -f "${tmp_agents:-/dev/null}" ]]; then
-    rm -f "$tmp_agents"
-  fi
+  # AGENTS.md always carries the consumer variant (generated once in main) —
+  # toolkit-repo prose rewritten, skill table trimmed to the installed subset.
+  _upsert_marker_block "$AGENTS_FOR_INSTALL" "$TARGET_PROJECT/AGENTS.md"
+  # Host alias files only for the hosts actually selected — a --claude install
+  # must not scatter GEMINI.md / copilot-instructions.md into the user's repo.
+  _host_selected claude  && _upsert_marker_block "$SOURCE/CLAUDE.md" "$TARGET_PROJECT/CLAUDE.md"
+  _host_selected gemini  && _upsert_marker_block "$SOURCE/GEMINI.md" "$TARGET_PROJECT/GEMINI.md"
+  _host_selected copilot && _upsert_marker_block "$SOURCE/.github/copilot-instructions.md" "$TARGET_PROJECT/.github/copilot-instructions.md"
   return 0
 }
 
@@ -565,6 +592,38 @@ ensure_docs_copied() {
   fi
 }
 
+# ── Ensure .gitignore entries (only for --project scope) ─────────────────────
+# The injected rules state «Never commit out/» and «.skill-state is
+# .gitignored» — make the installer uphold that instead of leaving the first
+# audit run one careless `git add -A` away from violating it. Append-if-missing
+# and idempotent; user content is never modified or reordered.
+ensure_gitignore_entries() {
+  if [[ "$SCOPE" != "project" ]]; then return 0; fi
+  if [[ "$SOURCE" -ef "$TARGET_PROJECT" ]]; then return 0; fi
+  local gi="$TARGET_PROJECT/.gitignore"
+  local comment="# skill-governance-toolkit — audit outputs and resumable-run state (keep untracked)"
+  local missing=()
+  local entry
+  for entry in "out/" ".skill-state/"; do
+    if [[ ! -f "$gi" ]] || ! grep -qxF "$entry" "$gi"; then
+      missing+=("$entry")
+    fi
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "── .gitignore already covers out/ and .skill-state/ ──"
+    return 0
+  fi
+  echo "── Ensuring .gitignore entries: ${missing[*]} ──"
+  # Append on a fresh line even when the existing file lacks a trailing newline.
+  if [[ -f "$gi" && -s "$gi" && -n "$(tail -c 1 "$gi")" ]]; then
+    echo >> "$gi"
+  fi
+  if [[ ! -f "$gi" ]] || ! grep -qxF "$comment" "$gi"; then
+    echo "$comment" >> "$gi"
+  fi
+  printf '%s\n' "${missing[@]}" >> "$gi"
+}
+
 # ── Ensure project root canonical dirs (only for --project scope) ────────────
 # Root-first layout — skills/, agents/, references/, scripts/ live at project
 # root as the single source of truth. Manifests in .codex-plugin/plugin.json
@@ -587,13 +646,21 @@ ensure_project_root_canonical_dirs() {
   _copy_owned_tree "$SOURCE/references/" "$TARGET_PROJECT/references/"
   _copy_runtime_scripts "$TARGET_PROJECT/scripts"
   _copy_owned_tree "$SOURCE/commands/"   "$TARGET_PROJECT/commands/"
-  # Also place manifests at root (Codex marketplace etc reads ./{...}-plugin/)
-  mkdir -p "$TARGET_PROJECT/.codex-plugin" "$TARGET_PROJECT/.claude-plugin"
-  _copy_file "$SOURCE/.codex-plugin/plugin.json" "$TARGET_PROJECT/.codex-plugin/plugin.json"
-  _copy_file "$SOURCE/.claude-plugin/plugin.json" "$TARGET_PROJECT/.claude-plugin/plugin.json"
-  _copy_file "$SOURCE/.claude-plugin/marketplace.json" "$TARGET_PROJECT/.claude-plugin/marketplace.json"
-  _copy_file "$SOURCE/gemini-extension.json" "$TARGET_PROJECT/gemini-extension.json"
-  echo "  · root layout ready: skills/, agents/, references/, scripts/, commands/, manifests/"
+  # Manifests at root only for selected hosts (Codex marketplace etc reads
+  # ./{...}-plugin/) — a --claude install must not plant Codex/Gemini manifests.
+  if _host_selected codex; then
+    mkdir -p "$TARGET_PROJECT/.codex-plugin"
+    _copy_file "$SOURCE/.codex-plugin/plugin.json" "$TARGET_PROJECT/.codex-plugin/plugin.json"
+  fi
+  if _host_selected claude; then
+    mkdir -p "$TARGET_PROJECT/.claude-plugin"
+    _copy_file "$SOURCE/.claude-plugin/plugin.json" "$TARGET_PROJECT/.claude-plugin/plugin.json"
+    _copy_file "$SOURCE/.claude-plugin/marketplace.json" "$TARGET_PROJECT/.claude-plugin/marketplace.json"
+  fi
+  if _host_selected gemini; then
+    _copy_file "$SOURCE/gemini-extension.json" "$TARGET_PROJECT/gemini-extension.json"
+  fi
+  echo "  · root layout ready: skills/, agents/, references/, scripts/, commands/ + manifests for: ${TARGETS[*]}"
 }
 
 # ── Per-host installers ───────────────────────────────────────────────────────
@@ -608,8 +675,9 @@ install_claude() {
   _copy_owned_tree "$SOURCE/references/" "$dest/references/"
   _copy_owned_tree "$SOURCE/commands/" "$dest/commands/"
   _copy_file "$SOURCE/CLAUDE.md" "$dest/CLAUDE.md"
-  # AGENTS.md INSIDE $dest — CLAUDE.md's `@AGENTS.md` resolves relative to its location
-  _copy_file "$SOURCE/AGENTS.md" "$dest/AGENTS.md"
+  # AGENTS.md INSIDE $dest — CLAUDE.md's `@AGENTS.md` resolves relative to its
+  # location. Consumer variant: runtime copies must not carry toolkit-repo prose.
+  cp "$AGENTS_FOR_INSTALL" "$dest/AGENTS.md"
   echo "✓ Claude Code:    $dest/  (${#SELECTED_SKILLS[@]} skills)"
 }
 
@@ -652,8 +720,8 @@ install_gemini() {
   _copy_owned_tree "$SOURCE/references/" "$dest/references/"
   _copy_owned_tree "$SOURCE/commands/" "$dest/commands/"
   _copy_file "$SOURCE/GEMINI.md" "$dest/GEMINI.md"
-  # AGENTS.md INSIDE $dest — GEMINI.md uses `@./AGENTS.md` import
-  _copy_file "$SOURCE/AGENTS.md" "$dest/AGENTS.md"
+  # AGENTS.md INSIDE $dest — GEMINI.md uses `@./AGENTS.md` import (consumer variant)
+  cp "$AGENTS_FOR_INSTALL" "$dest/AGENTS.md"
   _copy_file "$SOURCE/gemini-extension.json" "$dest/extension.json"
   echo "✓ Gemini CLI:     $dest/  (${#SELECTED_SKILLS[@]} skills)"
   echo "  ! Gemini does NOT support sub-agents — optional Task paths use sequential fallback"
@@ -697,6 +765,10 @@ if $DRY_RUN; then
   exit 0
 fi
 
+# Generate the consumer AGENTS.md once — used by the root marker block and by
+# every per-host runtime copy (claude/gemini) below.
+generate_consumer_agents_md
+
 # Ensure project root user-owned files ONCE (not per-host) for --project scope.
 # Append-with-markers — never overwrites user content.
 ensure_project_root_user_files
@@ -709,6 +781,10 @@ echo
 
 # Copy docs/ with conflict-rename — never deletes user's docs/ files.
 ensure_docs_copied
+echo
+
+# Keep audit outputs and resumable-run state untracked in the target repo.
+ensure_gitignore_entries
 echo
 
 # Hard guard #2: per-host installers create .{host}/ subdirs and copy skills/

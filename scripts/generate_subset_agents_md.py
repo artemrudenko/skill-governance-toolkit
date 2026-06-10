@@ -26,6 +26,101 @@ import re
 import sys
 
 
+CONSUMER_PREAMBLE = """\
+# Skill Governance Toolkit — agent rules
+
+> Rules for AI agents working with the skill library in this repository.
+> Installed and maintained by the skill-governance-toolkit installer — this
+> managed block is replaced on toolkit upgrades; put project-specific rules
+> OUTSIDE the managed markers.
+
+---
+"""
+
+CONSUMER_OVERVIEW_INTRO = (
+    "This project has the **skill-governance toolkit** installed — meta-skills "
+    "that govern the skill library in this repository, following the `AGENTS.md` "
+    "+ `SKILL.md` open standards (Linux Foundation AAIF · Anthropic Agent Skills). "
+    "Installed governance skills (`skills/INDEX.jsonl` is the authoritative list):"
+)
+
+CONSUMER_BUILD_BODY = """\
+## Build & Test Commands
+
+Validation runs through the installed governance skills and runtime scripts:
+
+```bash
+# Audit the skill library — handoff, budget, naming, portability, multi-tool compat
+# Trigger: «skill audit» / «check skills»
+#
+# Output: out/library-audit/library-audit-{date}.md
+
+# Score one skill across 9 dimensions (D1–D9, includes D9 Safety)
+# Trigger: «evaluate skill X» / «score skill X»
+#
+# Output: dimension table + top-3 improvements + (optional) rewrite
+
+# Inspect the installed corpus shape — categories, tiers, orphans
+python3 scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories
+
+# Aggregate info-tier evidence across scored skills — promotion view
+python3 scripts/filter_skills.py --index out/scores/index.jsonl --info-summary
+```
+
+First audit over a pre-existing skill library: run with `STRICTNESS=permissive`
+so toolkit-specific conventions (`metainfo:`, `compatibility:`) report as
+advisories, not blockers — tighten once the library is annotated.
+
+If `scripts/` directories contain Python helpers, run them with `python3` and stdlib only — **no pip dependencies allowed** (portability requirement).
+
+"""
+
+# Anchors that identify the toolkit's own AGENTS.md. Every transform below is
+# guarded by its own anchor — absent anchor → verbatim pass-through.
+_TOOLKIT_H1 = "# AGENTS.md — Skill Governance Toolkit"
+_OVERVIEW_INTRO_RE = re.compile(
+    r"This repository is a \*\*skill-governance toolkit\*\*.*?operate on other skills:",
+    re.DOTALL,
+)
+_SELF_PATTERN_PARA_RE = re.compile(
+    r"\n\nThe toolkit itself follows the universal pattern it enforces[^\n]*\n"
+)
+_STACK_SECTION_RE = re.compile(
+    r"\n## Stack & Architecture\n.*?(?=\n## )", re.DOTALL
+)
+_BUILD_SECTION_RE = re.compile(
+    # Replace from the heading up to (not including) the first ### subsection
+    # («Script & reference path resolution» — consumer-relevant, kept).
+    r"## Build & Test Commands\n.*?(?=### )", re.DOTALL
+)
+_README_BULLET_RE = re.compile(
+    r"\n- `README\.md` — quick start[^\n]*"
+)
+
+
+def consumer_transform(text: str) -> str:
+    """Rewrite toolkit-repo-specific sections for a consumer install.
+
+    Anchor-guarded: a source that does not look like the canonical toolkit
+    AGENTS.md (e.g. the synthetic fixtures in tests) passes through verbatim.
+    """
+    if _TOOLKIT_H1 not in text:
+        return text
+
+    # Header block: H1 + «single source of truth» blockquote up to the first
+    # horizontal rule → consumer preamble.
+    head, sep, tail = text.partition("\n---\n")
+    if sep and _TOOLKIT_H1 in head:
+        text = CONSUMER_PREAMBLE + tail
+
+    text = _OVERVIEW_INTRO_RE.sub(CONSUMER_OVERVIEW_INTRO, text, count=1)
+    text = _SELF_PATTERN_PARA_RE.sub("\n", text, count=1)
+    text = _STACK_SECTION_RE.sub("\n", text, count=1)
+    text = _BUILD_SECTION_RE.sub(CONSUMER_BUILD_BODY, text, count=1)
+    text = _README_BULLET_RE.sub("", text, count=1)
+    return text
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("Usage: generate_subset_agents_md.py SOURCE.md skill-csv", file=sys.stderr)
@@ -40,6 +135,8 @@ def main() -> int:
     except OSError as e:
         print(f"cannot read {src_path}: {e}", file=sys.stderr)
         return 1
+
+    text = consumer_transform(text)
 
     # Drop skill-summary table rows for skills NOT installed.
     # Match lines whose first table cell is `skill-name` (backtick-quoted).
@@ -66,6 +163,11 @@ def main() -> int:
         out_lines.append(line)
 
     new_text = "\n".join(out_lines)
+
+    # Full install (nothing dropped) → consumer copy without a scoped notice.
+    if not dropped:
+        sys.stdout.write(new_text)
+        return 0
 
     # Insert the scoped-install notice after the first horizontal rule
     # (which separates the header block from the body in AGENTS.md).

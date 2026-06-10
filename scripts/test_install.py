@@ -249,6 +249,78 @@ class InstallContentTests(unittest.TestCase):
                 )
 
 
+class ConsumerRootFilesTests(unittest.TestCase):
+    """Pre-ship review of 1.19.0: (a) the canonical toolkit AGENTS.md was
+    injected verbatim into consumer repos — false project description + a
+    `bash scripts/audit.sh` command that never ships; (b) a --claude install
+    scattered ALL hosts' alias files/manifests into the user's repo root;
+    (c) out/ and .skill-state/ were promised as gitignored but never were."""
+
+    def _install(self, target: Path, *flags: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", str(ROOT / "scripts" / "install.sh"),
+             *flags, "--project", f"--target-project={target}"],
+            cwd=ROOT, text=True, capture_output=True, check=False,
+        )
+
+    def test_claude_only_install_writes_only_claude_root_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            r = self._install(target, "--claude")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            # Selected host's files land…
+            self.assertTrue((target / "CLAUDE.md").exists())
+            self.assertTrue((target / ".claude-plugin" / "plugin.json").exists())
+            # …other hosts' files must NOT.
+            for unwanted in ("GEMINI.md", "gemini-extension.json"):
+                self.assertFalse((target / unwanted).exists(),
+                                 f"claude-only install planted {unwanted}")
+            self.assertFalse((target / ".codex-plugin").exists(),
+                             "claude-only install planted .codex-plugin/")
+            self.assertFalse((target / ".github").exists(),
+                             "claude-only install planted .github/copilot-instructions.md")
+
+    def test_all_install_writes_every_hosts_root_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            r = self._install(target, "--all")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            for wanted in ("CLAUDE.md", "GEMINI.md", "gemini-extension.json",
+                           ".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
+                           ".github/copilot-instructions.md"):
+                self.assertTrue((target / wanted).exists(), f"--all install missing {wanted}")
+
+    def test_installed_agents_md_is_consumer_variant(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            r = self._install(target, "--claude", "--gemini")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            for rel in ("AGENTS.md", ".claude/AGENTS.md", ".gemini/AGENTS.md"):
+                text = (target / rel).read_text(encoding="utf-8")
+                self.assertNotIn("This repository is a **skill-governance toolkit**", text,
+                                 f"{rel} carries the toolkit's own project description")
+                self.assertNotIn("scripts/audit.sh", text,
+                                 f"{rel} references the self-CI that never ships")
+                self.assertNotIn("## Stack & Architecture", text,
+                                 f"{rel} carries the toolkit's repo architecture")
+                self.assertIn("## Conventions & Boundaries", text,
+                              f"{rel} lost the governance rules")
+
+    def test_gitignore_entries_added_and_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            # Pre-existing user .gitignore WITHOUT a trailing newline — the
+            # append must still start on a fresh line.
+            (target / ".gitignore").write_text("node_modules/", encoding="utf-8")
+            self.assertEqual(self._install(target, "--claude").returncode, 0)
+            self.assertEqual(self._install(target, "--claude").returncode, 0)  # rerun
+            lines = (target / ".gitignore").read_text(encoding="utf-8").splitlines()
+            self.assertIn("node_modules/", lines, "user .gitignore content lost")
+            for entry in ("out/", ".skill-state/"):
+                self.assertEqual(lines.count(entry), 1,
+                                 f".gitignore entry {entry} missing or duplicated: {lines}")
+
+
 class UpgradeSafetyTests(unittest.TestCase):
     """--upgrade must never delete or clobber a user's own files."""
 

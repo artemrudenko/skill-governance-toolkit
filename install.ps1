@@ -256,11 +256,23 @@ if ($DryRun) {
         Write-Host ("    · {0} -> {1}" -f $t.Kind, (Join-Path $scopePrefix $t.Dir))
     }
     if ($scopeChoice -eq '2') {
+        $dryKinds = @($targets | ForEach-Object { $_.Kind })
+        $rootFiles = @('AGENTS.md (consumer variant)')
+        if ($dryKinds -contains 'claude')  { $rootFiles += 'CLAUDE.md' }
+        if ($dryKinds -contains 'gemini')  { $rootFiles += 'GEMINI.md' }
+        if ($dryKinds -contains 'copilot') { $rootFiles += '.github/copilot-instructions.md' }
+        $manifests = @()
+        if ($dryKinds -contains 'codex')  { $manifests += '.codex-plugin/' }
+        if ($dryKinds -contains 'claude') { $manifests += '.claude-plugin/' }
+        if ($dryKinds -contains 'gemini') { $manifests += 'gemini-extension.json' }
         Write-Host "  project root:"
-        Write-Host "    · upsert marker blocks in AGENTS.md, CLAUDE.md, GEMINI.md, .github/copilot-instructions.md"
+        Write-Host "    · upsert marker blocks in: $($rootFiles -join ', ')"
         Write-Host "    · copy filtered skills/ plus agents/, references/, scripts/, commands/"
         Write-Host "    · copy docs/ with conflict-renaming"
-        Write-Host "    · place .codex-plugin/, .claude-plugin/, gemini-extension.json manifests"
+        Write-Host "    · ensure out/ and .skill-state/ entries in .gitignore"
+        if ($manifests.Count -gt 0) {
+            Write-Host "    · place manifests: $($manifests -join ', ')"
+        }
     }
     else {
         Write-Host "  project root: skipped for global scope"
@@ -282,52 +294,71 @@ function Upsert-MarkerBlock {
     & $pythonCmd $markerScript upsert --file $Dest --src $Src
 }
 
-# Subset-aware AGENTS.md: when filtered, generate a trimmed version that
-# only advertises installed skills + carries a «Scoped install notice».
+# Consumer AGENTS.md: installs must NOT carry the toolkit-repo prose (the
+# self-CI `bash scripts/audit.sh` never ships; «This repository is a
+# skill-governance toolkit» misdescribes the user's repo). Mirror of bash
+# generate_consumer_agents_md() — always generate; the script also trims the
+# skill table to the installed subset and adds a scoped notice when filtered.
 function Resolve-AgentsSource {
-    param([int]$FullCount, [string[]]$SelectedSkills)
-    if ($SelectedSkills.Count -lt $FullCount) {
-        $genScript = Join-Path $RepoRoot 'scripts\generate_subset_agents_md.py'
-        if (-not (Test-Path $genScript)) {
-            Write-Warning "generate_subset_agents_md.py missing — using canonical AGENTS.md"
-            return (Join-Path $RepoRoot 'AGENTS.md')
-        }
-        $tmpFile = [System.IO.Path]::GetTempFileName()
-        $skillCsv = ($SelectedSkills -join ',')
-        $output = & $pythonCmd $genScript (Join-Path $RepoRoot 'AGENTS.md') $skillCsv
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "subset AGENTS.md generation failed — using canonical AGENTS.md"
-            return (Join-Path $RepoRoot 'AGENTS.md')
-        }
-        Set-Content -Path $tmpFile -Value $output -Encoding UTF8
-        Write-Host "  · AGENTS.md tailored for subset install ($($SelectedSkills.Count)/$FullCount skills)"
-        return $tmpFile
+    param([string[]]$SelectedSkills)
+    $genScript = Join-Path $RepoRoot 'scripts\generate_subset_agents_md.py'
+    if (-not (Test-Path $genScript)) {
+        Write-Warning "generate_subset_agents_md.py missing — using canonical AGENTS.md"
+        return (Join-Path $RepoRoot 'AGENTS.md')
     }
-    return (Join-Path $RepoRoot 'AGENTS.md')
+    $tmpFile = [System.IO.Path]::GetTempFileName()
+    $skillCsv = ($SelectedSkills -join ',')
+    $output = & $pythonCmd $genScript (Join-Path $RepoRoot 'AGENTS.md') $skillCsv
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "consumer AGENTS.md generation failed — using canonical AGENTS.md"
+        return (Join-Path $RepoRoot 'AGENTS.md')
+    }
+    Set-Content -Path $tmpFile -Value $output -Encoding UTF8
+    Write-Host "  · AGENTS.md prepared for install (consumer variant, $($SelectedSkills.Count) skills)"
+    return $tmpFile
 }
 
-# Full corpus size — anything across all tiers including unknown, used to
-# decide whether to emit the «scoped install» AGENTS.md variant.
-$fullCount = (& $pythonCmd (Join-Path $RepoRoot 'scripts\filter_skills.py') `
-    --index $indexPath --tier 'stable,preview,experimental,internal,unknown') `
-    | Where-Object { $_ -and $_.Trim() }
-$fullCount = $fullCount.Count
+# Resolved once — used by the root marker block AND per-host runtime copies.
+$agentsForInstall = Resolve-AgentsSource -SelectedSkills $selectedSkills
+# Host kinds actually selected — root alias files / manifests are written only
+# for these (mirror of bash _host_selected()).
+$kinds = @($targets | ForEach-Object { $_.Kind })
+
+# Mirror of ensure_gitignore_entries() in scripts/install.sh — keep audit
+# outputs (out/) and resumable-run state (.skill-state/) untracked in the
+# target repo. Append-if-missing, idempotent; user content never modified.
+function Ensure-GitignoreEntries {
+    param([string]$ProjectRoot)
+    $gi = Join-Path $ProjectRoot '.gitignore'
+    $comment = '# skill-governance-toolkit — audit outputs and resumable-run state (keep untracked)'
+    $existing = if (Test-Path $gi) { @(Get-Content $gi) } else { @() }
+    $missing = @('out/', '.skill-state/') | Where-Object { $existing -notcontains $_ }
+    if (-not $missing) { return }
+    $lines = @()
+    if ($existing -notcontains $comment) { $lines += $comment }
+    $lines += $missing
+    Add-Content -Path $gi -Value ($lines -join "`n")
+    Write-Host "  · .gitignore: ensured $($missing -join ', ')"
+}
 
 # ── Ensure project root user-owned files (append-with-markers) ────────────────
 # Project scope only, and never when the target is the toolkit's own dir (H2).
+# AGENTS.md always (consumer variant); host alias files only for selected hosts.
 if ($scopeChoice -eq '2' -and -not $selfInstall) {
     Write-Host "── Ensuring user-owned files at project root (append-with-markers) ──"
-    $agentsSrc = Resolve-AgentsSource -FullCount $fullCount -SelectedSkills $selectedSkills
-    Upsert-MarkerBlock $agentsSrc                                       (Join-Path $scopePrefix 'AGENTS.md')
-    Upsert-MarkerBlock (Join-Path $RepoRoot 'CLAUDE.md')                (Join-Path $scopePrefix 'CLAUDE.md')
-    Upsert-MarkerBlock (Join-Path $RepoRoot 'GEMINI.md')                (Join-Path $scopePrefix 'GEMINI.md')
-    $copilotDir = Join-Path $scopePrefix '.github'
-    New-Item -ItemType Directory -Force -Path $copilotDir | Out-Null
-    Upsert-MarkerBlock (Join-Path $RepoRoot '.github\copilot-instructions.md') (Join-Path $copilotDir 'copilot-instructions.md')
-    # Clean up temp file if used
-    if ($agentsSrc -ne (Join-Path $RepoRoot 'AGENTS.md') -and (Test-Path $agentsSrc)) {
-        Remove-Item $agentsSrc -Force
+    Upsert-MarkerBlock $agentsForInstall (Join-Path $scopePrefix 'AGENTS.md')
+    if ($kinds -contains 'claude') {
+        Upsert-MarkerBlock (Join-Path $RepoRoot 'CLAUDE.md') (Join-Path $scopePrefix 'CLAUDE.md')
     }
+    if ($kinds -contains 'gemini') {
+        Upsert-MarkerBlock (Join-Path $RepoRoot 'GEMINI.md') (Join-Path $scopePrefix 'GEMINI.md')
+    }
+    if ($kinds -contains 'copilot') {
+        $copilotDir = Join-Path $scopePrefix '.github'
+        New-Item -ItemType Directory -Force -Path $copilotDir | Out-Null
+        Upsert-MarkerBlock (Join-Path $RepoRoot '.github\copilot-instructions.md') (Join-Path $copilotDir 'copilot-instructions.md')
+    }
+    Ensure-GitignoreEntries -ProjectRoot $scopePrefix
     Write-Host ""
 }
 
@@ -485,11 +516,12 @@ function Install-Host {
             Copy-OwnedTree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references')
             Copy-OwnedTree (Join-Path $RepoRoot 'commands') (Join-Path $dest 'commands')
             Copy-Item (Join-Path $RepoRoot 'CLAUDE.md')  (Join-Path $dest 'CLAUDE.md') -Force
-            Copy-Item (Join-Path $RepoRoot 'AGENTS.md')  (Join-Path $dest 'AGENTS.md') -Force
+            # Consumer variant — runtime copies must not carry toolkit-repo prose.
+            Copy-Item $agentsForInstall (Join-Path $dest 'AGENTS.md') -Force
             if ($ScopePrefix -ne $HOME) {
                 $rootAgents = Join-Path $ScopePrefix 'AGENTS.md'
                 if (-not (Test-Path $rootAgents)) {
-                    Copy-Item (Join-Path $RepoRoot 'AGENTS.md') $rootAgents -Force
+                    Copy-Item $agentsForInstall $rootAgents -Force
                 }
             }
             Write-Host "[ok] Claude Code: $dest  ($($selectedSkills.Count) skills)"
@@ -520,6 +552,9 @@ function Install-Host {
             Copy-OwnedTree (Join-Path $RepoRoot 'references') (Join-Path $dest 'references')
             Copy-OwnedTree (Join-Path $RepoRoot 'commands') (Join-Path $dest 'commands')
             Copy-Item (Join-Path $RepoRoot 'GEMINI.md') (Join-Path $dest 'GEMINI.md') -Force
+            # AGENTS.md inside $dest — GEMINI.md uses `@./AGENTS.md` (consumer
+            # variant; mirrors bash install_gemini, which always shipped it).
+            Copy-Item $agentsForInstall (Join-Path $dest 'AGENTS.md') -Force
             Copy-Item (Join-Path $RepoRoot 'gemini-extension.json') `
                       (Join-Path $dest 'extension.json') -Force
             Write-Host "[ok] Gemini CLI: $dest  ($($selectedSkills.Count) skills)"
@@ -546,14 +581,21 @@ if ($scopeChoice -eq '2' -and -not $selfInstall) {
     Copy-RuntimeScripts (Join-Path $scopePrefix 'scripts') $mode
     Copy-OwnedTree (Join-Path $RepoRoot 'commands') (Join-Path $scopePrefix 'commands')
 
-    # Root manifests so Codex/Claude/Gemini marketplace discovery works at the
-    # project root — mirror of scripts/install.sh ensure_project_root_canonical_dirs.
-    New-Item -ItemType Directory -Force -Path (Join-Path $scopePrefix '.codex-plugin')  | Out-Null
-    New-Item -ItemType Directory -Force -Path (Join-Path $scopePrefix '.claude-plugin') | Out-Null
-    Copy-Item -Force (Join-Path $RepoRoot '.codex-plugin/plugin.json')       (Join-Path $scopePrefix '.codex-plugin/plugin.json')
-    Copy-Item -Force (Join-Path $RepoRoot '.claude-plugin/plugin.json')      (Join-Path $scopePrefix '.claude-plugin/plugin.json')
-    Copy-Item -Force (Join-Path $RepoRoot '.claude-plugin/marketplace.json') (Join-Path $scopePrefix '.claude-plugin/marketplace.json')
-    Copy-Item -Force (Join-Path $RepoRoot 'gemini-extension.json')           (Join-Path $scopePrefix 'gemini-extension.json')
+    # Root manifests only for SELECTED hosts — mirror of scripts/install.sh
+    # ensure_project_root_canonical_dirs (a claude-only install must not plant
+    # Codex/Gemini manifests in the user's repo).
+    if ($kinds -contains 'codex') {
+        New-Item -ItemType Directory -Force -Path (Join-Path $scopePrefix '.codex-plugin') | Out-Null
+        Copy-Item -Force (Join-Path $RepoRoot '.codex-plugin/plugin.json')       (Join-Path $scopePrefix '.codex-plugin/plugin.json')
+    }
+    if ($kinds -contains 'claude') {
+        New-Item -ItemType Directory -Force -Path (Join-Path $scopePrefix '.claude-plugin') | Out-Null
+        Copy-Item -Force (Join-Path $RepoRoot '.claude-plugin/plugin.json')      (Join-Path $scopePrefix '.claude-plugin/plugin.json')
+        Copy-Item -Force (Join-Path $RepoRoot '.claude-plugin/marketplace.json') (Join-Path $scopePrefix '.claude-plugin/marketplace.json')
+    }
+    if ($kinds -contains 'gemini') {
+        Copy-Item -Force (Join-Path $RepoRoot 'gemini-extension.json')           (Join-Path $scopePrefix 'gemini-extension.json')
+    }
 
     # Project docs (mirror of bash ensure_docs_copied) — the dry-run plan above
     # promises these; without this the Windows-native path silently skipped them.
@@ -570,6 +612,11 @@ if ($selfInstall) {
     Write-Host "── Self-install — skipping per-host install (would create .{host}/ dupes inside the toolkit dir) ──"
 } else {
     foreach ($t in $targets) { Install-Host -Target $t -ScopePrefix $scopePrefix -Mode $mode }
+}
+
+# Clean up the generated consumer AGENTS.md temp file.
+if ($agentsForInstall -ne (Join-Path $RepoRoot 'AGENTS.md') -and (Test-Path $agentsForInstall)) {
+    Remove-Item $agentsForInstall -Force
 }
 
 Write-Host "`nDone."

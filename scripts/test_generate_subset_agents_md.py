@@ -83,5 +83,74 @@ class SubsetGeneratorTests(unittest.TestCase):
         self.assertIn("Usage", result.stderr)
 
 
+class ConsumerTransformTests(unittest.TestCase):
+    """The installed AGENTS.md must describe the CONSUMER's repo, not the
+    toolkit's own. Found in pre-ship review of 1.19.0: the canonical file was
+    injected verbatim, so every agent turn in a consumer project read «This
+    repository is a skill-governance toolkit» and a `bash scripts/audit.sh`
+    self-CI command that is deliberately excluded from installs."""
+
+    ALL_SKILLS = (
+        "skill-find,skill-evaluate,skill-compare,library-audit,"
+        "skill-build-portable,integration-init"
+    )
+
+    def _generate(self, skills: str) -> str:
+        result = subprocess.run(
+            [PYTHON, str(SCRIPT), str(ROOT / "AGENTS.md"), skills],
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    def test_no_toolkit_repo_prose_in_consumer_copy(self) -> None:
+        out = self._generate(self.ALL_SKILLS)
+        for toolkit_speak in (
+            "This repository is a **skill-governance toolkit**",
+            "scripts/audit.sh",          # self-CI never ships into installs
+            "Self-CI for the toolkit",
+            "## Stack & Architecture",
+            "# AGENTS.md — Skill Governance Toolkit",
+        ):
+            self.assertNotIn(toolkit_speak, out,
+                             f"consumer AGENTS.md still carries toolkit-repo prose: {toolkit_speak!r}")
+
+    def test_consumer_copy_keeps_governance_sections(self) -> None:
+        out = self._generate(self.ALL_SKILLS)
+        for kept in (
+            "## Conventions & Boundaries",
+            "### Script & reference path resolution",
+            "## Writing Style",
+            "## Tool-Name Translation Across Platforms",
+            "## Optional integrations",
+            "| `skill-find` |",
+            "STRICTNESS=permissive",      # first-audit guidance for adopters
+        ):
+            self.assertIn(kept, out, f"consumer AGENTS.md lost a governance section: {kept!r}")
+
+    def test_full_install_has_no_scoped_notice(self) -> None:
+        out = self._generate(self.ALL_SKILLS)
+        self.assertNotIn("Scoped install notice", out,
+                         "full install must not claim to be a subset")
+
+    def test_subset_install_combines_transform_and_notice(self) -> None:
+        out = self._generate("skill-find")
+        self.assertIn("Scoped install notice", out)
+        self.assertNotIn("| `library-audit` |", out)
+        self.assertNotIn("This repository is a **skill-governance toolkit**", out)
+
+    def test_non_toolkit_source_passes_through_verbatim(self) -> None:
+        """Anchor guard: a source without the toolkit H1 gets row filtering
+        only — no consumer rewrites of user content."""
+        src = Path(tempfile.mkdtemp()) / "AGENTS.md"
+        src.write_text(SOURCE, encoding="utf-8")
+        result = subprocess.run(
+            [PYTHON, str(SCRIPT), str(src), "skill-find,library-audit,skill-evaluate"],
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.rstrip("\n"), SOURCE.rstrip("\n"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

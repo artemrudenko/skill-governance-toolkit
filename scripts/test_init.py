@@ -100,8 +100,35 @@ class InitShTests(unittest.TestCase):
         result = self._run(repo, "--advise-only", "--all", env=env)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         out = result.stdout
-        self.assertIn("[would run] npm install -g repomix", out)
-        self.assertIn("[would run] pipx install serena-mcp", out)
+        self.assertIn("[would run] npm install -g repomix@", out)
+        self.assertIn("[would run] pipx install serena-agent==", out)
+
+    def test_integration_installs_are_version_pinned(self) -> None:
+        # Supply-chain pin: the default (non-fork) path must never install a
+        # floating `latest` from PyPI/npm — every install command carries an
+        # explicit version (env-overridable via SGT_*_VERSION).
+        repo = self._skeleton()
+        result = self._run(repo, "--advise-only", "--all")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        out = result.stdout
+        self.assertNotIn("[would run] pipx install code-review-graph\n", out)
+        self.assertNotIn("[would run] npm install -g repomix\n", out)
+        self.assertIn("pipx install code-review-graph==", out)
+        self.assertIn("npm install -g repomix@", out)
+        self.assertIn("pipx install serena-agent==", out)
+        # `serena-mcp` does not exist on PyPI — the old command 404'd.
+        self.assertNotIn("serena-mcp", out)
+
+    def test_version_pins_are_env_overridable(self) -> None:
+        repo = self._skeleton()
+        env = dict(os.environ, SGT_CRG_VERSION="9.9.9", SGT_REPOMIX_VERSION="8.8.8",
+                   SGT_SERENA_VERSION="7.7.7")
+        result = self._run(repo, "--advise-only", "--all", env=env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        out = result.stdout
+        self.assertIn("code-review-graph==9.9.9", out)
+        self.assertIn("repomix@8.8.8", out)
+        self.assertIn("serena-agent==7.7.7", out)
 
     def test_invalid_tool_fails_fast(self) -> None:
         repo = self._skeleton()

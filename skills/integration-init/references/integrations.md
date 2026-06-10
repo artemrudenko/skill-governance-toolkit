@@ -20,10 +20,14 @@ Default AI code review reads each touched file plus each imported file in full. 
 
 | Variant | Command |
 |---|---|
-| Upstream main (recommended default) | `pipx install code-review-graph` |
-| With Python enrichment (adds Jedi) | `pipx install code-review-graph[enrichment]` |
-| Fork (better-code-review-graph, time-limited) | `pipx install git+https://github.com/n24q02m/better-code-review-graph` |
-| Via pip (if pipx unavailable) | `pip install --user code-review-graph` |
+| Upstream, pinned (recommended default) | `pipx install "code-review-graph==${SGT_CRG_VERSION}"` |
+| With Python enrichment (adds Jedi) | `pipx install "code-review-graph[enrichment]==${SGT_CRG_VERSION}"` |
+| Fork (better-code-review-graph, time-limited) | `pipx install git+https://github.com/n24q02m/better-code-review-graph@${SGT_CRG_FORK_REF}` |
+| Via pip (if pipx unavailable) | `pip install --user "code-review-graph==${SGT_CRG_VERSION}"` |
+
+Never install a floating `latest` — `scripts/init.sh` carries the pinned
+known-good default for `SGT_CRG_VERSION` (and `SGT_CRG_FORK_REF`); bump the
+env var deliberately, after review.
 
 After install:
 ```bash
@@ -155,7 +159,7 @@ You can install both; they don't conflict.
 ### Install commands
 
 ```bash
-npm install -g repomix          # global install (recommended)
+npm install -g "repomix@${SGT_REPOMIX_VERSION}"   # global install, pinned (recommended)
 # OR via npx (no install):
 npx repomix --version
 ```
@@ -235,7 +239,9 @@ Orthogonal to CRG:
 ### Install commands
 
 ```bash
-pipx install serena-mcp
+# PyPI package is `serena-agent` (`serena-mcp` does not exist on PyPI);
+# the installed CLI entry point is `serena`.
+pipx install "serena-agent==${SGT_SERENA_VERSION}"
 ```
 
 ### Initial setup commands

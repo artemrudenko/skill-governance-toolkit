@@ -39,13 +39,13 @@ Q-SRN-1: Serena languages?
    → ☑ Python  ☑ TypeScript
 
 [Running installs...]
-  ✓ pipx install code-review-graph[enrichment]              (v2.3.3)
+  ✓ pipx install code-review-graph[enrichment]==2.3.5       (pinned)
   ✓ code-review-graph install --platform claude-code        (MCP config written to ~/.claude/mcp/)
   ✓ code-review-graph build                                  (parsed 2,341 files in 14s)
   ✓ ./scripts/install-pre-commit-hook.sh                    (.git/hooks/pre-commit linked)
-  ✓ npm install -g repomix                                   (v0.4.2)
+  ✓ npm install -g repomix@1.14.1                            (pinned)
   ✓ repomix --init                                           (repomix.config.json created)
-  ✓ pipx install serena-mcp                                  (v0.3.1)
+  ✓ pipx install serena-agent==1.5.3                         (pinned)
   ✓ serena init --languages=python,typescript                (language servers ready)
 
 [Updating documentation...]
@@ -65,7 +65,7 @@ User: /integration-init --advise-only --with crg
 integration-init: ADVISE-ONLY mode — no installs will run.
 
 To install code-review-graph:
-  1. pipx install code-review-graph
+  1. pipx install code-review-graph==2.3.5
   2. code-review-graph install --platform claude-code
   3. code-review-graph build           # initial parse (~30s for 500-file project)
 
@@ -85,11 +85,11 @@ Q1: Which integrations to keep installed?
    → User unselects: ☑ code-review-graph  ☑ repomix  ☐ serena
 
 ⚠ Removing serena documentation from AGENTS.md and code-reviewer.md.
-  This skill does NOT uninstall the serena binary itself — run `pipx uninstall serena-mcp` manually.
+  This skill does NOT uninstall the serena binary itself — run `pipx uninstall serena-agent` manually.
 
 [Updating documentation...]
   ✓ AGENTS.md: removed integration:serena block
   ✓ agents/code-reviewer.md: removed handoff:serena block
 
-Done. Serena binary still installed; remove with: pipx uninstall serena-mcp
+Done. Serena binary still installed; remove with: pipx uninstall serena-agent
 ```

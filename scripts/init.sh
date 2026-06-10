@@ -32,6 +32,14 @@ SERENA_LANGS="python,typescript"
 ADVISE_ONLY=false
 DRY_RUN=false
 
+# Pinned integration versions — known-good defaults from public registries,
+# bumped deliberately (after review) via env override. Same supply-chain
+# discipline as the fork path's SGT_CRG_FORK_REF: a floating `latest` would
+# pull whatever the registry serves at install time.
+CRG_VERSION="${SGT_CRG_VERSION:-2.3.5}"
+REPOMIX_VERSION="${SGT_REPOMIX_VERSION:-1.14.1}"
+SERENA_VERSION="${SGT_SERENA_VERSION:-1.5.3}"
+
 AGENTS_MD="$REPO_ROOT/AGENTS.md"
 CODE_REVIEWER_MD="$REPO_ROOT/agents/code-reviewer.md"
 
@@ -59,6 +67,12 @@ Serena sub-options:
 Mode:
   --advise-only        Print commands instead of running them
   --dry-run            Simulate without side effects (no install, no doc writes)
+
+Version pins (env overrides — bump deliberately, after review):
+  SGT_CRG_VERSION      code-review-graph PyPI version (default: pinned known-good)
+  SGT_REPOMIX_VERSION  repomix npm version
+  SGT_SERENA_VERSION   serena-agent PyPI version
+  SGT_CRG_FORK_REF     fork commit SHA for --use-fork
 
 Examples:
   ./scripts/init.sh
@@ -203,9 +217,9 @@ install_crg() {
     run pipx install "git+https://github.com/n24q02m/better-code-review-graph@${fork_ref}"
   else
     if $ENRICHMENT; then
-      run pipx install 'code-review-graph[enrichment]'
+      run pipx install "code-review-graph[enrichment]==${CRG_VERSION}"
     else
-      run pipx install code-review-graph
+      run pipx install "code-review-graph==${CRG_VERSION}"
     fi
   fi
 
@@ -251,7 +265,7 @@ install_repomix() {
     say "  ✗ npm not found — install Node.js first, then re-run."
     return 1
   fi
-  run npm install -g repomix
+  run npm install -g "repomix@${REPOMIX_VERSION}"
   if confirm "Initialize repomix.config.json with defaults?" "y"; then
     run repomix --init
   fi
@@ -265,7 +279,9 @@ install_serena() {
     say "  ✗ pipx not found — install pipx first (e.g. \`brew install pipx\` or \`python3 -m pip install --user pipx\`), then re-run."
     return 1
   fi
-  run pipx install serena-mcp
+  # PyPI package is `serena-agent` (there is no `serena-mcp` on PyPI — the
+  # old name 404s); the installed CLI entry point is still `serena`.
+  run pipx install "serena-agent==${SERENA_VERSION}"
   run serena init "--languages=$SERENA_LANGS"
 }
 

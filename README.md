@@ -51,12 +51,16 @@ python3 ~/tools/sgt/scripts/sgt.py init        # guided install + verify; undo w
 
 Pin a release for reproducibility:
 ```bash
-/plugin install skill-governance-toolkit@1.19.0    # Claude
-gemini extensions install ...@1.19.0                # Gemini
+/plugin install skill-governance-toolkit@1.20.0    # Claude
+gemini extensions install ...@1.20.0                # Gemini
 ```
 
-Everything else — hosts & scopes, selective install (`--category` / `--tier` / `--skill`),
-private GitHub / GitLab auth, upgrades and what's preserved, uninstall, Windows —
+A project install adds top-level `skills/`, `agents/`, `references/`, `scripts/`,
+`commands/`, `docs/` dirs plus the alias files of the hosts you selected (only
+those) — preview the exact plan with `--dry-run`. Everything else — hosts & scopes,
+the full [install footprint](docs/installation.md#project-install-footprint),
+selective install (`--category` / `--tier` / `--skill`), private GitHub / GitLab
+auth, upgrades and what's preserved, uninstall, Windows —
 lives in [`docs/installation.md`](docs/installation.md).
 
 ---

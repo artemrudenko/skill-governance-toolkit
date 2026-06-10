@@ -50,6 +50,12 @@ Prefer the raw installer? `~/tools/sgt/scripts/install.sh --claude --project` (o
 (no `--claude`/`--project` flags). Both are non-destructive — your `AGENTS.md` and
 files are preserved (managed via markers).
 
+**What lands in your repo:** a project install adds top-level `skills/`, `agents/`,
+`references/`, `scripts/`, `commands/` and `docs/` dirs, the alias files/manifests
+of the hosts you selected (only those), a managed `AGENTS.md` block, and `out/` +
+`.skill-state/` entries in `.gitignore`. Preview the exact plan with `--dry-run`;
+full list: [`docs/installation.md` § Project-install footprint](docs/installation.md#project-install-footprint).
+
 ## Verify it worked
 
 ```bash
@@ -72,6 +78,11 @@ Then just ask your agent a trigger phrase: «is there a skill for evaluating pro
 | **Remove the toolkit** | `sgt uninstall --dry-run` then `sgt uninstall` |
 
 (`sgt` = `python3 <toolkit>/scripts/sgt.py`. After a project install it's at `./scripts/sgt.py`.)
+
+> **First audit of a pre-existing library?** Run with `STRICTNESS=permissive` —
+> toolkit additions to the open standard (`metainfo:`, `compatibility:`) report
+> as advisories instead of a wall of 🔴. Details:
+> [`docs/installation.md` § First audit over an existing skill library](docs/installation.md#first-audit-over-an-existing-skill-library).
 
 ## Add a skill in 3 steps
 

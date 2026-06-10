@@ -278,6 +278,38 @@ The installer tracks the files it owns in a `.sgt-owned` sidecar — see
 [Upgrading & what's preserved](#upgrading--whats-preserved) for the exact ownership
 contract, and [`docs/architecture.md`](architecture.md) for the install-contract design.
 
+### Project-install footprint
+
+A `--project` install places real files at your repo root — know the full list
+before running it (`--dry-run` prints the exact plan):
+
+- **Top-level dirs:** `skills/`, `agents/`, `references/`, `scripts/` (runtime
+  whitelist only), `commands/`, and `docs/` (the toolkit's ~16 guide files,
+  conflict-renamed if you have same-named docs) — plus a `.{host}/` dir per
+  selected host.
+- **Root alias files & manifests — selected hosts only** (since 1.20.0):
+  `CLAUDE.md` + `.claude-plugin/` for `--claude`, `GEMINI.md` +
+  `gemini-extension.json` for `--gemini`, `.github/copilot-instructions.md` for
+  `--copilot`, `.codex-plugin/` for `--codex`. A claude-only install no longer
+  plants the other hosts' files; pass several flags or `--all` for multi-host teams.
+- **`AGENTS.md` (always):** a managed marker block with the **consumer variant**
+  of the toolkit rules — skill table, authoring conventions, tool mapping —
+  rewritten for *your* repo (since 1.20.0 it no longer carries the toolkit's own
+  project description or its self-CI commands). Content outside the markers is
+  never touched.
+- **`.gitignore`:** `out/` and `.skill-state/` entries are appended if missing
+  (audit reports and resumable-run state must stay untracked).
+
+### First audit over an existing skill library
+
+Toolkit-specific conventions (`metainfo:`, `compatibility:`, `license:`) are
+*additions* to the open SKILL.md standard — a pre-existing, spec-conformant
+library will trigger 🔴 findings for them on the first run. Start with
+`STRICTNESS=permissive` so they report as advisories, annotate the library
+(`sgt new-skill` scaffolds compliant frontmatter), then tighten. The CI gate is
+delta-based — it blocks only findings *introduced* by an MR, so onboarding a
+legacy library never produces an avalanche of blocked MRs.
+
 ---
 
 ## Private GitHub

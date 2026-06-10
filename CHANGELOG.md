@@ -13,6 +13,71 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.20.0] — 2026-06-10 — consumer-correct installs + supply-chain pins
+
+Fixes the HIGH and MEDIUM findings of the 1.19.0 pre-ship multi-perspective
+review (security / dogfooding / release / new-adopter). Installer behavior
+changes; no governance-rule severity changes (non-breaking).
+
+### Added
+- **`.gitignore` managed entries** — a project install now ensures `out/` and
+  `.skill-state/` entries (append-if-missing, idempotent, user content
+  untouched) in the target repo, upholding the injected «never commit out/»
+  rule instead of merely stating it. Both installers (bash + PowerShell).
+- **First-audit guidance** — `STRICTNESS=permissive` note for pre-existing
+  spec-conformant libraries (QUICKSTART, installation.md § First audit, and
+  the injected consumer AGENTS.md), so the first interactive run reads as
+  advisories, not a wall of 🔴 for toolkit-specific conventions.
+- **Project-install footprint disclosure** — README/QUICKSTART one-paragraph
+  summary + `installation.md` § Project-install footprint (full list).
+- Integration version pins are env-overridable: `SGT_CRG_VERSION`,
+  `SGT_REPOMIX_VERSION`, `SGT_SERENA_VERSION` (documented in
+  `init.sh --help` and `integrations.md`).
+
+### Changed
+- **Consumer AGENTS.md (HIGH fix)** — installs no longer inject the toolkit's
+  own repo description into consumer projects. `generate_subset_agents_md.py`
+  now always emits a consumer variant: toolkit-repo header/Project Overview
+  rewritten, «Stack & Architecture» dropped, the `bash scripts/audit.sh`
+  self-CI (deliberately excluded from installs) replaced with the commands
+  that actually ship. Applied to the root marker block AND every per-host
+  runtime copy (`.claude/AGENTS.md`, `.gemini/AGENTS.md`), bash + PowerShell.
+  Anchor-guarded: non-toolkit sources pass through verbatim; the scoped-install
+  notice now appears only when skill rows were actually dropped.
+- **Root files honor host selection** — `--claude --project` no longer plants
+  `GEMINI.md`, `.github/copilot-instructions.md`, `.codex-plugin/`,
+  `gemini-extension.json` etc.; each host's alias files/manifests land only
+  when that host is selected (`AGENTS.md` always; `--all` unchanged). Dry-run
+  plan and `--help` updated to state exactly what will be written.
+- **CI gate base images digest-pinned** — `SGT_IMAGE` / `SGT_NOOP_IMAGE`
+  defaults now carry `@sha256:` manifest-list digests (same «gate cannot
+  change silently» discipline as `SGT_REF`), with a documented bump procedure
+  and the CVE-patch trade-off stated (gitlab-ci.yml comment +
+  gitlab-onboarding.md § 2b).
+- **`init.sh` integration installs are version-pinned** — `code-review-graph==2.3.5`,
+  `repomix@1.14.1`, `serena-agent==1.5.3` instead of floating `latest` from
+  PyPI/npm (the fork path was already SHA-pinned).
+- `install.ps1` gemini path now ships `AGENTS.md` into `.gemini/` (consumer
+  variant), matching the bash installer's long-standing behavior.
+
+### Fixed
+- **`serena-mcp` → `serena-agent`** — the previously documented and scripted
+  `pipx install serena-mcp` referenced a package that does not exist on PyPI
+  (404 at install time). Correct package is `serena-agent`; the CLI entry
+  point remains `serena`. Fixed in `init.sh`, integration-init references,
+  and uninstall hints.
+
+### Upgrade notes
+- Re-running the installer over an existing install upgrades the injected
+  AGENTS.md block to the consumer variant automatically (marker-block upsert).
+- Previously planted unselected-host files (e.g. `GEMINI.md` from a
+  claude-only 1.19.x install) are NOT auto-removed — delete them manually or
+  run `sgt uninstall` before reinstalling.
+- New self-CI coverage: consumer-transform tests (P32 suite) and installer
+  host-scoping/.gitignore tests (installer behavior suite).
+
+---
+
 ## [1.19.0] — 2026-06-09 — documentation restructure (single-source + IA)
 
 A corpus-wide IA pass (duplication map, Diátaxis classification, visualization

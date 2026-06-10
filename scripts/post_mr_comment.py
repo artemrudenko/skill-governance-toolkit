@@ -216,11 +216,20 @@ def _append_footer(lines: list[str]) -> None:
     lines.append(f"_Full guide: {AUTHOR_GUIDE}_")
 
 
-def find_marker_note(notes: list[dict[str, Any]], marker: str) -> int | None:
-    """Return the id of the first note containing the marker, else None."""
+def find_marker_note(notes: list[dict[str, Any]], marker: str, author_id: int | None = None) -> int | None:
+    """Return the id of the first note containing the marker, else None.
+
+    With `author_id` set, only notes authored by that user match. Anyone who can
+    comment on the MR can pre-seed a note containing the marker; without the
+    author check the poster would PUT-update the impostor's note instead of
+    posting its own (cosmetic report hijack — the verdict is the CI exit code).
+    """
     for note in notes:
-        if marker in str(note.get("body", "")):
-            return int(note["id"])
+        if marker not in str(note.get("body", "")):
+            continue
+        if author_id is not None and (note.get("author") or {}).get("id") != author_id:
+            continue
+        return int(note["id"])
     return None
 
 
@@ -241,9 +250,31 @@ def _api_request(url: str, token: str, method: str = "GET", payload: dict[str, A
     return json.loads(body) if body else None
 
 
+def _current_user_id(api_url: str, token: str) -> int | None:
+    """Resolve the token's own user id via GET /user.
+
+    Returns None when the call fails (older GitLab, restricted token scope) —
+    the lookup then degrades to legacy marker-only matching with a one-line
+    warning. This hardening must never crash the gate.
+    """
+    try:
+        user = _api_request(f"{api_url.rstrip('/')}/user", token)
+        return int(user["id"])
+    except (urllib.error.URLError, OSError, ValueError, KeyError, TypeError) as exc:
+        print(
+            f"post_mr_comment: cannot resolve token user via /user ({exc}) — "
+            "falling back to marker-only note matching",
+            file=sys.stderr,
+        )
+        return None
+
+
 def post_or_update(api_url: str, project_id: str, mr_iid: str, token: str, body: str) -> str:
     """Create the gate note, or update the existing marker note in place."""
     base = f"{api_url.rstrip('/')}/projects/{project_id}/merge_requests/{mr_iid}/notes"
+    # Only the gate's own previous note is eligible for update — see
+    # find_marker_note. None (resolution failed) keeps legacy marker-only match.
+    author_id = _current_user_id(api_url, token)
     # The gate note is created early in the MR's life. List notes oldest-first
     # and follow pagination to the end of the list — a fixed single page (even a
     # large one) misses the marker on an MR with 100+ earlier notes, and we'd
@@ -253,7 +284,7 @@ def post_or_update(api_url: str, project_id: str, mr_iid: str, token: str, body:
     while True:
         list_url = f"{base}?per_page=100&page={page}&order_by=created_at&sort=asc"
         notes = _api_request(list_url, token) or []
-        existing = find_marker_note(notes, MARKER)
+        existing = find_marker_note(notes, MARKER, author_id=author_id)
         if existing is not None or len(notes) < 100:
             break
         page += 1

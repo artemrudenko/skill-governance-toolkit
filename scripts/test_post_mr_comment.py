@@ -138,6 +138,8 @@ class PostMrCommentTests(unittest.TestCase):
 
         def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
             calls.append((method, url))
+            if url.endswith("/user"):
+                return {"id": 99}
             return [] if method == "GET" else None
 
         original = post_mr_comment._api_request
@@ -148,7 +150,7 @@ class PostMrCommentTests(unittest.TestCase):
         finally:
             post_mr_comment._api_request = original
 
-        get_url = next(url for method, url in calls if method == "GET")
+        get_url = next(url for method, url in calls if method == "GET" and "/notes" in url)
         self.assertIn("per_page=100", get_url)
         self.assertIn("sort=asc", get_url)
 
@@ -158,11 +160,14 @@ class PostMrCommentTests(unittest.TestCase):
         # of the list — otherwise it misses the marker and POSTs a duplicate,
         # breaking the idempotency contract.
         calls: list[tuple[str, str, object]] = []
-        page1 = [{"id": i, "body": f"review note {i}"} for i in range(100)]
-        page2 = [{"id": 200, "body": f"{post_mr_comment.MARKER}\nprevious gate result"}]
+        page1 = [{"id": i, "body": f"review note {i}", "author": {"id": i}} for i in range(100)]
+        page2 = [{"id": 200, "body": f"{post_mr_comment.MARKER}\nprevious gate result",
+                  "author": {"id": 99}}]
 
         def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
             calls.append((method, url, payload))
+            if url.endswith("/user"):
+                return {"id": 99}
             if method == "GET":
                 return page2 if "page=2" in url else page1
             return None
@@ -183,12 +188,14 @@ class PostMrCommentTests(unittest.TestCase):
 
     def test_post_or_update_stops_on_short_page_and_posts(self) -> None:
         # No marker anywhere: a short (<100) page means the list is exhausted —
-        # exactly one GET, then a POST creating the note (no infinite paging).
+        # exactly one notes GET, then a POST creating the note (no infinite paging).
         calls: list[tuple[str, str]] = []
 
         def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
             calls.append((method, url))
-            return [{"id": 1, "body": "just a note"}] if method == "GET" else None
+            if url.endswith("/user"):
+                return {"id": 99}
+            return [{"id": 1, "body": "just a note", "author": {"id": 7}}] if method == "GET" else None
 
         original = post_mr_comment._api_request
         post_mr_comment._api_request = fake_api
@@ -199,7 +206,7 @@ class PostMrCommentTests(unittest.TestCase):
             post_mr_comment._api_request = original
 
         self.assertEqual(action, "created")
-        self.assertEqual(len([m for m, _ in calls if m == "GET"]), 1)
+        self.assertEqual(len([m for m, url in calls if m == "GET" and "/notes" in url]), 1)
         self.assertEqual(len([m for m, _ in calls if m == "POST"]), 1)
 
     def test_find_marker_note_returns_id(self) -> None:
@@ -210,6 +217,19 @@ class PostMrCommentTests(unittest.TestCase):
 
         self.assertEqual(post_mr_comment.find_marker_note(notes, post_mr_comment.MARKER), 11)
         self.assertIsNone(post_mr_comment.find_marker_note(notes[:1], post_mr_comment.MARKER))
+
+    def test_find_marker_note_filters_by_author_id(self) -> None:
+        # With an author_id, a marker note from another user must NOT match —
+        # any MR commenter can pre-seed the marker to hijack the gate's update.
+        notes = [
+            {"id": 20, "body": f"{post_mr_comment.MARKER}\nimpostor", "author": {"id": 7}},
+            {"id": 21, "body": f"{post_mr_comment.MARKER}\nown note", "author": {"id": 99}},
+        ]
+
+        self.assertEqual(post_mr_comment.find_marker_note(notes, post_mr_comment.MARKER, author_id=99), 21)
+        self.assertIsNone(post_mr_comment.find_marker_note(notes[:1], post_mr_comment.MARKER, author_id=99))
+        # author_id=None keeps the legacy marker-only behavior (graceful degradation).
+        self.assertEqual(post_mr_comment.find_marker_note(notes, post_mr_comment.MARKER), 20)
 
     def test_api_request_sends_non_default_user_agent(self) -> None:
         # Some WAFs / load balancers reset connections whose User-Agent is the
@@ -301,16 +321,19 @@ class PostMrCommentTests(unittest.TestCase):
         self.assertIn("docs/gate-for-authors.md", body)
 
     def test_post_or_update_puts_to_existing_marker_note(self) -> None:
-        # Idempotency contract: when the marker note already exists, the poster
-        # must PUT the new body to /notes/<id> — never POST a duplicate note.
+        # Idempotency contract: when the gate's OWN marker note already exists,
+        # the poster must PUT the new body to /notes/<id> — never POST a duplicate.
         calls: list[tuple[str, str, object]] = []
 
         def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
             calls.append((method, url, payload))
+            if url.endswith("/user"):
+                return {"id": 99}
             if method == "GET":
                 return [
-                    {"id": 7, "body": "unrelated review note"},
-                    {"id": 42, "body": f"{post_mr_comment.MARKER}\nprevious gate result"},
+                    {"id": 7, "body": "unrelated review note", "author": {"id": 7}},
+                    {"id": 42, "body": f"{post_mr_comment.MARKER}\nprevious gate result",
+                     "author": {"id": 99}},
                 ]
             return None
 
@@ -329,6 +352,68 @@ class PostMrCommentTests(unittest.TestCase):
             "https://gitlab.example/api/v4/projects/1/merge_requests/2/notes/42",
             {"body": "new body"},
         )])
+
+    def test_post_or_update_ignores_impostor_marker_note(self) -> None:
+        # An MR commenter pre-seeded a note with the gate's marker. It is NOT the
+        # token user's note, so the poster must POST a fresh note instead of
+        # PUT-updating the impostor's (which would let them displace the report).
+        calls: list[tuple[str, str, object]] = []
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append((method, url, payload))
+            if url.endswith("/user"):
+                return {"id": 99}
+            if method == "GET":
+                return [{"id": 13, "body": f"{post_mr_comment.MARKER}\nfake gate report",
+                         "author": {"id": 7}}]
+            return None
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        try:
+            action = post_mr_comment.post_or_update(
+                "https://gitlab.example/api/v4", "1", "2", "tok", "real body")
+        finally:
+            post_mr_comment._api_request = original
+
+        self.assertEqual(action, "created")
+        self.assertNotIn("PUT", [method for method, _, _ in calls])
+        post_calls = [(url, payload) for method, url, payload in calls if method == "POST"]
+        self.assertEqual(post_calls, [(
+            "https://gitlab.example/api/v4/projects/1/merge_requests/2/notes",
+            {"body": "real body"},
+        )])
+
+    def test_post_or_update_user_lookup_failure_falls_back_to_marker_only(self) -> None:
+        # /user can fail on older GitLab or a restricted token. The poster must
+        # warn once and degrade to legacy marker-only matching — still updating
+        # the existing marker note, never crashing the gate over the hardening.
+        calls: list[tuple[str, str, object]] = []
+
+        def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
+            calls.append((method, url, payload))
+            if url.endswith("/user"):
+                raise _http_error(403, "Forbidden", b'{"message":"insufficient_scope"}')
+            if method == "GET":
+                return [{"id": 42, "body": f"{post_mr_comment.MARKER}\nprevious gate result",
+                         "author": {"id": 7}}]
+            return None
+
+        original = post_mr_comment._api_request
+        post_mr_comment._api_request = fake_api
+        stderr = io.StringIO()
+        try:
+            with redirect_stderr(stderr):
+                action = post_mr_comment.post_or_update(
+                    "https://gitlab.example/api/v4", "1", "2", "tok", "new body")
+        finally:
+            post_mr_comment._api_request = original
+
+        self.assertEqual(action, "updated")
+        self.assertIn(
+            "https://gitlab.example/api/v4/projects/1/merge_requests/2/notes/42",
+            [url for method, url, _ in calls if method == "PUT"])
+        self.assertIn("marker-only", stderr.getvalue())
 
     def test_main_http_error_sanitized_and_surfaces_gitlab_body(self) -> None:
         # 401 and 500 from the API must exit non-zero, surface the GitLab response
@@ -392,6 +477,8 @@ class PostMrCommentTests(unittest.TestCase):
 
         def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
             calls.append((method, url))
+            if url.endswith("/user"):
+                return {"id": 99}
             return [] if method == "GET" else None
 
         original = post_mr_comment._api_request
@@ -446,6 +533,8 @@ class PostMrCommentTests(unittest.TestCase):
 
         def fake_api(url: str, token: str, method: str = "GET", payload: object = None) -> object:
             calls.append((method, url))
+            if url.endswith("/user"):
+                return {"id": 99}
             return [] if method == "GET" else None
 
         original = post_mr_comment._api_request

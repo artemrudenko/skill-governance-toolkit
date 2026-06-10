@@ -67,6 +67,19 @@ class SyncVersionBehaviorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("version metadata ok", result.stdout)
 
+    def test_check_succeeds_from_foreign_cwd_without_root_flag(self) -> None:
+        # Default --root must resolve from the script location, not CWD.
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [PYTHON, str(ROOT / "scripts" / "sync_version.py"), "--check"],
+                cwd=tmp,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("version metadata ok", result.stdout)
+
     def test_check_detects_drift_without_mutating_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

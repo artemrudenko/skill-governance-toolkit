@@ -114,7 +114,14 @@ DERIVED_FILES = [
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Sync derived version metadata from VERSION.")
-    parser.add_argument("--root", type=Path, default=Path("."), help="Repository root.")
+    # Default to the repo root derived from this file's location (scripts/..),
+    # not CWD — audit.sh may be invoked from any directory.
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path(__file__).resolve().parents[1],
+        help="Repository root (default: the repo containing this script).",
+    )
     parser.add_argument("--check", action="store_true", help="Fail if derived files are not in sync.")
     args = parser.parse_args()
 

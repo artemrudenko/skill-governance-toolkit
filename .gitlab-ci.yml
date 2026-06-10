@@ -1,17 +1,21 @@
 # TOOLKIT'S OWN self-CI for a GitLab-hosted mirror — the GitLab twin of
 # .github/workflows/ci.yml. It audits the whole tree and runs the full
-# test/behavior suite (scripts/audit.sh, P1–P36 → all test_*.py suites) on
-# every merge request and every push to the default branch.
+# test/behavior suite (scripts/audit.sh, P1–P37 → all test_*.py suites) on
+# every merge request and every push to the default branch. A `vX.Y.Z` tag
+# push additionally publishes a GitLab Release whose body is derived from
+# CHANGELOG.md (see the `release` job).
 #
 # This is NOT the template a consuming marketplace repo should copy — consumers
 # want the changed-only MR gate: references/ci/gitlab-ci.yml.
 #
-# Images default to public registries (Docker Hub / MCR). On an egress-restricted
-# instance, override SGT_CI_IMAGE / SGT_CI_PWSH_IMAGE as project CI/CD variables
-# pointing at your internal registry mirror.
+# Images default to public registries (Docker Hub / MCR / registry.gitlab.com).
+# On an egress-restricted instance, override SGT_CI_IMAGE / SGT_CI_PWSH_IMAGE /
+# SGT_CI_RELEASE_IMAGE as project CI/CD variables pointing at your internal
+# registry mirror.
 
 stages:
   - validate
+  - release
 
 variables:
   # python:3.12 (non-slim) ships git — no apt-get needed at job time.
@@ -20,6 +24,10 @@ variables:
   # (requires Debian repo egress); mirror an image with both preinstalled to
   # make the job self-contained.
   SGT_CI_PWSH_IMAGE: "mcr.microsoft.com/powershell:lts-debian-12"
+  # release-cli is alpine-based; the job apk-installs python3 for the
+  # notes extractor (requires Alpine repo egress — mirror an image with
+  # python3 preinstalled to make it self-contained).
+  SGT_CI_RELEASE_IMAGE: "registry.gitlab.com/gitlab-org/release-cli:latest"
 
 .sgt_self_ci_rules:
   rules:
@@ -65,3 +73,22 @@ docker-smoke:
       | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:ci
     - printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"audit_project","arguments":{"root":"/workspace","profile":"release-ready"}}}'
       | docker run --rm -i --network none -v "$PWD:/workspace:ro" agent-governance-mcp:ci
+
+# Publishes a GitLab Release for every version tag. The body is derived from
+# CHANGELOG.md by scripts/extract_release_notes.py — single source, no
+# hand-maintained notes file (P37 guards that the tagged VERSION always
+# yields non-empty notes). The tag==VERSION assertion stops a mistagged
+# commit from publishing notes for the wrong release.
+release:
+  stage: release
+  image: $SGT_CI_RELEASE_IMAGE
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+  script:
+    - test "v$(cat VERSION)" = "$CI_COMMIT_TAG" || (echo "VERSION $(cat VERSION) does not match tag $CI_COMMIT_TAG" && exit 1)
+    - command -v python3 >/dev/null || apk add --no-cache python3 >/dev/null
+    - python3 scripts/extract_release_notes.py --output release-notes.md
+  release:
+    tag_name: '$CI_COMMIT_TAG'
+    name: 'skill-governance-toolkit $CI_COMMIT_TAG'
+    description: 'release-notes.md'

@@ -396,6 +396,19 @@ python3 scripts/sync_version.py --check  # CI drift check
 `scripts/audit.sh` runs the check, so release metadata drift fails CI before
 publishing.
 
+### Release notes (GitLab Releases)
+
+Every `vX.Y.Z` tag push publishes a **GitLab Release** whose body is derived
+from `CHANGELOG.md` by `scripts/extract_release_notes.py` — the CHANGELOG
+section for that version, prefixed with a **gate-impact line** («🔴 BREAKING»
+marker present → "previously-passing MRs may block after this `SGT_REF` bump";
+absent → "none declared"). There is no hand-maintained notes file —
+`CHANGELOG.md` stays the single authored source, and self-CI P37 guards that
+the current `VERSION` always yields non-empty notes, so a tag can never publish
+an empty release. Consumers reviewing an `SGT_REF` bump: read the Release pages
+for the tag range first — the gate-impact line answers the blocking question
+up front.
+
 ### Auto-bump in consuming repos
 
 - **GitHub** — scheduled `dependabot.yml` pointing at the toolkit repo, or a custom

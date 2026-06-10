@@ -8,6 +8,7 @@
 # sibling imports). Dev/test/release tooling is INTENTIONALLY EXCLUDED and must
 # never appear here:
 #   test_*.py · install.sh · sync_version.py · audit.sh · generate_subset_agents_md.py
+#   · extract_release_notes.py
 #
 # Guard tests (test_install.py) enforce: every entry exists on disk, the set is
 # import-closed, every script referenced by a shipped skill/reference/agent/

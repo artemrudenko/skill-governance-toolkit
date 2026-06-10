@@ -23,6 +23,7 @@ DEV_ONLY_NEVER_SHIP = (
     "sync_version.py",
     "audit.sh",
     "generate_subset_agents_md.py",
+    "extract_release_notes.py",
 )
 # Runtime files an end install must be able to find (CLI/MCP/skill smoke set).
 RUNTIME_SMOKE = ("agent_governance_mcp.py", "sgt.py", "checkpoint.py", "agent_audit.py")

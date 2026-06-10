@@ -770,6 +770,24 @@ else
   fail "build_index parser tests failed — run: python3 scripts/test_build_index.py"
 fi
 
+# ── P37: release-notes extraction from CHANGELOG ─────────────────────────────
+# The GitLab release job derives the per-tag Release body from CHANGELOG.md
+# via extract_release_notes.py (single source — no hand-maintained notes
+# file). Guard both the extractor's behavior and that the CURRENT VERSION
+# yields non-empty notes, so a tag can never publish an empty release.
+
+phase "P37 — release-notes extraction from CHANGELOG"
+if python3 "$ROOT/scripts/test_extract_release_notes.py" >/dev/null 2>&1; then
+  pass "release-notes extractor tests pass"
+else
+  fail "release-notes extractor tests failed — run: python3 scripts/test_extract_release_notes.py"
+fi
+if rn_notes="$(python3 "$ROOT/scripts/extract_release_notes.py" 2>/dev/null)" && [[ -n "$rn_notes" ]]; then
+  pass "VERSION $(cat "$ROOT/VERSION") extracts non-empty release notes"
+else
+  fail "extract_release_notes.py produced no notes for VERSION $(cat "$ROOT/VERSION") — add/repair the CHANGELOG heading"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""

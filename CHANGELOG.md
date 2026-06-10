@@ -33,6 +33,13 @@ changes; no governance-rule severity changes (non-breaking).
 - Integration version pins are env-overridable: `SGT_CRG_VERSION`,
   `SGT_REPOMIX_VERSION`, `SGT_SERENA_VERSION` (documented in
   `init.sh --help` and `integrations.md`).
+- **Automated GitLab Releases** — a `vX.Y.Z` tag push now publishes a GitLab
+  Release whose body is derived from the matching CHANGELOG section by
+  `scripts/extract_release_notes.py`, prefixed with a gate-impact line («🔴
+  BREAKING» marker → "previously-passing MRs may block"). No hand-maintained
+  notes file — CHANGELOG stays the single source. New self-CI phase **P37**
+  guards the extractor and that the current VERSION always yields non-empty
+  notes (suite is now P1–P37); the release job re-asserts tag == VERSION.
 
 ### Changed
 - **Consumer AGENTS.md (HIGH fix)** — installs no longer inject the toolkit's

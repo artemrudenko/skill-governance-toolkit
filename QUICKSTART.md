@@ -112,7 +112,8 @@ sgt ci-init --gitlab     # writes .gitlab-ci.yml (clones the toolkit via CI_JOB_
 > against the project (`<toolkit>/scripts/sgt.py --root . ci-init --github`).
 
 The command prints the exact remaining setup (token scope, branch protection,
-CODEOWNERS). Full walkthrough: [`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).
+CODEOWNERS). Full walkthrough: [`docs/github-onboarding.md`](docs/github-onboarding.md) ·
+[`docs/gitlab-onboarding.md`](docs/gitlab-onboarding.md).
 
 The gate scans **every** governed asset (skills, agents, MCP/plugin configs,
 hooks, referenced scripts) for content-security issues — hidden/bidi characters

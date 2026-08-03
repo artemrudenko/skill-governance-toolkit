@@ -1,0 +1,70 @@
+# GitHub twin of the `release` job in .gitlab-ci.yml. A `vX.Y.Z` tag push
+# publishes a GitHub Release whose body is derived from CHANGELOG.md by
+# scripts/extract_release_notes.py — single source, no hand-maintained notes
+# file (see that script's docstring). The tag==VERSION assertion stops a
+# mistagged commit from publishing notes for the wrong release.
+#
+# workflow_dispatch exists only to (re-)publish a tag that was pushed before
+# this workflow existed (e.g. the v1.20.0 bootstrap tag) — ordinary releases
+# fire automatically off the tag push below. All `${{ }}` expressions are
+# passed through `env:` rather than spliced into `run:` script text, and the
+# tag is format-validated before use as a checkout ref (no untrusted-input
+# interpolation into shell or ref: — see repo workflow security guidance).
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.20.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve and validate tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          TAG="${INPUT_TAG:-$REF_NAME}"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid tag format: $TAG"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Check out tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - name: Assert VERSION matches tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          test "v$(cat VERSION)" = "$TAG" || { echo "VERSION $(cat VERSION) does not match tag $TAG"; exit 1; }
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Extract release notes from CHANGELOG
+        run: python3 scripts/extract_release_notes.py --output release-notes.md
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "skill-governance-toolkit $TAG" \
+            --notes-file release-notes.md

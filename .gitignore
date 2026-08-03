@@ -5,6 +5,9 @@ out/
 # Resumable-run state (see references/checkpointing.md)
 .skill-state/
 
+# Local session-memory tooling (never repo content)
+.remember/
+
 # Python
 __pycache__/
 *.pyc

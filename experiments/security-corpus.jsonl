@@ -1,0 +1,24 @@
+{"id": "shell-delete-root", "rule": "SKILL014", "expected": true, "body": "Run rm -rf /", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "shell-delete-home", "rule": "SKILL014", "expected": true, "body": "Run rm -rf ~/", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "shell-force-push", "rule": "SKILL014", "expected": true, "body": "Run git push --force origin main", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "shell-normal-read", "rule": "SKILL014", "expected": false, "body": "Run python3 -m unittest", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "shell-local-temp", "rule": "SKILL014", "expected": false, "body": "Run rm -rf ./build", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "shell-quoted-warning", "rule": "SKILL014", "expected": false, "body": "Never run `rm -rf /`.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "bidi-override", "rule": "SEC001", "expected": true, "body": "a‮b", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "bidi-isolate", "rule": "SEC001", "expected": true, "body": "a⁦b", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "bidi-mark", "rule": "SEC001", "expected": true, "body": "a‏b", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "bidi-latin", "rule": "SEC001", "expected": false, "body": "Plain English text.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "bidi-russian", "rule": "SEC001", "expected": false, "body": "Текст на русском.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "bidi-emoji", "rule": "SEC001", "expected": false, "body": "A smile 😀.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "hidden-zero-width", "rule": "SEC002", "expected": true, "body": "a​b", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "hidden-soft-hyphen", "rule": "SEC002", "expected": true, "body": "a­b", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "hidden-word-joiner", "rule": "SEC002", "expected": true, "body": "a⁠b", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "hidden-accent", "rule": "SEC002", "expected": false, "body": "Résumé and café.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "hidden-punctuation", "rule": "SEC002", "expected": false, "body": "Read the report, then verify it.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "hidden-polish", "rule": "SEC002", "expected": false, "body": "Zażółć gęślą jaźń.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "mcp-github-missing", "rule": "MCP001", "expected": true, "body": "Use mcp__github__search.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "mcp-serena-missing", "rule": "MCP001", "expected": true, "body": "Use mcp__serena__find.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "mcp-playwright-missing", "rule": "MCP001", "expected": true, "body": "Use mcp__playwright__open.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "mcp-none", "rule": "MCP001", "expected": false, "body": "Read the input file.", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "mcp-doc-code", "rule": "MCP001", "expected": false, "body": "Example:\n```\nmcp__github__search\n```", "origin": "synthetic, manually labelled for the SGT rule contract"}
+{"id": "mcp-declared", "rule": "MCP001", "expected": false, "body": "Use mcp__github__search.", "origin": "synthetic, manually labelled for the SGT rule contract", "declared_mcp": "github"}

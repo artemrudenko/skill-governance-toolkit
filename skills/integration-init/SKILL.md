@@ -10,11 +10,11 @@ description: |
   non-mutating dry preview.
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
-metainfo:
-  category: [governance]
-  tier: stable
-  owner: artsiom
-  added: "2026-05-23"
+metadata:
+  sgt-category: "governance"
+  sgt-tier: "stable"
+  sgt-owner: "artsiom"
+  sgt-added: "2026-05-23"
 ---
 
 # Integration Init

@@ -85,15 +85,26 @@ def _rewrite_frontmatter(fm_lines: list[str], full_set: list[str]) -> list[str]:
     flow = _flow_list(full_set)
     out = list(fm_lines)
 
+    metadata_idx = _find_top_key(out, "metadata")
+    if metadata_idx is not None:
+        if out[metadata_idx].partition(":")[2].strip():
+            raise RuntimeError("cannot safely modify inline or scalar metadata; use a block mapping")
+        block_end = _block_end(out, metadata_idx)
+        key_idx = _find_sub_key(out, metadata_idx + 1, block_end, "sgt-requires-mcp", indent=2)
+        line = f'  sgt-requires-mcp: "{", ".join(full_set)}"\n'
+        if key_idx is not None:
+            out[key_idx] = line
+            return out
+        return out[:metadata_idx + 1] + [line] + out[metadata_idx + 1:]
+
     metainfo_idx = _find_top_key(out, "metainfo")
 
     if metainfo_idx is None:
-        # Case 4: no metainfo block — append one.
+        # New declarations use the Agent Skills standard metadata field.
         if out and not out[-1].endswith("\n"):
             out[-1] = out[-1] + "\n"
-        out.append("metainfo:\n")
-        out.append("  requires:\n")
-        out.append(f"    mcp: {flow}\n")
+        out.append("metadata:\n")
+        out.append(f'  sgt-requires-mcp: "{", ".join(full_set)}"\n')
         return out
 
     # Bounds of the metainfo block: from metainfo_idx+1 until the next top-level key.
@@ -221,9 +232,9 @@ def process(path: Path, apply: bool) -> bool:
     print(f"  missing: {', '.join(sorted(missing))}")
     if apply:
         path.write_text(new_text, encoding="utf-8")
-        print(f"  applied: declared {', '.join(sorted(missing))} under metainfo.requires.mcp")
+        print(f"  applied: declared {', '.join(sorted(missing))} in governance metadata")
     else:
-        print("  would declare the missing server(s) under metainfo.requires.mcp")
+        print("  would declare the missing server(s) in governance metadata")
     return True
 
 

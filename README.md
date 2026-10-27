@@ -19,7 +19,7 @@ same engine then gates it on every PR/MR so it can't merge until fixed.
 
 **Portability scope honestly stated:**
 - **Core skills** (skill-find, skill-evaluate, skill-compare, library-audit, skill-build-portable, integration-init) — portable across all five runtimes.
-- **Sub-agent layer** (`agents/code-reviewer.md`) — works on Claude Code, Copilot, Cursor, Codex via their respective sub-agent / task tools. **Gemini CLI has no sub-agent support** — the agent's instructions must be inlined or the skill must fall back to linear flow.
+- **Sub-agent layer** (`agents/code-reviewer.md`) — host support and agent formats differ. Gemini CLI documents sub-agents, but this toolkit's agent has not been verified there. Use the sequential fallback when dispatch is unavailable.
 - **Optional integrations** (CRG, repomix, serena via `integration-init`) — runtime detection per platform; install commands documented but vendor-tool availability is your responsibility.
 
 The repository ships six meta-skills, a working TypeScript code-reviewer sub-agent, and a resumable-run state pattern (interrupted runs continue from the last checkpoint — see [`references/checkpointing.md`](references/checkpointing.md)).
@@ -56,8 +56,8 @@ python3 ~/tools/sgt/scripts/sgt.py init        # guided install + verify; undo w
 Pin a release for reproducibility:
 ```bash
 /plugin marketplace add {your-org}/skill-governance-toolkit   # Claude — once per machine
-/plugin install skill-governance-toolkit@1.20.0               # Claude
-gemini extensions install ...@1.20.0                           # Gemini
+/plugin install skill-governance-toolkit@1.21.0               # Claude
+gemini extensions install ...@1.21.0                           # Gemini
 ```
 
 A project install adds top-level `skills/`, `agents/`, `references/`, `scripts/`,
@@ -145,11 +145,13 @@ For the full architectural reasoning — including anti-patterns like `allowed-t
 
 | Runtime | Reads | Status |
 |---|---|---|
-| Claude Code | `CLAUDE.md` (with `@AGENTS.md` import) + `skills/` + `.claude-plugin/` | ✓ native |
-| GitHub Copilot (VS Code / CLI) | `AGENTS.md` + `.github/copilot-instructions.md` + `skills/` (since 2025-12-18) | ✓ native |
-| OpenAI Codex CLI | `AGENTS.md` + `skills/` (via `.codex-plugin/`) | ✓ native |
-| Google Gemini CLI | `GEMINI.md` (imports `AGENTS.md`) + `skills/` (via `gemini-extension.json`) | ✓ native |
-| Cursor (v2.2+) | `AGENTS.md` + `skills/` (auto-discovered) | ✓ native, no manifest needed |
+| Claude Code | `CLAUDE.md` and `.claude/skills/` | Installation supported; execution needs current verification |
+| GitHub Copilot (VS Code / CLI) | `AGENTS.md` and `.github/skills/` | CLI discovery and one project-only skill run verified |
+| OpenAI Codex CLI | `AGENTS.md` and `.codex/skills/` | One installed skill executed locally; see evidence |
+| Google Gemini CLI | `GEMINI.md` and `.gemini/skills/` | Installation supported; execution needs current verification |
+| Cursor | `AGENTS.md` and `.cursor/skills/` | Installation supported; execution needs current verification |
+
+See [runtime compatibility evidence](docs/runtime-compatibility.md) for versions and limitations.
 
 ---
 

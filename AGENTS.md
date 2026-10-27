@@ -48,14 +48,14 @@ The toolkit itself follows the universal pattern it enforces — it can be loade
 
 ### Skill authoring rules (enforced by `library-audit`)
 
-1. **Only `name` and `description` are required by the Agent Skills standard** in frontmatter — these are the minimum that any portable parser must accept. **The toolkit additionally requires** `compatibility:`, `license:`, and a `metainfo:` sub-block (since 1.8.0) — see `docs/skill-authoring-standard.md` § metainfo for the schema. Top-level org-specific fields are forbidden (they break portability claims); all extensions live under `metainfo:`.
-2. **Never use `allowed-tools:` in multi-host skills.** Claude Code treats it as a hard whitelist; Copilot / Cursor / Codex silently ignore it. The skill will behave differently across platforms with no warning.
+1. **Only `name` and `description` are required by the Agent Skills standard.** Toolkit policy also requires `compatibility`, `license`, and SGT keys in `metadata`. See `docs/skill-authoring-standard.md` for the schema and legacy migration.
+2. **Avoid `allowed-tools:` in multi-host skills.** Claude Code may pre-approve listed tools; support and permission effects vary across hosts. Review the original permission behavior before proposing removal.
 3. **Tool-name mapping lives at repo root** in `references/{copilot,codex,gemini}-tools.md` — never duplicated inside each skill. A skill that needs `Read` simply says `Read`; the runtime translates.
 4. **`SKILL.md` body: target ≤ 200 lines; gate budget 500, hard limit 600** (configurable via `body_budget` / `body_critical` in the audit config — the single source of truth; `skill-evaluate` 3.1 and `library-audit` budget-spec echo it, never diverge). Push detail into `references/`. Push executables into `scripts/`. Push static templates into `assets/`.
 5. **`description` is mission-critical** — write 2–5 explicit trigger phrases in the user's natural language. Skill descriptions are how the agent decides when to activate.
 6. **Naming convention:** `{entity}-{action}[-{qualifier}]`, kebab-case, ≤ 2 words after the entity (action + optional qualifier). Closed-vocabulary action verbs: `find`, `audit`, `evaluate`, `compare`, `build`, `extend`, `frame`, `ingest`, `mark`, `plan`, `query`, `init`. Optional qualifier disambiguates within the same verb (e.g. `skill-build-portable` vs `skill-build`).
 7. **Discovery / scan skills require a bounded scope parameter.** Open-ended «scan all» without `SCOPE_WINDOW` (last N sessions, since YYYY-MM-DD, sprint X) must fail-fast in Phase 0.
-8. **`metainfo.category` and `metainfo.tier` are required** (since 1.8.0; closed vocab — new skills start at `tier: preview`). Schema, vocab, and promotion contract: `docs/skill-authoring-standard.md` § metainfo.
+8. **`metadata.sgt-category` and `metadata.sgt-tier` are required by toolkit policy.** New skills start at `preview`. Legacy `metainfo` remains readable. See `docs/skill-authoring-standard.md` § metainfo.
 
 ### Sub-agent rules
 
@@ -135,7 +135,7 @@ This works on every supported runtime (Claude / Copilot / Cursor / Codex /
 Gemini) because all five support batched tool calls within one turn.
 
 **Do NOT use `Task` sub-agent dispatch to parallelize work:**
-- Gemini CLI does not support sub-agents — required `Task` breaks portability.
+- Sub-agent availability and invocation differ by host and version — required `Task` breaks portability.
 - Cross-context insights (collision detection, cross-dim scoring) are lost
   when work is sharded across isolated sub-agent contexts.
 

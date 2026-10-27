@@ -129,8 +129,8 @@ that table here; it drifts.
 
 Skills use **batched tool calls** (multiple `tool_use` blocks in one
 message) for embarrassingly parallel work, NOT `Task` sub-agent dispatch.
-Reason: Gemini CLI has no sub-agent support, so required `Task` would break
-portability. Cross-skill insights (collision detection, cross-dim scoring)
+Reason: sub-agent availability and invocation vary across hosts and versions,
+so required `Task` would break portability. Cross-skill insights (collision detection, cross-dim scoring)
 also benefit from being in one agent context.
 
 `Task` / sub-agent dispatch is still allowed as an optional specialized path
@@ -172,7 +172,7 @@ self-CI (`scripts/audit.sh`) enforces on every run.
 We deliberately chose NOT to make sub-agent orchestration required for
 the meta-skills. Reasons:
 
-- **Sub-agent support is uneven.** Gemini CLI has none. Requiring agents
+- **Sub-agent support is uneven.** Hosts expose different agent formats and controls. Requiring agents
   breaks the «works in all 5 runtimes» promise.
 - **Cross-skill insights need single context.** Trigger collisions,
   cross-dim scoring (D3+D4, D5 vs D9) require one agent holding all

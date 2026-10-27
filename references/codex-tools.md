@@ -33,7 +33,7 @@ Skills in this repository use **Claude Code tool names** as the canonical refere
 
 ### Tool restrictions
 
-- Codex does **not** support a SKILL.md-level `allowed-tools:` whitelist. To restrict tools, use the agent layer (`agents/{name}.md` with `tools:` field).
+- Tool permissions depend on the active Codex host and its settings. A `tools:` field in an agent file is a declaration, not proof of runtime enforcement.
 
 ### Slash commands
 

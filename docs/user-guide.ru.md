@@ -213,7 +213,9 @@ flowchart TD
 ---
 name: skill-example
 description: One specific workflow. Use when "trigger one", "trigger two".
-metainfo: { category: governance, tier: preview }  # + compatibility, license
+metadata:
+  sgt-category: "governance"
+  sgt-tier: "preview"  # + compatibility, license
 ---
 > **Skill type:** Detect-only   <!-- required declaration (SKILL021) -->
 ```
@@ -380,7 +382,7 @@ flowchart TD
 - `REF001`–`REF004` / `SCR001`–`SCR003` — небезопасные ссылки и контент
   referenced-скриптов (exfiltration, опасный shell, секреты).
 - `MCP001`/`MCP002` — использование `mcp__server__*` без объявления в
-  `metainfo.requires.mcp` (и наоборот).
+  `metadata.sgt-requires-mcp` (or legacy `metainfo.requires.mcp`) (и наоборот).
 - `HOOK001`/`HOOK002` — команды хуков, запускающие опасный shell или
   утекающие секреты.
 

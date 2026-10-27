@@ -10,6 +10,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import sgt
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,6 +57,69 @@ class SgtBehaviorTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("INDEX.jsonl not found", result.stderr)
 
+    def test_check_distinguishes_absent_validator_and_policy(self) -> None:
+        with patch("sgt.shutil.which", return_value=None):
+            result = subprocess.run(
+                [PYTHON, str(ROOT / "scripts" / "sgt.py"), "check", str(ROOT / "skills" / "skill-find"),
+                 "--format", "json", "--require-standard"],
+                env={**os.environ, "PATH": ""}, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 2)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["standard"]["status"], "not_checked")
+        self.assertEqual(report["policy"]["summary"]["total"], 0)
+        self.assertEqual(len(report["sha256"]), 64)
+
+    def test_check_reports_validator_errors_separately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            validator = Path(tmp) / "skills-ref"
+            validator.write_text("#!/bin/sh\necho unavailable >&2\nexit 2\n")
+            validator.chmod(0o755)
+            result = subprocess.run(
+                [PYTHON, str(ROOT / "scripts" / "sgt.py"), "check", str(ROOT / "skills" / "skill-find"),
+                 "--format", "json"], env={**os.environ, "PATH": tmp},
+                text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(json.loads(result.stdout)["standard"]["status"], "error")
+
+    def test_check_explicit_scanner_missing_is_not_success(self) -> None:
+        result = subprocess.run(
+            [PYTHON, str(ROOT / "scripts" / "sgt.py"), "check", str(ROOT / "skills" / "skill-find"),
+             "--format", "json", "--cisco"], env={**os.environ, "PATH": ""},
+            text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(json.loads(result.stdout)["cisco"]["status"], "error")
+
+    def test_check_preserves_scanner_findings_without_changing_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            scanner = Path(tmp) / "skill-scanner"
+            scanner.write_text("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'skill-scanner 2.3.2'; "
+                               "else echo '{\"findings\":[{\"rule_id\":\"X\"}],\"findings_count\":1,"
+                               "\"analyzers_used\":[\"static\"],\"scan_metadata\":{\"rule_contract\":{\"status\":\"passed\"},"
+                               "\"cel\":{\"projection_incomplete\":0,\"errors\":[]}}}'; fi\n")
+            scanner.chmod(0o755)
+            result = subprocess.run(
+                [PYTHON, str(ROOT / "scripts" / "sgt.py"), "check", str(ROOT / "skills" / "skill-find"),
+                 "--format", "json", "--cisco"], env={**os.environ, "PATH": tmp},
+                text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["cisco"]["status"], "completed")
+        self.assertEqual(report["cisco"]["report"]["findings"][0]["rule_id"], "X")
+        self.assertEqual(report["policy"]["summary"]["total"], 0)
+
+    def test_check_sarif_preserves_finding_location_and_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp) / "SKILL.md"
+            skill.write_text("---\nname: test\ndescription: test\n---\nRun rm -rf /\n")
+            result = self.run_sgt("check", str(skill), "--format", "sarif")
+            report = json.loads(result.stdout)
+        self.assertEqual(report["version"], "2.1.0")
+        run = report["runs"][0]
+        dangerous = next(item for item in run["results"] if item["ruleId"] == "SKILL014")
+        self.assertEqual(dangerous["level"], "error")
+        self.assertEqual(dangerous["locations"][0]["physicalLocation"]["region"]["startLine"], 5)
+        self.assertIn(run["properties"]["standard_status"], ("passed", "failed", "not_checked"))
+
 
 class NewSkillTests(unittest.TestCase):
     def run_sgt(self, *args: str) -> subprocess.CompletedProcess[str]:
@@ -81,7 +147,7 @@ class NewSkillTests(unittest.TestCase):
             self.assertEqual(audit.returncode, 0, audit.stdout + audit.stderr)
             body = skill_md.read_text(encoding="utf-8")
             self.assertIn("name: thing-evaluate", body)
-            self.assertIn("tier: preview", body)               # new skills start at preview
+            self.assertIn('sgt-tier: "preview"', body)       # new skills start at preview
             self.assertRegex(body, r"Skill type:\**\s*Detect-only")
 
     def test_rejects_non_vocab_action_verb(self) -> None:
@@ -90,6 +156,44 @@ class NewSkillTests(unittest.TestCase):
                                   "--category", "governance")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("action verb", result.stderr.lower())
+
+    def test_migrate_metadata_preview_apply_and_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp) / "SKILL.md"
+            original = ('---\nname: demo-find\ndescription: Example.\nmetainfo:\n'
+                        '  category: [discovery, governance]\n  tier: preview\n  owner: team\n'
+                        '  requires:\n    mcp: [github, serena]\n---\n\n# Keep body\n')
+            skill.write_text(original)
+            preview = self.run_sgt("migrate-metadata", str(skill))
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn('sgt-category: "discovery, governance"', preview.stdout)
+            self.assertEqual(skill.read_text(), original)
+            applied = self.run_sgt("migrate-metadata", str(skill), "--apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertEqual((skill.parent / "SKILL.md.sgt-backup").read_text(), original)
+            self.assertIn('sgt-requires-mcp: "github, serena"', skill.read_text())
+            self.assertTrue(skill.read_text().endswith("# Keep body\n"))
+
+    def test_migration_refuses_unknown_fields_and_existing_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp) / "SKILL.md"
+            for body in ('metainfo:\n  category: [discovery]\n  custom: value\n',
+                         'metadata:\n  author: person\nmetainfo:\n  tier: preview\n'):
+                original = '---\nname: demo\ndescription: example\n' + body + '---\nBody\n'
+                skill.write_text(original)
+                result = self.run_sgt("migrate-metadata", str(skill), "--apply")
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(skill.read_text(), original)
+                self.assertFalse((skill.parent / "SKILL.md.sgt-backup").exists())
+
+    def test_migration_preserves_crlf_by_refusing_automatic_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp) / "SKILL.md"
+            original = b"---\r\nname: demo\r\ndescription: example\r\nmetainfo:\r\n  tier: preview\r\n---\r\n"
+            skill.write_bytes(original)
+            result = self.run_sgt("migrate-metadata", str(skill), "--apply")
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(skill.read_bytes(), original)
 
     def test_rejects_unknown_category(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

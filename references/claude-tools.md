@@ -33,7 +33,7 @@ These fields are **honored by Claude Code only** — other runtimes silently ign
 
 | Field | Purpose | Honored by |
 |---|---|---|
-| `allowed-tools` | **Hard whitelist** — listed tools are the only ones the skill can call. Blocks all others. | Claude Code only — Copilot/Cursor/Codex ignore (**dangerous: skill silently behaves differently across runtimes**) |
+| `allowed-tools` | Pre-approves listed tools during invocation. Other tools remain subject to permission settings. | Claude Code only — Copilot/Cursor/Codex ignore (**dangerous: skill silently behaves differently across runtimes**) |
 | `when_to_use` | Trigger phrases (supplementary to `description`) | Claude Code only |
 | `argument-hint` | Autocomplete hint for slash-command invocation | Claude Code only |
 | `arguments` | Named positional args | Claude Code only |

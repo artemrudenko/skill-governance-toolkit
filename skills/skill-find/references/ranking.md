@@ -18,6 +18,9 @@ Parse `NEED` to extract matching signals:
 
 Combine the four weighted signals (30 + 35 + 20 + 15 = 100) into a single score. Scores clamp to 0–100.
 
+The score is a model-assigned ranking heuristic, not a calibrated probability.
+Treat equal or close scores as uncertain and explain the evidence for the ranking.
+
 ## Match tier classification
 
 - ≥ 75 → **Strong match** — covers the need as-is

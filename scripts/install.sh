@@ -24,9 +24,8 @@
 #                  .github/copilot-instructions.md) are NEVER overwritten — the installer
 #                  upserts a single block between BEGIN/END markers; content outside the
 #                  markers is preserved verbatim. See scripts/marker_block.py for semantics.
-#   --upgrade      Clean upgrade — rsync --delete removes files no longer present in the
-#                  source (handles renamed/removed skills). Requires rsync. Marker-block
-#                  upsert behavior for user-owned files is unchanged.
+#   --upgrade      Refresh verified toolkit-owned skills and files; preserve unowned
+#                  or modified skills and indexes. Marker-block behavior is unchanged.
 #   --force        Wipe managed dirs (skills/ agents/ scripts/ references/ commands/)
 #                  before copy (does NOT alter the marker-block contract for user-owned
 #                  root files — those are still upserted, not overwritten).
@@ -48,37 +47,8 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-if command -v rsync >/dev/null 2>&1; then
-  COPY_TOOL="rsync"
-else
-  echo "Note: rsync not found — falling back to cp -R." >&2
-  COPY_TOOL="cp"
-fi
-
 INSTALL_MODE="fresh"   # fresh | upgrade | force
 DRY_RUN=false
-
-_smart_copy() {
-  local src="$1" dest="$2"
-  if [[ "$COPY_TOOL" == "rsync" ]]; then
-    local rsync_flags="-a --exclude=.DS_Store --exclude=__pycache__ --exclude=.skill-state"
-    if [[ "$INSTALL_MODE" == "upgrade" ]]; then
-      rsync $rsync_flags --delete "$src" "$dest"
-    else
-      rsync $rsync_flags "$src" "$dest"
-    fi
-  else
-    if [[ "$INSTALL_MODE" == "upgrade" ]]; then
-      echo "  ! --upgrade requires rsync; falling back to --force semantics for $dest" >&2
-      rm -rf "$dest"
-    fi
-    mkdir -p "$dest"
-    # "${src%/}/." copies the directory CONTENTS identically on BSD and GNU cp.
-    # Plain `cp -R "$src/" "$dest"` nests src inside an existing dest on GNU.
-    cp -R "${src%/}/." "$dest"
-    find "$dest" \( -name '.DS_Store' -o -name '__pycache__' -o -name '.skill-state' \) -exec rm -rf {} + 2>/dev/null || true
-  fi
-}
 
 _pre_install_cleanup() {
   local dest="$1"; shift
@@ -168,8 +138,8 @@ Install mode (optional):
   (default)      Fresh. Managed dirs (skills/, agents/, references/, scripts/, commands/)
                  are overwritten. User-owned root files are upserted via marker block —
                  user content outside the markers is NEVER touched.
-  --upgrade      Clean upgrade. rsync --delete removes stale files in managed dirs
-                 (handles renamed/removed skills). Marker-block contract unchanged.
+  --upgrade      Refresh verified toolkit-owned skills; preserve unowned and modified
+                 skills and indexes. Marker-block contract unchanged.
   --force        Wipe managed dirs before copy. Marker-block contract for user-owned
                  root files is unchanged (still upsert, not overwrite).
                  ⚠ In --global scope this deletes ANY skills/scripts you keep in
@@ -402,20 +372,7 @@ print_dry_run_plan() {
 # `skill-find` in the target environment doesn't report skills that aren't there).
 _copy_filtered_skills() {
   local dest="$1"
-  mkdir -p "$dest"
-  local s
-  for s in "${SELECTED_SKILLS[@]}"; do
-    if [[ -d "$SOURCE/skills/$s" ]]; then
-      _smart_copy "$SOURCE/skills/$s/" "$dest/$s/"
-    else
-      echo "  ! filter selected '$s' but skills/$s/ does not exist on disk — skipped" >&2
-    fi
-  done
-  # Filtered INDEX.jsonl — let the helper re-emit only the selected entries.
-  local fargs=(--index "$SOURCE/skills/INDEX.jsonl" --tier "$TIER_FILTER" --filtered-index)
-  [[ -n "$CATEGORY_FILTER" ]] && fargs+=(--category "$CATEGORY_FILTER")
-  [[ -n "$SKILL_FILTER" ]]    && fargs+=(--skill "$SKILL_FILTER")
-  python3 "$SOURCE/scripts/filter_skills.py" "${fargs[@]}" > "$dest/INDEX.jsonl"
+  python3 "$SOURCE/scripts/managed_skills.py" install "$dest" --index "${SELECTED_SKILLS[@]}" || return 1
 }
 
 # _copy_runtime_scripts DEST — copy ONLY whitelisted runtime scripts (see
@@ -693,7 +650,12 @@ install_copilot() {
   else
     echo "✓ Copilot:        $dest/copilot-instructions.md (managed via marker block; user content preserved)"
   fi
-  echo "  → Skills are workspace-auto-discovered (since 2025-12); ensure project has skills/ visible"
+  local skill_dest="$dest/skills"
+  [[ "$SCOPE" == "global" ]] && skill_dest="$HOME/.copilot/skills"
+  if [[ ${#SELECTED_SKILLS[@]} -gt 0 ]]; then
+    python3 "$SOURCE/scripts/managed_skills.py" install "$skill_dest" "${SELECTED_SKILLS[@]}" || return 1
+  fi
+  echo "  → Copilot skills: $skill_dest (existing user skills preserved)"
   echo "  → AGENTS.md at TARGET_PROJECT root is what Copilot actually reads for rules"
 }
 
@@ -820,7 +782,7 @@ for target in "${TARGETS[@]}"; do
     claude)  echo "  · Claude Code:    invoke skill-find or any skill by trigger phrase" ;;
     copilot) echo "  · Copilot:        Open a file in TARGET_PROJECT — AGENTS.md is read natively" ;;
     codex)   echo "  · Codex CLI:      codex plugins list" ;;
-    gemini)  echo "  · Gemini CLI:     gemini extensions list" ;;
+    gemini)  echo "  · Gemini CLI:     trust the project, then run gemini skills list" ;;
     cursor)  echo "  · Cursor v2.2+:   AGENTS.md auto-loaded from project root" ;;
   esac
 done

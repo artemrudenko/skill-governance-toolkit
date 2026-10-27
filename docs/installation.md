@@ -260,13 +260,23 @@ to see the current corpus shape.
 
 ## Where files land & ownership
 
+Each newly installed skill carries an ownership marker containing its file hashes.
+An upgrade or uninstall preserves a skill when the marker is absent or its content changed.
+The installer applies the same rule to managed `INDEX.jsonl` files.
+Older installations have no marker, so the installer preserves their skill directories and indexes.
+Review and back up each legacy path before moving it aside and reinstalling.
+The installer reports preserved paths and does not automatically claim ownership.
+
 | Runtime | Project rules read from | Skills loaded from | Sub-agents loaded from |
 |---|---|---|---|
 | Claude Code | `CLAUDE.md` (which `@AGENTS.md`) | `~/.claude/skills/` or `./.claude/skills/` | `~/.claude/agents/` or `./.claude/agents/` |
-| Copilot | `AGENTS.md` (root) + `.github/copilot-instructions.md` | Skills auto-discovered from workspace | Via `agent` tool with `agents/` |
+| Copilot | `AGENTS.md` (root) + `.github/copilot-instructions.md` | `./.github/skills/` or `~/.copilot/skills/` | Host-dependent; not verified by this toolkit |
 | Codex CLI | `AGENTS.md` (root) | `~/.codex/skills/` or via `.codex-plugin/plugin.json` | Via `spawn_agent` with `agents/` |
-| Gemini CLI | `GEMINI.md` (which `@./AGENTS.md`) | `~/.gemini/skills/` | — (no sub-agent support) |
+| Gemini CLI | `GEMINI.md` (which `@./AGENTS.md`) | `./.gemini/skills/` or `~/.gemini/skills/` | — (toolkit agent not verified on Gemini) |
 | Cursor v2.2+ | `AGENTS.md` (root, native) | `./.cursor/skills/` | Via the Cursor marketplace (no plugin manifest shipped — Cursor reads `AGENTS.md` + `agents/` natively) |
+
+For a Gemini project install, trust the project in Gemini before running
+`gemini skills list`. Gemini does not discover project skills in an untrusted folder.
 
 Since 1.10.0 the installer ships only the runtime scripts listed in
 [`scripts/runtime-manifest.txt`](../scripts/runtime-manifest.txt) — dev/test/release
@@ -302,13 +312,17 @@ before running it (`--dry-run` prints the exact plan):
 
 ### First audit over an existing skill library
 
-Toolkit-specific conventions (`metainfo:`, `compatibility:`, `license:`) are
+Toolkit-specific conventions (`metadata.sgt-*`, `compatibility:`, `license:`) are
 *additions* to the open SKILL.md standard — a pre-existing, spec-conformant
 library will trigger 🔴 findings for them on the first run. Start with
 `STRICTNESS=permissive` so they report as advisories, annotate the library
 (`sgt new-skill` scaffolds compliant frontmatter), then tighten. The CI gate is
 delta-based — it blocks only findings *introduced* by an MR, so onboarding a
 legacy library never produces an avalanche of blocked MRs.
+
+`STRICTNESS` is an input to the interactive `library-audit` skill.
+The deterministic CLI does not accept that input.
+Use `sgt check` to inspect a single skill with separate format and policy results.
 
 ---
 

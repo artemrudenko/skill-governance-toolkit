@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import subprocess
 import shutil
@@ -44,6 +45,36 @@ def _load_manifest() -> list[str]:
 
 
 class InstallBehaviorTests(unittest.TestCase):
+    def test_powershell_native_branch_single_skill(self) -> None:
+        """Exercise the native PowerShell branch on Windows and Unix pwsh."""
+        if not shutil.which("pwsh"):
+            self.skipTest("pwsh not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, "SGT_TEST_TARGET": tmp, "SGT_TEST_INSTALLER": str(ROOT / "install.ps1")}
+            prefix = "" if os.name == "nt" else "Set-Variable IsWindows -Value $true -Force; "
+            command = prefix + "& $env:SGT_TEST_INSTALLER -YesDefault -TargetProject $env:SGT_TEST_TARGET -Skill skill-find"
+            result = subprocess.run(["pwsh", "-NoProfile", "-Command", command], cwd=ROOT,
+                                    env=env, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            target = Path(tmp)
+            self.assertTrue((target / "skills" / "skill-find" / "SKILL.md").is_file())
+            self.assertTrue((target / ".claude" / "skills" / "skill-find" / "SKILL.md").is_file())
+            entries = [json.loads(line) for line in (target / "skills" / "INDEX.jsonl").read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([entry["name"] for entry in entries], ["skill-find"])
+
+    def test_powershell_native_branch_all_hosts_single_skill(self) -> None:
+        if not shutil.which("pwsh"):
+            self.skipTest("pwsh not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, "SGT_TEST_TARGET": tmp, "SGT_TEST_INSTALLER": str(ROOT / "install.ps1")}
+            prefix = "" if os.name == "nt" else "Set-Variable IsWindows -Value $true -Force; "
+            command = prefix + "& $env:SGT_TEST_INSTALLER -TargetProject $env:SGT_TEST_TARGET -Skill skill-find"
+            result = subprocess.run(["pwsh", "-NoProfile", "-Command", command], cwd=ROOT,
+                                    env=env, input="6\n2\n", text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for directory in (".claude", ".github", ".codex", ".gemini", ".cursor"):
+                self.assertTrue((Path(tmp) / directory / "skills" / "skill-find" / "SKILL.md").is_file(), directory)
+
     def test_project_dry_run_prints_plan_without_writing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
@@ -93,9 +124,10 @@ class InstallBehaviorTests(unittest.TestCase):
         self.assertIn("Dry-run install plan", result.stdout)
 
     def test_powershell_installer_real_project_install(self) -> None:
-        """Execute the NON-dry-run native PS install path (copy + marker upsert),
-        which the dry-run test exits before. Runs on a pwsh-capable runner (the
-        ubuntu CI 'windows-parity' job); skips locally when pwsh is absent."""
+        """Execute a non-dry-run PowerShell install.
+
+        On Unix the script delegates to bash. Separate tests exercise the native branch.
+        """
         if not shutil.which("pwsh"):
             self.skipTest("pwsh not installed")
         with tempfile.TemporaryDirectory() as tmp:
@@ -190,6 +222,74 @@ class InstallContentTests(unittest.TestCase):
              "--all", "--project", f"--target-project={target}", *extra],
             cwd=ROOT, text=True, capture_output=True, check=False,
         )
+
+    def test_root_skill_collision_survives_install_upgrade_and_uninstall(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            user_skill = target / "skills" / "skill-find" / "SKILL.md"
+            user_skill.parent.mkdir(parents=True)
+            user_skill.write_text("user-owned content\n")
+            cmd = ["bash", str(ROOT / "scripts" / "install.sh"), "--claude", "--project",
+                   f"--target-project={target}", "--skill", "skill-find"]
+            for extra in ([], ["--upgrade"]):
+                result = subprocess.run(cmd + extra, cwd=ROOT, text=True, capture_output=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(user_skill.read_text(), "user-owned content\n")
+            result = subprocess.run([sys.executable, str(ROOT / "scripts" / "sgt.py"), "--root", str(target),
+                                     "uninstall", "--host", "claude", "--yes"],
+                                    cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(user_skill.read_text(), "user-owned content\n")
+
+    def test_uninstall_does_not_delete_unowned_matching_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            user_skill = target / "skills" / "skill-find" / "SKILL.md"
+            user_skill.parent.mkdir(parents=True)
+            user_skill.write_text("user-owned content\n")
+            result = subprocess.run([sys.executable, str(ROOT / "scripts" / "sgt.py"), "--root", str(target),
+                                     "uninstall", "--yes"], cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(user_skill.read_text(), "user-owned content\n")
+
+    def test_copilot_project_install_preserves_collisions_and_user_edits(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            user_skill = target / ".github" / "skills" / "skill-find" / "SKILL.md"
+            user_skill.parent.mkdir(parents=True)
+            user_skill.write_text("user-owned content\n")
+            cmd = ["bash", str(ROOT / "scripts" / "install.sh"), "--copilot", "--project",
+                   f"--target-project={target}", "--skill", "skill-find,skill-compare"]
+            first = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            managed = target / ".github" / "skills" / "skill-compare" / "SKILL.md"
+            self.assertTrue(managed.exists())
+            self.assertEqual(user_skill.read_text(), "user-owned content\n")
+            managed.write_text(managed.read_text() + "\nUser edit.\n")
+            again = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
+            self.assertTrue(managed.read_text().endswith("User edit.\n"))
+            removal = subprocess.run([sys.executable, str(ROOT / "scripts" / "sgt.py"), "--root", str(target),
+                                      "uninstall", "--host", "copilot", "--yes"],
+                                     cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(removal.returncode, 0, removal.stdout + removal.stderr)
+            self.assertTrue(managed.exists(), "uninstall removed edited Copilot skill")
+            self.assertEqual(user_skill.read_text(), "user-owned content\n")
+
+    def test_copilot_uninstall_removes_unchanged_managed_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            result = subprocess.run(["bash", str(ROOT / "scripts" / "install.sh"), "--copilot", "--project",
+                                     f"--target-project={target}", "--skill", "skill-find"],
+                                    cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            managed = target / ".github" / "skills" / "skill-find"
+            self.assertTrue(managed.is_dir())
+            result = subprocess.run([sys.executable, str(ROOT / "scripts" / "sgt.py"), "--root", str(target),
+                                     "uninstall", "--host", "copilot", "--yes"],
+                                    cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse(managed.exists())
 
     def test_no_dev_files_land_in_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -440,7 +540,7 @@ class TargetProjectFlagTests(unittest.TestCase):
 
 
 class CpFallbackPortabilityTests(unittest.TestCase):
-    """Without rsync, _smart_copy must copy directory CONTENTS — identical on
+    """Without rsync, the installer must copy directory CONTENTS — identical on
     BSD and GNU cp. Plain `cp -R src/ dest` nests src inside an existing dest
     on GNU/Linux, producing a broken install. (The bug is GNU-only, so this is
     a true regression test on Linux CI and a contract pin on macOS.)"""

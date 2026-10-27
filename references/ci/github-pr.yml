@@ -33,6 +33,8 @@ on:
     # asset_type). A path the engine governs but CI ignores is a silent gap.
     paths:
       - "skills/**"
+      - ".github/skills/**"
+      - ".agents/skills/**"
       - "agents/**"
       - "commands/**"
       - "prompts/**"

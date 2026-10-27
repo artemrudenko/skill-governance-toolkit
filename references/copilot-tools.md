@@ -24,8 +24,8 @@ Skills in this repository use **Claude Code tool names** as the canonical refere
 
 ### Tool restrictions
 
-- Claude Code's `allowed-tools:` frontmatter field is a **hard whitelist** — listed tools are the only ones the skill can call.
-- Copilot **silently ignores** `allowed-tools:`. A skill restricted to `[Read, Grep]` on Claude Code will have access to **all** Copilot tools by default.
+- Claude Code can pre-approve listed tools; other tools remain subject to its permission settings.
+- Copilot **silently ignores** `allowed-tools:`. A skill can receive different approval behavior across hosts.
 - **Implication:** if a skill assumes restricted tool access for safety reasons, document those assumptions in the body — frontmatter alone won't enforce them on Copilot.
 
 ### Sub-agents

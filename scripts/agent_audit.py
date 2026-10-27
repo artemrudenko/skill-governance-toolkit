@@ -23,7 +23,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from build_index import FRONTMATTER_RE, parse_frontmatter
+from build_index import FRONTMATTER_RE, governance_metadata, parse_frontmatter
 
 
 # Defaults below are overridable via the catalog's optional `config` block; see
@@ -542,7 +542,7 @@ def _has_chain_signal(fm: dict[str, Any], body: str) -> bool:
     if isinstance(fm, dict):
         if fm.get("handoffs"):
             return True
-        metainfo = fm.get("metainfo")
+        metainfo = governance_metadata(fm)
         if isinstance(metainfo, dict) and (metainfo.get("replaced_by") or metainfo.get("deprecated")):
             return True
     return bool(_CHAIN_BODY_RE.search(body))
@@ -694,10 +694,10 @@ def audit_skill(path: str | Path, profile: str = "release-ready", root: str | Pa
             finding("SKILL006", skill_path, 1, "Missing `license:` frontmatter field.", "Declare the skill license in `license:`.")
         )
 
-    metainfo = fm.get("metainfo")
-    if not isinstance(metainfo, dict):
+    metainfo = governance_metadata(fm)
+    if not metainfo:
         findings.append(
-            finding("SKILL007", skill_path, 1, "Missing `metainfo:` block.", "Add `metainfo.category` and `metainfo.tier`.")
+            finding("SKILL007", skill_path, 1, "Missing toolkit governance metadata.", "Add `metadata.sgt-category` and `metadata.sgt-tier`.")
         )
     else:
         categories = metainfo.get("category")
@@ -724,7 +724,7 @@ def audit_skill(path: str | Path, profile: str = "release-ready", root: str | Pa
 
     if "allowed-tools" in fm:
         findings.append(
-            finding("SKILL009", skill_path, line_for_regex(fm_text, r"^allowed-tools\s*:", re.M), "`allowed-tools:` appears in frontmatter.", "Remove it and document tool restrictions in the body as guidance.")
+            finding("SKILL009", skill_path, line_for_regex(fm_text, r"^allowed-tools\s*:", re.M), "`allowed-tools:` appears in frontmatter.", "Review host permission effects before changing it; document the portability tradeoff.")
         )
 
     host_only_fields = [
@@ -1041,7 +1041,7 @@ def _mask_code_spans(text: str, *, mask_inline: bool = True) -> str:
 def _declared_mcp_servers(frontmatter: dict[str, Any]) -> set[str]:
     """Servers declared in `metainfo.requires.mcp` (a list of names). Tolerant of
     missing/odd shapes — returns an empty set rather than raising."""
-    metainfo = frontmatter.get("metainfo") if isinstance(frontmatter, dict) else None
+    metainfo = governance_metadata(frontmatter) if isinstance(frontmatter, dict) else None
     if not isinstance(metainfo, dict):
         return set()
     requires = metainfo.get("requires")

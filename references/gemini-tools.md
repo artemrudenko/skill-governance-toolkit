@@ -14,16 +14,16 @@ Skills in this repository use **Claude Code tool names** as the canonical refere
 | `Glob` | `run_shell_command` with `find` | Use shell |
 | `WebFetch` | `web_fetch` | Fetch a URL |
 | `WebSearch` | `google_search` | Native Gemini tool |
-| `Task` (subagent dispatch) | — | **Gemini CLI does not support sub-agents.** Treat `Task` as optional and run the documented sequential fallback |
+| `Task` (subagent dispatch) | host sub-agent tool, when available | Gemini documents sub-agents. This toolkit's agent mapping is unverified; use the sequential fallback when needed. |
 | `TodoWrite` | — | No native todo tool — keep todos in markdown inline |
 | `AskUserQuestion` | plain chat clarification | Canonical clarification concept; Gemini may not expose a structured question API |
 | `Skill` tool | `activate_skill` | Gemini loads skill metadata at session start and activates the full body on demand |
 
 ## Behavioral differences worth knowing
 
-### No sub-agents
+### Sub-agents
 
-This is the most significant difference. If a skill requires the `Task` orchestration pattern for correctness, it **will not work on Gemini CLI as written**. Portable skills may use `Task` only as an optional path with a sequential fallback. Two workarounds:
+Gemini CLI documents built-in and custom sub-agents. Availability and configuration vary by version. The toolkit has not verified its `agents/code-reviewer.md` mapping. Portable skills keep sub-agent use optional and provide a sequential fallback:
 
 1. **Inline the agent's instructions** into the skill body — converts orchestration into a single linear flow.
 2. **Sequential skill invocations** — the user manually invokes each step, or the skill returns a "next step" hint that the user accepts.

@@ -24,21 +24,16 @@ Common organization-specific paths and their portable substitutes. Extend this t
 
 ## Frontmatter field rules
 
-### F1 — `allowed-tools:` removal (🔴 BLOCKER)
+### F1 — `allowed-tools:` permission difference (🔴 BLOCKER)
 
-```yaml
-# REMOVE THIS:
-allowed-tools:
-  - Read
-  - Grep
-  - Bash
-```
+Claude Code can pre-approve listed tools for a skill invocation.
+The field does not block other tools; host permission settings still apply.
+Other hosts may handle the field differently.
 
-**Why:** Claude Code treats this as a **hard whitelist** — blocks all tools not listed. Copilot / Cursor / Codex **silently ignore** it. A skill with `[Read, Grep]` allowed will behave consistently on Claude but have full tool access on Copilot. Silent divergence is the worst kind of bug.
-
-**Transformation:** remove the field. If the original intent was security / scope-limiting, add a `## Hard rules` paragraph in the body:
-
-> «**Tool restrictions (informational):** this skill operates as a read-only auditor. Even though there is no runtime enforcement, do not invoke `Write`, `Edit`, or `Bash`-with-mutations in this skill.»
+**Transformation:** report the original field and its host-specific permission effects.
+Show any proposed removal in the diff and explain that approval prompts can change.
+If the user requires its original behavior, stop the universal conversion and report the host-specific requirement.
+Never describe prose as an enforced permission boundary.
 
 ### F2 — `type:`, `status:`, `last_updated:`, `last_verified:` removal (🟡)
 
@@ -88,12 +83,14 @@ A skill without a description cannot be activated by any runtime. This is unreco
 
 **Transformation:** add
 ```yaml
-compatibility: "<TARGET_RUNTIMES joined by · >"
+compatibility: "Intended targets: <TARGET_RUNTIMES joined by · >; runtime behavior unverified"
 ```
 
-Example: `compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"`
+Example: `compatibility: "Intended targets: Claude Code · GitHub Copilot; runtime behavior unverified"`
 
 If `TARGET_RUNTIMES` is a subset, list only the included runtimes.
+Preserve an existing field unless the user supplies evidence for changing it.
+Report intended targets and missing runtime evidence in residual concerns.
 
 ## Body rules
 
@@ -166,7 +163,7 @@ Grep for claims like «works everywhere», «portable across tools», «universa
 
 ```diff
 - This skill works everywhere — Claude, Copilot, Cursor, all of them.
-+ See the `compatibility:` field above for supported runtimes.
++ See the `compatibility:` field above for stated runtime requirements and targets.
 ```
 
 ## Structure rules

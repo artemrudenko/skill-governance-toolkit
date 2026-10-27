@@ -473,6 +473,11 @@ if python3 "$ROOT/scripts/test_asset_security.py" >/dev/null 2>&1; then
 else
   fail "asset-security tests failed — run: python3 scripts/test_asset_security.py"
 fi
+if python3 "$ROOT/experiments/run_security_corpus.py" --verify >/dev/null 2>&1; then
+  pass "labelled synthetic security corpus matches expectations"
+else
+  fail "security corpus mismatch — run: python3 experiments/run_security_corpus.py --verify"
+fi
 if python3 "$ROOT/scripts/test_ops_reporting.py" >/dev/null 2>&1; then
   pass "ops-reporting behavior tests pass (list-suppressions, --whole-tree, report-trends)"
 else

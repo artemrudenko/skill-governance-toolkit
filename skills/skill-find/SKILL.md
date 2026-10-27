@@ -10,11 +10,11 @@ description: |
   (use directly / adapt / create new).
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
-metainfo:
-  category: [discovery, governance]
-  tier: stable
-  owner: artsiom
-  added: "2026-05-23"
+metadata:
+  sgt-category: "discovery, governance"
+  sgt-tier: "stable"
+  sgt-owner: "artsiom"
+  sgt-added: "2026-05-23"
 ---
 
 # Skill Find
@@ -25,7 +25,7 @@ metainfo:
 
 Search all configured skill sources for skills matching a natural-language need. Return a ranked list with a match percentage, a quality tier, and the clearest next step for each result.
 
-**Runtime notes:** Claude/Copilot/Cursor/Codex — normal workflow. Gemini — no sub-agent dispatch (this skill doesn't use Task, so no caveat needed in practice).
+**Runtime notes:** This skill runs sequentially.
 
 ## When to use
 
@@ -44,7 +44,7 @@ Search all configured skill sources for skills matching a natural-language need.
 - User wants to compare a local skill against a corporate version → use `skill-compare`.
 
 **Don't skip when:**
-- «There can't be a skill for this» — well-named skills surface in 90%+ of relevant searches with strong matches; the cost of a single lookup is sub-second.
+- «There can't be a skill for this» — a bounded lookup can reveal an existing skill before you create another.
 
 ## Predecessor
 

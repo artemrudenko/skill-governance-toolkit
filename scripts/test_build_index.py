@@ -102,6 +102,30 @@ class FrontmatterTests(unittest.TestCase):
         fm = build_index.parse_frontmatter("---\nname: x\n---\nbody\n")
         self.assertEqual(fm, {"name": "x"})
 
+    def test_standard_metadata_keeps_index_shape_and_legacy_fallback(self) -> None:
+        fm = build_index.parse_frontmatter(
+            '---\nname: sample\nmetadata:\n  sgt-category: "governance, discovery"\n'
+            '  sgt-tier: "preview"\n  sgt-requires-mcp: "serena, repomix"\n'
+            'metainfo:\n  category: [testing]\n  tier: stable\n  owner: alice\n---\nbody\n'
+        )
+        self.assertEqual(build_index.governance_metadata(fm), {
+            "category": ["governance", "discovery"], "tier": "preview",
+            "owner": "alice", "requires": {"mcp": ["serena", "repomix"]},
+        })
+
+    def test_plain_standard_metadata_does_not_create_governance_fields(self) -> None:
+        self.assertEqual(build_index.governance_metadata({"metadata": {"author": "alice"}}), {})
+
+    def test_bundled_skills_use_standard_top_level_fields_and_string_metadata(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        allowed = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
+        paths = list((root / "skills").glob("*/SKILL.md"))
+        self.assertTrue(paths, "no bundled skills found")
+        for path in paths:
+            fm = build_index.parse_frontmatter(path.read_text(encoding="utf-8"))
+            self.assertFalse(set(fm) - allowed, str(path))
+            self.assertTrue(all(isinstance(value, str) for value in fm.get("metadata", {}).values()), str(path))
+
 
 class ScalarCategoryNormalizationTests(unittest.TestCase):
     def test_scalar_category_emitted_as_list(self) -> None:

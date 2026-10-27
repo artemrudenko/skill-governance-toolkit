@@ -19,18 +19,18 @@ description: |
   Output: {what the skill produces}.
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
-metainfo:
-  category: [governance]            # closed vocab — see § metainfo below
-  tier: stable                       # stable | preview | experimental | internal
-  owner: "{handle or team}"          # optional but recommended
-  added: "YYYY-MM-DD"               # ISO date the skill landed
+metadata:
+  sgt-category: "governance"
+  sgt-tier: "stable"
+  sgt-owner: "{handle or team}"
+  sgt-added: "YYYY-MM-DD"
 ---
 
 # {Skill Title}
 
 > **Skill type:** Detect-only | Mutating
 > **Runtime notes:** Claude/Copilot/Cursor/Codex — normal workflow.
-> Gemini — no sub-agent dispatch; inline agent instructions or use linear fallback.
+> Use a sequential fallback when sub-agent dispatch is unavailable.
 
 ## Purpose
 {1–2 sentence business value}
@@ -111,66 +111,37 @@ concerns a **stray** prohibition placed *outside* those sanctioned sections — 
 never flags content inside them, and never asks you to add them. A standalone hard
 rule that must always hold goes in `AGENTS.md` / `CLAUDE.md`, not a skill body.
 
-## metainfo block (required since 1.8.0)
+## metainfo block (toolkit policy)
 
-`metainfo:` is a **namespaced sub-block** in frontmatter — top-level fields
-are reserved by the Agent Skills standard (`name`, `description`,
-`compatibility`, `license`, `allowed-tools`). Org-specific extensions live
-under `metainfo:` so that:
+The Agent Skills standard reserves `metadata` for string-to-string properties.
+SGT stores its policy data in namespaced `sgt-` keys inside `metadata`.
+These fields are toolkit policy, not requirements of the Agent Skills standard.
+The legacy top-level `metainfo` block remains readable for existing installations.
+When both forms declare a field, the standard metadata field takes precedence.
+The generated index retains its existing `metainfo` shape for installer compatibility.
 
-1. The skill stays portable — parsers unaware of the field ignore it
-   safely, and `library-audit` Phase 4 keeps passing.
-2. The toolkit's installer can filter the library by category / tier
-   without parsing the body.
-3. `library-audit` Phase 5.5 can produce a coverage report (skills-by-
-   category, orphans, tier drift).
-
-### Required fields
-
-| Field | Type | Required | Notes |
+| Field | Type | Toolkit policy | Description |
 |---|---|---|---|
-| `category` | array of strings (closed vocab — see below) | yes | A skill may belong to ≥1 categories |
-| `tier` | enum | yes | `stable` · `preview` · `experimental` · `internal` |
-
-### Optional fields
-
-| Field | Type | Notes |
-|---|---|---|
-| `owner` | string | Handle or team responsible for the skill (e.g. `artsiom`, `governance-wg`). Surfaces in audit reports. |
-| `added` | ISO date string | When the skill first landed in this repo. Useful for «what's new since X» reports. |
-| `deprecated` | ISO date string | If set, marks the skill as deprecated since that date. Installer warns; auditor flags. |
-| `replaced_by` | skill name | If `deprecated:` is set, points to the successor. |
-
-### Optional sub-block — `requires:`
-
-`metainfo.requires` declares the skill's runtime dependencies. Today it carries
-one key, `mcp`, listing the MCP servers the skill needs.
-
-| Field | Type | Notes |
-|---|---|---|
-| `requires.mcp` | array of strings | MCP server names this skill uses via `mcp__<server>__<tool>` tools (e.g. `github`, `playwright`). |
+| `sgt-category` | comma-separated string | required | One or more categories from the closed vocabulary below. |
+| `sgt-tier` | string | required | `stable`, `preview`, `experimental`, or `internal`. |
+| `sgt-owner` | string | optional | Responsible person or team. |
+| `sgt-added` | string | optional | ISO date. |
+| `sgt-deprecated` | string | optional | Deprecation date. |
+| `sgt-replaced-by` | string | optional | Replacement skill name. |
+| `sgt-language` | string | optional | Declared language for the script-mix check. |
+| `sgt-requires-mcp` | comma-separated string | optional | MCP server names used in the skill body. |
 
 ```yaml
-metainfo:
-  category: [governance]
-  tier: preview
-  requires:
-    mcp: [github]
+metadata:
+  sgt-category: "governance, discovery"
+  sgt-tier: "preview"
+  sgt-requires-mcp: "github, playwright"
 ```
 
-**Why declare it.** The auditor cross-checks every `mcp__<server>__` tool used in
-the body against this list (∪ the org `allowlists.mcp_servers`):
-
-- A server **used but not declared** → `MCP001` (high). Declaring it makes the
-  dependency explicit so a runtime can provision and gate it.
-- A server **declared but never used** → `MCP002` (low). Remove the stale entry or
-  add the usage. (Org-allowlist servers are exempt from MCP002.)
-
-A token inside a **fenced** code block, or on a detection-context line, does not
-count as usage — so a fenced example never trips `MCP001`. An **inline-code**
-token (`` `mcp__github__search` ``) **does** count: a backticked tool name in an
-instruction is real usage, so put example-only tool names in a fenced block, not
-inline. See [`checks-reference.md` § MCP consistency rules](checks-reference.md#mcp-consistency-rules-mcp).
+The auditor compares declared MCP servers with tool names used in the body.
+It reports undeclared servers as MCP001 and unused declarations as MCP002.
+Existing `metainfo.requires.mcp` declarations remain readable.
+See [the checks reference](checks-reference.md#mcp-consistency-rules-mcp).
 
 ### Closed vocabulary — `category:`
 
@@ -205,22 +176,20 @@ unstable skills into their workflow.
 ### Example
 
 ```yaml
-metainfo:
-  category: [governance, discovery]
-  tier: stable
-  owner: artsiom
-  added: 2026-05-25
+metadata:
+  sgt-category: "governance, discovery"
+  sgt-tier: "stable"
+  sgt-owner: "artsiom"
+  sgt-added: "2026-05-25"
 ```
 
-### Validation (enforced)
+### Validation
 
-- `build_index.py` extracts `metainfo` into `skills/INDEX.jsonl` so the
-  installer can read it once instead of parsing every SKILL.md.
-- `library-audit` Phase 5.5 (coverage report) fails the audit if:
-  - any skill lacks `metainfo.category` or `metainfo.tier`;
-  - any `category` value is outside the closed vocab;
-  - any `tier` value is outside the enum;
-  - a `deprecated:` is set without `replaced_by:`.
+- `build_index.py` normalizes standard metadata and legacy metainfo into the existing index shape.
+- `library-audit` checks required toolkit policy fields and their closed vocabularies.
+- The official `skills-ref` validator checks the separate Agent Skills format contract.
+- A legacy `metainfo` block remains readable, but the official validator rejects that top-level field.
+- Migrate existing skills deliberately; do not discard fields when both forms appear.
 
 ## Body length budget
 

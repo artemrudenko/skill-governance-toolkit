@@ -15,21 +15,14 @@ Codex CLI / Google Gemini CLI.
 
 ## Rationale
 
-### MC1 — Why `allowed-tools:` is poison for portability
+### MC1 — Permission behavior varies by host
 
-Claude Code treats `allowed-tools` as a **hard whitelist** — any tool not
-in the list is blocked at runtime. Copilot / Cursor / Codex **silently
-ignore** the field. A skill that lists `allowed-tools: [Read, Grep]` will:
-
-- Work on Claude Code (with only Read + Grep available).
-- Run on Copilot / Cursor / Codex with **all** tools enabled — silently
-  inconsistent semantics across runtimes.
-- Break on Claude Code if it actually needs `Bash` later — the whitelist
-  forbids it.
-
-The portable solution is to omit `allowed-tools:` entirely and let the host
-runtime enforce its own policy. Document required capabilities in prose
-inside the body if needed.
+Claude Code can pre-approve the listed tools during skill invocation.
+Other tools remain subject to the user's permission settings.
+Other hosts may interpret or ignore this field differently.
+Review the original permission effect before proposing a portable replacement.
+A prose instruction does not enforce a host permission boundary.
+See [Claude Code skill permissions](https://code.claude.com/docs/en/skills#pre-approve-tools-for-a-skill).
 
 ### MC2 — Why per-skill `rules/{tool}.md` files cause drift
 
@@ -51,8 +44,7 @@ by compatibility.
 
 ### MC4 — Sub-agent dispatch must be optional
 
-Gemini CLI does not support sub-agents, and some other hosts expose different
-dispatch mechanisms. Skills that delegate via `Task` MUST NOT require that
+Hosts expose different sub-agent formats and dispatch mechanisms. Skills that delegate via `Task` MUST NOT require that
 path for correctness.
 
 Required portable contract:

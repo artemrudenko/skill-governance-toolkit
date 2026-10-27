@@ -28,7 +28,7 @@ Audit logic. Output → `_audits/internal/my-audit-{date}.md`.
 # Portable Skill Build — my-audit
 
 Transformations applied (5):
-  🔴 F1 · frontmatter:5 · remove allowed-tools (non-portable hard whitelist)
+  🔴 F1 · frontmatter:5 · review allowed-tools removal (host permission effects differ)
   🟡 F2 · frontmatter:3 · remove type:, status: (not in agentskills.io spec)
   🟡 F3 · frontmatter:8 · remove paths: (Claude-only; document in body if path-scope matters)
   🔴 B1 · body:line 1 · replace _audits/internal/ → out/audits/internal/
@@ -82,7 +82,7 @@ context: fork
 #   context: fork
 name: research-build
 description: ...
-compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
+compatibility: "Intended targets: Claude Code · GitHub Copilot · Cursor · Codex · Gemini; runtime behavior unverified"
 license: MIT
 ---
 ```

@@ -10,6 +10,7 @@ Index of every document the Skill Governance Toolkit ships, classified by [Diát
 | [../QUICKSTART.md](../QUICKSTART.md) | tutorial | skill author · consumer-repo maintainer | you want the first install-to-first-audit run in minutes |
 | [../AGENTS.md](../AGENTS.md) | reference | toolkit contributor | you (or your agent) work inside this repo and need its binding rules |
 | [installation.md](installation.md) | how-to | consumer-repo maintainer | you install, upgrade, or distribute the toolkit in a repo or org |
+| [runtime-compatibility.md](runtime-compatibility.md) | reference | consumer-repo maintainer | you need observed host versions and verification limits |
 | [user-guide.md](user-guide.md) | how-to | consumer-repo maintainer · skill author | you run the meta-skill workflows (find / evaluate / compare / audit / port) — Russian version: [user-guide.ru.md](user-guide.ru.md) |
 | [skill-authoring-standard.md](skill-authoring-standard.md) | reference | skill author | you write or review a `SKILL.md` and need the canonical skeleton |
 | [gate-for-authors.md](gate-for-authors.md) | how-to | skill author | the gate flagged your MR and you need the one-screen overview |

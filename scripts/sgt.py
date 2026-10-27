@@ -10,11 +10,15 @@ remembering every filename.
 from __future__ import annotations
 
 import argparse
+import difflib
+import hashlib
 import json
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import os
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +27,7 @@ from doctor import run_doctor
 from quickstart import print_text as print_quickstart_text
 from quickstart import build_quickstart
 from marker_block import remove as remove_marker_block
+from managed_skills import INDEX_MARKER, owned_and_unchanged, owned_index_unchanged
 
 # Install root (where the toolkit's own scripts/references/templates live). Distinct
 # from `--root`, which is the user's project being operated on.
@@ -95,6 +100,208 @@ def command_audit(args: argparse.Namespace) -> int:
     return result.returncode
 
 
+def check_sarif(report: dict[str, Any]) -> dict[str, Any]:
+    """Export toolkit findings; retain external check statuses as run metadata."""
+    policy = report["policy"]
+    levels = {"high": "error", "medium": "warning", "low": "note", "info": "note"}
+    results = []
+    for finding in policy["findings"]:
+        results.append({
+            "ruleId": finding["rule_id"],
+            "level": levels.get(finding["severity"], "warning"),
+            "message": {"text": finding["message"]},
+            "locations": [{"physicalLocation": {
+                "artifactLocation": {"uri": Path(finding["file"]).resolve().as_uri()},
+                "region": {"startLine": max(1, int(finding.get("line") or 1))},
+            }}],
+            "properties": {"suggestion": finding.get("suggestion", "")},
+        })
+    return {"version": "2.1.0", "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+            "runs": [{"tool": {"driver": {"name": "Skill Governance Toolkit",
+                                          "version": policy.get("engine_version", "unknown")}},
+                      "results": results,
+                      "properties": {"sha256": report["sha256"],
+                                     "standard_status": report["standard"]["status"],
+                                     "cisco_status": report.get("cisco", {}).get("status", "not_requested")}}]}
+
+
+def command_check(args: argparse.Namespace) -> int:
+    """Check a skill without installing the toolkit into the target project."""
+    from agent_audit import audit_skill, should_fail
+
+    supplied = Path(args.path).expanduser().resolve()
+    skill_path = supplied / "SKILL.md" if supplied.is_dir() else supplied
+    if skill_path.name != "SKILL.md" or not skill_path.is_file():
+        print("sgt check: provide a skill directory or an existing SKILL.md", file=sys.stderr)
+        return 2
+    try:
+        content = skill_path.read_bytes()
+        policy = audit_skill(skill_path)
+    except (OSError, UnicodeError, ValueError) as exc:
+        print(f"sgt check: {exc}", file=sys.stderr)
+        return 2
+
+    executable = shutil.which("skills-ref")
+    standard: dict[str, Any] = {"status": "not_checked", "reason": "skills-ref is not on PATH"}
+    if executable:
+        try:
+            result = subprocess.run([executable, "validate", str(skill_path.parent)],
+                                    capture_output=True, text=True, timeout=30, check=False)
+            status = "passed" if result.returncode == 0 else "failed" if result.returncode == 1 else "error"
+            standard = {"status": status,
+                        "validator": "skills-ref", "exit_code": result.returncode,
+                        "output": (result.stdout + result.stderr).strip()}
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            standard = {"status": "error", "reason": str(exc)}
+    report = {"target": str(skill_path), "sha256": hashlib.sha256(content).hexdigest(),
+              "standard": standard, "policy": policy}
+    if args.cisco:
+        scanner = shutil.which("skill-scanner")
+        if not scanner:
+            report["cisco"] = {"status": "error", "reason": "skill-scanner is not on PATH"}
+        else:
+            try:
+                version = subprocess.run([scanner, "--version"], capture_output=True, text=True,
+                                         timeout=30, check=False)
+                if version.returncode != 0 or version.stdout.strip() != "skill-scanner 2.3.2":
+                    raise ValueError("unsupported Cisco scanner version; expected skill-scanner 2.3.2")
+                scan = subprocess.run([scanner, "scan", str(skill_path.parent), "--format", "json"],
+                                      capture_output=True, text=True, timeout=120, check=False)
+                data = json.loads(scan.stdout) if scan.returncode == 0 else None
+                if (not isinstance(data, dict) or not isinstance(data.get("findings"), list)
+                        or data.get("findings_count") != len(data["findings"])
+                        or not isinstance(data.get("analyzers_used"), list) or not data["analyzers_used"]):
+                    raise ValueError("scanner returned an invalid report")
+                metadata = data.get("scan_metadata") or {}
+                if (metadata.get("rule_contract", {}).get("status") != "passed"
+                        or metadata.get("cel", {}).get("projection_incomplete") != 0
+                        or metadata.get("cel", {}).get("errors") != []):
+                    raise ValueError("scanner reported an incomplete or invalid analysis")
+                report["cisco"] = {"status": "completed", "version": version.stdout.strip(), "report": data}
+            except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+                report["cisco"] = {"status": "error", "reason": str(exc)}
+    try:
+        if hashlib.sha256(skill_path.read_bytes()).hexdigest() != report["sha256"]:
+            print("sgt check: target changed during inspection; rerun the check", file=sys.stderr)
+            return 2
+    except OSError as exc:
+        print(f"sgt check: target became unavailable: {exc}", file=sys.stderr)
+        return 2
+    if args.format in ("json", "sarif"):
+        print(json.dumps(check_sarif(report) if args.format == "sarif" else report,
+                         ensure_ascii=False, indent=2))
+    else:
+        print(f"Standard: {standard['status']}")
+        if standard.get("reason"):
+            print(f"  {standard['reason']}")
+        if standard.get("output"):
+            print(f"  {standard['output']}")
+        print(f"Toolkit policy: {policy['summary']['total']} finding(s)")
+        for item in policy["findings"]:
+            print(f"  {item['severity']} {item['rule_id']}: {item['message']}")
+        if args.cisco:
+            cisco = report["cisco"]
+            print(f"Cisco scanner: {cisco['status']}")
+            if cisco.get("reason"):
+                print(f"  {cisco['reason']}")
+            if cisco.get("report"):
+                print(f"  {len(cisco['report']['findings'])} finding(s); use --format json for details")
+        print(f"SHA-256: {report['sha256']}")
+    if (standard["status"] == "error" or (args.require_standard and standard["status"] == "not_checked")
+            or (args.cisco and report["cisco"]["status"] == "error")):
+        return 2
+    if standard["status"] == "failed" or should_fail(policy, args.fail_on):
+        return 1
+    return 0
+
+
+def command_migrate_metadata(args: argparse.Namespace) -> int:
+    """Preview or migrate the supported legacy frontmatter without data loss."""
+    from build_index import FRONTMATTER_RE, governance_metadata, parse_frontmatter
+
+    supplied = Path(args.path).expanduser().absolute()
+    skill_path = supplied / "SKILL.md" if supplied.is_dir() else supplied
+    if skill_path.is_symlink() or skill_path.name != "SKILL.md" or not skill_path.is_file():
+        print("sgt migrate-metadata: provide a non-symlink SKILL.md or skill directory", file=sys.stderr)
+        return 2
+    try:
+        original = skill_path.read_bytes().decode("utf-8")
+        if "\r" in original:
+            raise ValueError("CRLF input requires manual migration to preserve line endings")
+        fm = parse_frontmatter(original)
+        match = FRONTMATTER_RE.match(original)
+        if not fm or not match or not isinstance(fm.get("metainfo"), dict):
+            raise ValueError("a legacy metainfo mapping is required")
+        if "metadata" in fm:
+            raise ValueError("metadata already exists; merge it manually to preserve its fields")
+        legacy = fm["metainfo"]
+        known = {"category", "tier", "owner", "added", "deprecated", "replaced_by", "language", "requires"}
+        if set(legacy) - known:
+            raise ValueError("legacy metainfo has unsupported keys; migrate them manually")
+        requires = legacy.get("requires")
+        if requires is not None and (not isinstance(requires, dict) or set(requires) - {"mcp"}):
+            raise ValueError("legacy requires has unsupported fields; migrate them manually")
+        block = re.search(r"(?m)^metainfo:[ \t]*\n(?:(?:[ \t]+[^\n]*|[ \t]*)\n)*", match.group(1) + "\n")
+        if block is None or "#" in block.group(0):
+            raise ValueError("cannot safely migrate this metainfo block or its comments")
+        for line in block.group(0).splitlines()[1:]:
+            if not line.strip():
+                continue
+            if not (re.match(r"^  (category|tier|owner|added|deprecated|replaced_by|language|requires):", line)
+                    or re.match(r"^    mcp:", line) or re.match(r"^      - ", line)):
+                raise ValueError("legacy block contains unsupported syntax; migrate it manually")
+        normalized = governance_metadata(fm)
+        lines = ["metadata:"]
+        for key in ("category", "tier", "owner", "added", "deprecated", "replaced_by", "language"):
+            if key not in normalized:
+                continue
+            value = normalized[key]
+            if key == "category":
+                value = value if isinstance(value, list) else [value]
+                if not all(isinstance(item, str) and "," not in item for item in value):
+                    raise ValueError("unsupported category format")
+                value = ", ".join(value)
+            if not isinstance(value, str):
+                raise ValueError(f"{key} must be a string")
+            lines.append(f"  sgt-{key.replace('_', '-')}: {json.dumps(value, ensure_ascii=False)}")
+        if requires and "mcp" in requires:
+            servers = requires["mcp"]
+            servers = servers if isinstance(servers, list) else [servers]
+            if not all(isinstance(item, str) and "," not in item for item in servers):
+                raise ValueError("unsupported MCP server list")
+            lines.append(f'  sgt-requires-mcp: {json.dumps(", ".join(servers), ensure_ascii=False)}')
+        fm_text = match.group(1) + "\n"
+        updated_fm = fm_text[:block.start()] + "\n".join(lines) + "\n" + fm_text[block.end():]
+        updated = "---\n" + updated_fm.rstrip("\n") + "\n---\n" + original[match.end():]
+        parsed = parse_frontmatter(updated)
+        expected = dict(normalized)
+        if isinstance(expected.get("category"), str):
+            expected["category"] = [expected["category"]]
+        if requires and isinstance(requires.get("mcp"), str):
+            expected["requires"] = {**requires, "mcp": [requires["mcp"]]}
+        if parsed is None or "metainfo" in parsed or governance_metadata(parsed) != expected:
+            raise ValueError("migration did not round-trip the original governance data")
+        print("".join(difflib.unified_diff(original.splitlines(keepends=True), updated.splitlines(keepends=True),
+                                          fromfile=str(skill_path), tofile=str(skill_path) + " (proposed)")), end="")
+        if args.apply:
+            backup = skill_path.with_name("SKILL.md.sgt-backup")
+            with backup.open("x", encoding="utf-8") as stream:
+                stream.write(original)
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=skill_path.parent, delete=False) as stream:
+                temp_path = Path(stream.name)
+                stream.write(updated)
+            try:
+                os.chmod(temp_path, skill_path.stat().st_mode)
+                os.replace(temp_path, skill_path)
+            finally:
+                temp_path.unlink(missing_ok=True)
+            print(f"Backup: {backup}")
+    except (OSError, UnicodeError, ValueError) as exc:
+        print(f"sgt migrate-metadata: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def validate_skill_name(name: str) -> str | None:
     """Return an error string if `name` violates the naming convention, else None.
 
@@ -128,10 +335,10 @@ description: |
   Triggers: «TODO phrase one», «TODO phrase two», «TODO phrase three».
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
-metainfo:
-  category: [{', '.join(categories)}]
-  tier: preview
-  owner: "TODO-your-handle"
+metadata:
+  sgt-category: "{', '.join(categories)}"
+  sgt-tier: "preview"
+  sgt-owner: "TODO-your-handle"
 ---
 
 # {name}
@@ -454,11 +661,12 @@ def _plan_install_dir(base: Path, skill_names: set[str], script_names: list[str]
 
     for name in skill_names:
         d = base / "skills" / name
-        if d.is_dir():
+        if owned_and_unchanged(d):
             dirs.append(d)
     idx = base / "skills" / "INDEX.jsonl"
-    if idx.exists():
+    if owned_index_unchanged(base / "skills"):
         files.append(idx)
+        sidecars.append(base / "skills" / INDEX_MARKER)
 
     # docs/ included: the installer copies toolkit docs into the project and
     # records them in docs/.sgt-owned, so uninstall removes exactly our docs and
@@ -637,7 +845,7 @@ def command_uninstall(args: argparse.Namespace) -> int:
             all_dirs += d; all_files += f; all_sidecars += s
     else:  # global
         for host in hosts:
-            hb = Path.home() / HOST_DIRS[host]
+            hb = Path.home() / (".copilot" if host == "copilot" else HOST_DIRS[host])
             d, f, s = _plan_install_dir(hb, skill_names, script_names, host=host)
             all_dirs += d; all_files += f; all_sidecars += s
 
@@ -781,6 +989,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     audit = subcommands.add_parser("audit", help="Run the full self-audit.")
     audit.set_defaults(func=command_audit)
+
+    check = subcommands.add_parser("check", help="Check one skill without installing into its project.")
+    check.add_argument("path", help="Skill directory or SKILL.md to inspect.")
+    check.add_argument("--format", choices=["text", "json", "sarif"], default="text")
+    check.add_argument("--fail-on", choices=["none", "any", "low", "medium", "high"], default="none")
+    check.add_argument("--require-standard", action="store_true", help="Fail if skills-ref is unavailable.")
+    check.add_argument("--cisco", action="store_true", help="Also run the installed Cisco skill-scanner locally.")
+    check.set_defaults(func=command_check)
+
+    migrate = subcommands.add_parser("migrate-metadata", help="Preview migration of legacy metainfo for one skill.")
+    migrate.add_argument("path", help="Skill directory or SKILL.md to migrate.")
+    migrate.add_argument("--apply", action="store_true", help="Write the migration after creating a backup.")
+    migrate.set_defaults(func=command_migrate_metadata)
 
     new_skill = subcommands.add_parser(
         "new-skill", help="Scaffold a governance-clean SKILL.md skeleton.")

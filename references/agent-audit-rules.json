@@ -52,14 +52,14 @@
     {
       "rule_id": "SKILL007",
       "severity": "medium",
-      "title": "Missing metainfo block",
-      "description": "metainfo.category and metainfo.tier drive installer filtering and audits."
+      "title": "Missing toolkit governance metadata",
+      "description": "Toolkit category and tier metadata drive installer filtering and audits. Standard metadata.sgt-* fields and legacy metainfo are supported."
     },
     {
       "rule_id": "SKILL008",
       "severity": "medium",
-      "title": "Invalid metainfo value",
-      "description": "metainfo.category and metainfo.tier must use the closed vocabularies."
+      "title": "Invalid governance metadata value",
+      "description": "Toolkit category and tier values must use the closed vocabularies."
     },
     {
       "rule_id": "SKILL009",
@@ -167,13 +167,13 @@
       "rule_id": "MCP001",
       "severity": "high",
       "title": "MCP tool used but server not declared",
-      "description": "A skill body uses an `mcp__<server>__<tool>` MCP tool whose server is neither listed in `metainfo.requires.mcp` nor in the org `allowlists.mcp_servers`. Declare the server so reviewers and runtimes can provision and gate it. A token inside a fenced code block (```), or on a detection-context line (one containing detect/scan/pattern/denylist/allowlist/…), is not counted as usage. A token in an inline-code span (`mcp__github__search`) DOES count — a tool name in backticks is a real usage, so wrap example-only tool names in a fenced block, not inline."
+      "description": "A skill body uses an `mcp__<server>__<tool>` MCP tool whose server is neither listed in `metadata.sgt-requires-mcp` or legacy `metainfo.requires.mcp` nor in the org `allowlists.mcp_servers`. Declare the server so reviewers and runtimes can provision and gate it. A token inside a fenced code block (```), or on a detection-context line (one containing detect/scan/pattern/denylist/allowlist/…), is not counted as usage. A token in an inline-code span (`mcp__github__search`) DOES count — a tool name in backticks is a real usage, so wrap example-only tool names in a fenced block, not inline."
     },
     {
       "rule_id": "MCP002",
       "severity": "low",
       "title": "Declared MCP server unused",
-      "description": "A server listed in `metainfo.requires.mcp` is never used (no `mcp__<server>__` token) in the skill body. Remove the stale declaration or add the usage. Org allowlist servers are exempt — an unused org-allowlisted server is fine."
+      "description": "A server listed in `metadata.sgt-requires-mcp` or legacy `metainfo.requires.mcp` is never used (no `mcp__<server>__` token) in the skill body. Remove the stale declaration or add the usage. Org allowlist servers are exempt — an unused org-allowlisted server is fine."
     },
     {
       "rule_id": "SEC010",

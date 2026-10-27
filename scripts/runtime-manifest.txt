@@ -22,6 +22,7 @@ filter_skills.py
 
 # ── CLI facade (stable) + its transitive deps ──
 sgt.py
+managed_skills.py
 doctor.py
 quickstart.py
 

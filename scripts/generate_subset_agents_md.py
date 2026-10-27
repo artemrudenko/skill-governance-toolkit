@@ -68,7 +68,7 @@ python3 scripts/filter_skills.py --index out/scores/index.jsonl --info-summary
 ```
 
 First audit over a pre-existing skill library: run with `STRICTNESS=permissive`
-so toolkit-specific conventions (`metainfo:`, `compatibility:`) report as
+so toolkit-specific conventions (`metadata.sgt-*`, `compatibility:`) report as
 advisories, not blockers — tighten once the library is annotated.
 
 If `scripts/` directories contain Python helpers, run them with `python3` and stdlib only — **no pip dependencies allowed** (portability requirement).

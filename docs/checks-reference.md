@@ -52,9 +52,9 @@ merge on `high`; `medium`/`low`/`info` are advisory.
 | SKILL004 | high | `description` over 1024 characters | Exceeds the Agent Skills hard limit; parsers may reject or truncate |
 | SKILL005 | medium | No `compatibility:` field | Toolkit requires explicit portability claims |
 | SKILL006 | medium | No `license:` field | Portable reuse needs license metadata |
-| SKILL007 | medium | No `metainfo:` block | `metainfo.category`/`tier` drive installer filtering and audits |
-| SKILL008 | medium | `metainfo.category`/`tier` outside the closed vocabulary | Free-text values break `--category`/`--tier` selective install |
-| SKILL009 | high | `allowed-tools:` present | Enforced by some hosts, ignored by others → silent cross-platform divergence |
+| SKILL007 | medium | Missing toolkit governance metadata | Standard `metadata.sgt-category`/`sgt-tier`, or legacy `metainfo`, drive installer filtering and audits |
+| SKILL008 | medium | Governance category/tier outside the closed vocabulary | Free-text values break `--category`/`--tier` selective install |
+| SKILL009 | high | `allowed-tools:` present | Host permission behavior varies; review the effect before changing the field |
 | SKILL010 | medium | Claude-only / host-only frontmatter field | Tool-specific keys weaken the portability claim |
 | SKILL011 | medium | Body longer than the line budget | Long bodies should push detail into `references/`, `scripts/`, `assets/` |
 | SKILL013 | medium | No verification guidance | Skills should state how to confirm completion or quality |
@@ -135,7 +135,7 @@ Scans the **content** of in-repo scripts (`scripts/<name>.{py,sh,ps1}`) that an 
 
 ### MCP consistency rules (`MCP*`)
 
-Cross-checks MCP tool usage against declared servers, and structurally scans MCP server commands. An `mcp__<server>__<tool>` token in a skill body is "usage"; `metainfo.requires.mcp` (a list of server names) plus the org `allowlists.mcp_servers` are "declaration".
+Cross-checks MCP tool usage against declared servers, and structurally scans MCP server commands. An `mcp__<server>__<tool>` token in a skill body is "usage"; `metadata.sgt-requires-mcp` (a comma-separated string), legacy `metainfo.requires.mcp`, and the org `allowlists.mcp_servers` are declarations.
 
 **False-positive control (MCP001 is high/floor — a *floor* rule's severity
 cannot be downgraded and it cannot be inline-suppressed; full definition in

@@ -12,6 +12,40 @@ Every flag, default, choice, and exit code below is verified against the argpars
 
 ---
 
+## `sgt check` — inspect one skill
+
+Run `python3 scripts/sgt.py check /path/to/skill` without installing into the target.
+The path may name the skill directory or its `SKILL.md`.
+The command reports the file SHA-256, toolkit policy findings, and format validation separately.
+It invokes `skills-ref validate` only when `skills-ref` is on PATH.
+It does not download or install the validator.
+
+| Flag | Values / Default | What it does |
+|---|---|---|
+| `--format` | `text`, `json`, or `sarif`, default `text` | Select output format. |
+| `--fail-on` | `none`, `any`, `low`, `medium`, `high`; default `none` | Select the policy severity that produces exit 1. |
+| `--require-standard` | flag | Return exit 2 when `skills-ref` is unavailable. |
+| `--cisco` | flag | Run Cisco `skill-scanner` 2.3.2 with its default analyzers. |
+
+Exit 1 signals invalid standard format or policy findings at the selected threshold.
+Exit 2 signals an invalid path, validator failure, or a required missing validator.
+Without `--require-standard`, a missing validator is reported as `not_checked`.
+When requested, a missing or failing Cisco scanner returns exit 2.
+The adapter rejects unverified scanner versions and incomplete scanner reports.
+Cisco findings remain separate from toolkit findings and do not affect `--fail-on`.
+Inspect the scanner's own report and policy before using its verdict in CI.
+SGT does not activate Cisco's optional LLM, VirusTotal, OSV, or behavioral analyzers.
+SARIF contains toolkit findings and external-check statuses, not external findings.
+Use JSON to retain the full Cisco report.
+
+## `sgt migrate-metadata` — migrate one legacy skill
+
+Run `python3 scripts/sgt.py migrate-metadata /path/to/skill` to preview a diff.
+Pass `--apply` to write the change and create `SKILL.md.sgt-backup` beside the source.
+The command refuses an existing backup and does not overwrite it.
+The command refuses unknown legacy fields, existing `metadata`, CRLF input, and comments inside the legacy block.
+Merge unsupported cases manually so no user data is discarded.
+
 ## `agent_audit.py` — the engine
 
 ```bash

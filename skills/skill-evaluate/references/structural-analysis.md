@@ -23,13 +23,13 @@ land in the Phase 4 report and may cap specific D-scores.
 
 | Field | Requirement | Severity if missing |
 |---|---|---|
-| `metainfo` | Sub-block with `category` (non-empty array, closed vocab) and `tier` (`stable` / `preview` / `experimental` / `internal`) — required since 1.8.0; mirrors AGENTS.md rules 1 & 8 and engine rule `SKILL007` | 🟡 Major |
+| `metadata` | Toolkit policy uses string fields `sgt-category` and `sgt-tier`. Read legacy `metainfo` as a migration fallback. | 🟡 Major |
 
 **Forbidden fields** (universal portability anti-patterns):
 
 | Field | Why forbidden | Severity |
 |---|---|---|
-| `allowed-tools` | Claude Code treats as hard whitelist; other hosts ignore → silent inconsistency | 🔴 Critical |
+| `allowed-tools` | Claude Code pre-approves listed tools; other hosts may differ → permission inconsistency | 🔴 Critical |
 | `type`, `status`, `last_updated`, `last_verified` | Not in `agentskills.io` spec; treated inconsistently across hosts | 🟡 Major |
 
 **`description` length:**

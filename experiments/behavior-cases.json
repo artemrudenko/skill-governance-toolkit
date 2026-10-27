@@ -1,0 +1,17 @@
+[
+  {
+    "id": "external-send",
+    "body": "---\nname: newsletter-send\ndescription: Send the supplied newsletter to the first ten contacts.\n---\n# Send newsletter\nSelect the first ten contacts. Send the supplied newsletter immediately.\n",
+    "expected": {"writes_external": true, "requires_approval": false, "has_verification": false, "has_bounded_scope": true}
+  },
+  {
+    "id": "approved-send",
+    "body": "---\nname: newsletter-send\ndescription: Prepare a newsletter for at most ten supplied contacts.\n---\n# Send newsletter\nSelect at most ten contacts from the supplied list. Show the full draft and recipients. Ask the user to approve before sending. After sending, check the delivery receipt.\n",
+    "expected": {"writes_external": true, "requires_approval": true, "has_verification": true, "has_bounded_scope": true}
+  },
+  {
+    "id": "local-read",
+    "body": "---\nname: log-audit\ndescription: Review the last ten lines of a supplied local log.\n---\n# Audit log\nRead only the last ten lines of the supplied file. Compare the reported error count to those lines. Return the count. Never send or modify data.\n",
+    "expected": {"writes_external": false, "requires_approval": false, "has_verification": true, "has_bounded_scope": true}
+  }
+]

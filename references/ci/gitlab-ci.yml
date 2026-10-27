@@ -91,6 +91,8 @@ variables:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "skills/**/*"
+        - ".github/skills/**/*"
+        - ".agents/skills/**/*"
         - "agents/**/*"
         - "commands/**/*"
         - "prompts/**/*"

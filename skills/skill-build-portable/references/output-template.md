@@ -33,7 +33,7 @@ Runtimes:   {TARGET_RUNTIMES}
 + # (removed — non-portable; tool restrictions documented in body)
 - type: skill
 - status: active
-+ compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
++ compatibility: "Intended targets: Claude Code · GitHub Copilot · Cursor · Codex · Gemini; runtime behavior unverified"
 + license: MIT
 
   description: |

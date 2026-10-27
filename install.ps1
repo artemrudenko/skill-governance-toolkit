@@ -234,8 +234,8 @@ $filterArgs = @('--index', $indexPath, '--tier', $tierFilter)
 if (-not [string]::IsNullOrWhiteSpace($Category)) { $filterArgs += @('--category', $Category) }
 if (-not [string]::IsNullOrWhiteSpace($Skill))    { $filterArgs += @('--skill',    $Skill) }
 
-$selectedSkills = (& $pythonCmd (Join-Path $RepoRoot 'scripts\filter_skills.py') @filterArgs) `
-    | Where-Object { $_ -and $_.Trim() }
+$selectedSkills = @((& $pythonCmd (Join-Path $RepoRoot 'scripts\filter_skills.py') @filterArgs) `
+    | Where-Object { $_ -and $_.Trim() })
 if (-not $selectedSkills -or $selectedSkills.Count -eq 0) {
     throw "No skills match the filter (Category=$Category Tier=$tierFilter Skill=$Skill). Inspect: $pythonCmd scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories"
 }
@@ -367,32 +367,9 @@ if ($scopeChoice -eq '2' -and -not $selfInstall) {
 function Copy-FilteredSkills {
     param([string]$Dest, [string]$Mode)
 
-    # Refresh each selected toolkit skill by wiping ONLY its own subdir, never
-    # the whole skills/ dir. In global scope $Dest is ~/.<host>/skills which may
-    # also hold the user's personal skills — a wholesale wipe (esp. on the
-    # auto-detected `upgrade` mode) would silently delete them (H3). Per-skill
-    # refresh mirrors bash's rsync-per-skill-subdir semantics.
-    New-Item -ItemType Directory -Force -Path $Dest | Out-Null
-    foreach ($s in $selectedSkills) {
-        $srcSkill  = Join-Path $RepoRoot ('skills\' + $s)
-        $destSkill = Join-Path $Dest $s
-        if (Test-Path $srcSkill) {
-            if ($Mode -in 'force','upgrade' -and (Test-Path $destSkill)) {
-                Remove-Item -Recurse -Force $destSkill
-            }
-            Copy-Item -Recurse -Force -Path $srcSkill -Destination $Dest
-        } else {
-            Write-Warning "filter selected '$s' but skills\$s missing on disk — skipped"
-        }
-    }
-    # Write filtered INDEX.jsonl using filter_skills.py
-    $filteredIndexPath = Join-Path $Dest 'INDEX.jsonl'
-    $filteredArgs = $filterArgs + '--filtered-index'
-    $filtered = & $pythonCmd (Join-Path $RepoRoot 'scripts\filter_skills.py') @filteredArgs
-    Set-Content -Path $filteredIndexPath -Value $filtered -Encoding UTF8
-    # Strip junk
-    Get-ChildItem -Path $Dest -Recurse -Force -Include '.DS_Store','__pycache__','.skill-state' `
-        -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+    # Preserve unowned or locally edited skills and indexes on every upgrade.
+    & $pythonCmd (Join-Path $RepoRoot 'scripts/managed_skills.py') install $Dest --index @selectedSkills
+    if ($LASTEXITCODE -ne 0) { throw "Managed skill installation failed" }
 }
 
 # Mirror of _copy_runtime_scripts() in scripts/install.sh — copy ONLY the
@@ -534,6 +511,12 @@ function Install-Host {
                 Write-Host "[ok] Copilot (global): $dest\copilot-instructions.md"
             } else {
                 Write-Host "[ok] Copilot: managed via marker block in project root .github/"
+            }
+            $skillDest = Join-Path $dest 'skills'
+            if ($ScopePrefix -eq $HOME) { $skillDest = Join-Path $ScopePrefix '.copilot/skills' }
+            if ($selectedSkills.Count -gt 0) {
+                & $pythonCmd (Join-Path $RepoRoot 'scripts/managed_skills.py') install $skillDest @selectedSkills
+                if ($LASTEXITCODE -ne 0) { throw "Copilot skill installation failed" }
             }
         }
         'codex' {

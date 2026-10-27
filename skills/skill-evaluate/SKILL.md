@@ -9,11 +9,11 @@ description: |
   Output: dimension table, top-3 improvements, optional rewritten version, entry in `out/scores/index.jsonl`.
 compatibility: "Claude Code · GitHub Copilot · Cursor v2.2+ · OpenAI Codex CLI · Google Gemini CLI"
 license: MIT
-metainfo:
-  category: [governance]
-  tier: stable
-  owner: artsiom
-  added: "2026-05-23"
+metadata:
+  sgt-category: "governance"
+  sgt-tier: "stable"
+  sgt-owner: "artsiom"
+  sgt-added: "2026-05-23"
 ---
 
 # Skill Evaluate
@@ -42,7 +42,7 @@ metainfo:
 - Library-wide quality scan — use `library-audit` instead (this skill scores ONE skill at a time).
 
 **Don't skip when:**
-- «It's a small skill, quality is obvious» — D1–D9 scoring is objective and surfaces blind spots.
+- «It's a small skill, quality is obvious» — D1–D9 scoring can surface blind spots; model judgments may vary.
 - «The description looks OK» — sweet-spot length is measurable, not visual.
 
 ## Predecessor
@@ -97,7 +97,7 @@ metainfo:
 
 Score each dimension independently. Assign the **lowest score whose description fully applies** — do not round up. Record a one-sentence finding per dimension.
 
-> **Nine dimensions total (D1–D9).** D8 — Discoverability — was added based on the empirical finding that activation rate with a well-formed description is ~90% vs ~20% with a vague one. D9 — Safety/Risk Awareness — was added because pretty-but-unsafe skills (well-structured Jira-ticket creators with no idempotency, no rollback, no prompt-injection awareness) were scoring 32/40 while being production-hazardous. D9 evaluates the design's awareness of six safety sub-concerns (blast radius, prompt injection, sensitive data, authz, rollback, idempotency). Read-only skills get a D9 floor of 4 — see the rubric.
+> **Nine dimensions total (D1–D9).** D8 — Discoverability — checks whether the description states the purpose and triggers. D9 — Safety/Risk Awareness — was added because pretty-but-unsafe skills (well-structured Jira-ticket creators with no idempotency, no rollback, no prompt-injection awareness) were scoring 32/40 while being production-hazardous. D9 evaluates the design's awareness of six safety sub-concerns (blast radius, prompt injection, sensitive data, authz, rollback, idempotency). Read-only skills get a D9 floor of 4 — see the rubric.
 
 ---
 

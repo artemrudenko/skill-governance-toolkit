@@ -47,6 +47,33 @@ def parse_frontmatter(text: str) -> dict[str, Any] | None:
     return _parse_yaml_lines(body.splitlines())
 
 
+def governance_metadata(frontmatter: dict[str, Any]) -> dict[str, Any]:
+    """Normalize standard string metadata and the legacy metainfo mapping.
+
+    Standard fields override legacy fields individually during migration.
+    The returned shape preserves the existing index and installer contract.
+    """
+    legacy = frontmatter.get("metainfo")
+    result = dict(legacy) if isinstance(legacy, dict) else {}
+    standard = frontmatter.get("metadata")
+    if not isinstance(standard, dict):
+        return result
+    for key in ("tier", "owner", "added", "deprecated", "replaced_by", "language"):
+        value = standard.get("sgt-" + key.replace("_", "-"))
+        if isinstance(value, str):
+            result[key] = value
+    categories = standard.get("sgt-category")
+    if isinstance(categories, str):
+        result["category"] = [part.strip() for part in categories.split(",") if part.strip()]
+    servers = standard.get("sgt-requires-mcp")
+    if isinstance(servers, str):
+        old_requires = result.get("requires")
+        requires = dict(old_requires) if isinstance(old_requires, dict) else {}
+        requires["mcp"] = [part.strip() for part in servers.split(",") if part.strip()]
+        result["requires"] = requires
+    return result
+
+
 def _parse_yaml_lines(lines: list[str]) -> dict[str, Any]:
     """Tiny YAML subset parser. Handles: key:value, key:|block, list-items, nested 2-space indent."""
     result: dict[str, Any] = {}
@@ -250,8 +277,9 @@ def build_index(skills_dir: Path) -> list[dict[str, Any]]:
         # Orphan skills (no metainfo) are still indexed so the installer can see them,
         # but get a sentinel `tier="unknown"` so the default --tier filter drops them
         # rather than silently installing skills with unclear stability.
-        if "metainfo" in fm and isinstance(fm["metainfo"], dict):
-            entry["metainfo"] = fm["metainfo"]
+        governance = governance_metadata(fm)
+        if governance:
+            entry["metainfo"] = governance
             # `category: governance` (scalar) is accepted by the audit engine;
             # normalize to a list here so every INDEX consumer (filter_skills,
             # doctor, install.sh) sees one shape.

@@ -209,7 +209,9 @@ The shape every skill must have, in miniature:
 ---
 name: skill-example
 description: One specific workflow. Use when "trigger one", "trigger two".
-metainfo: { category: governance, tier: preview }  # + compatibility, license
+metadata:
+  sgt-category: "governance"
+  sgt-tier: "preview"  # + compatibility, license
 ---
 > **Skill type:** Detect-only   <!-- required declaration (SKILL021) -->
 ```
@@ -373,7 +375,7 @@ content security issues, in these rule families:
 - `REF001`–`REF004` / `SCR001`–`SCR003` — unsafe references and the content of
   referenced scripts (exfiltration, dangerous shell, secrets).
 - `MCP001`/`MCP002` — `mcp__server__*` usage not declared in
-  `metainfo.requires.mcp` (and vice versa).
+  `metadata.sgt-requires-mcp` (or legacy `metainfo.requires.mcp`) (and vice versa).
 - `HOOK001`/`HOOK002` — hook commands running dangerous shell or leaking secrets.
 
 Full catalog with triggering examples and clean fixes:
@@ -553,7 +555,7 @@ It focuses on TypeScript and reports:
 Rules:
 
 - Sub-agents do not dispatch other sub-agents.
-- Gemini has no sub-agent support, so any optional sub-agent path needs a sequential fallback.
+- Host sub-agent support varies, so any optional sub-agent path needs a sequential fallback.
 - Bash is limited to read-only inspection commands.
 
 ---

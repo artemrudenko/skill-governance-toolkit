@@ -42,10 +42,8 @@ jobs:
 
   windows-parity:
     name: install.ps1 behavioral parity (pwsh)
-    # GitHub's ubuntu image ships pwsh, so the install.ps1 tests EXECUTE here
-    # (syntax parse + real non-dry-run install) instead of self-skipping. This
-    # closes the gap where the Windows installer's copy/marker/guard path — which
-    # can delete user skills — never ran in CI.
+    # Ubuntu ships pwsh. Tests exercise Unix delegation and force the native
+    # branch in an isolated fixture. The Windows job below checks the real OS.
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -61,6 +59,20 @@ jobs:
 
       - name: install.ps1 syntax + behavioral install tests
         run: python3 scripts/test_install.py
+
+  windows-native:
+    name: PowerShell install on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check native installer for one skill and all hosts
+        run: >-
+          python scripts/test_install.py
+          InstallBehaviorTests.test_powershell_native_branch_single_skill
+          InstallBehaviorTests.test_powershell_native_branch_all_hosts_single_skill
 
   docker:
     name: Docker MCP smoke test

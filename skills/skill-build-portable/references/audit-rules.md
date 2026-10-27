@@ -17,7 +17,7 @@ Severity legend: 🔴 blocker (must apply) · 🟡 warning (recommended) · 🟢
 | **F4** Claude-only `hooks:`, `model:`, `effort:`, `context: fork`, `disable-model-invocation`, `user-invocable` | grep frontmatter | 🟡 if `KEEP_CLAUDE_FALLBACK=false` else preserved as comment | Remove or comment-out |
 | **F5** Missing `description:` | grep frontmatter | 🔴 | STOP — cannot generate without source description |
 | **F6** Description < 80 or > 1024 chars | char count | 🟡 | Flag for user attention; do not auto-rewrite |
-| **F7** Missing `compatibility:` field | grep frontmatter | 🟡 | Add: `compatibility: "{TARGET_RUNTIMES list}"` |
+| **F7** Missing `compatibility:` field | grep frontmatter | 🟡 | Add intended targets with an explicit unverified label; preserve existing claims |
 
 ## Body audit (B-rules)
 
@@ -29,7 +29,7 @@ Severity legend: 🔴 blocker (must apply) · 🟡 warning (recommended) · 🟢
 | **B4** Tool-specific command syntax baked into body | grep `claude-cli`, `gh copilot`, `codex `, etc. | 🟡 | Generalize to «invoke this skill» or document each command per runtime |
 | **B5** Per-skill `rules/{tool}.md` directory exists | `ls {skill_dir}/rules/` | 🟡 | Remove subdirectory; merge tool mappings into repo-level `references/{tool}-tools.md` |
 | **B6** Body references `Task` / sub-agent dispatch without sequential fallback | grep body | 🟡 | Add optional-dispatch language plus a sequential fallback with the same output schema |
-| **B7** Body claims «works everywhere» without supporting evidence | grep for portability claims | 🟡 | Replace with measured `compatibility:` field |
+| **B7** Body claims «works everywhere» without supporting evidence | grep for portability claims | 🟡 | Replace with verified support or clearly labeled intended targets |
 
 ## Structure audit (S-rules)
 

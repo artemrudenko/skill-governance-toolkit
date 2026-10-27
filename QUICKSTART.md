@@ -70,6 +70,17 @@ Then just ask your agent a trigger phrase: «is there a skill for evaluating pro
 
 ## Common tasks
 
+Check an external skill without installing files into its project:
+
+```bash
+python3 ~/tools/sgt/scripts/sgt.py check /path/to/skill
+```
+
+The report separates toolkit policy from Agent Skills format validation.
+Install `skills-ref` separately to run the official format validator.
+Without it, the command reports `not_checked`; `--require-standard` returns exit 2.
+Use `--format json` for machine-readable results and `--fail-on high` for policy gating.
+
 | Goal | Command |
 |---|---|
 | Guided install + verify | `sgt init` |

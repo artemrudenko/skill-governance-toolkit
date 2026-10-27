@@ -13,6 +13,45 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [Unreleased]
+
+---
+
+## [1.21.0] — 2026-10-27 — portable skills and safer installs
+
+### Changed
+- Toolkit skills use Agent Skills `metadata` with string-valued `sgt-*` keys.
+  The index and auditor continue to read legacy `metainfo` fields.
+  Standard metadata wins per field when both formats appear.
+- Clarify host-specific permission effects and Gemini sub-agent availability.
+
+### Added
+- `sgt check` separates optional `skills-ref` validation from toolkit policy.
+  It can run the separately installed Cisco scanner and export toolkit findings as SARIF.
+- `sgt migrate-metadata` previews supported legacy migrations and creates a backup before writing.
+- Add synthetic security fixtures and paired behavior experiment inputs.
+- Install Copilot skills into documented project and personal skill paths.
+  Preserve pre-existing or modified skills in those paths.
+- Track installed skill contents and indexes before replacing or removing them.
+  Preserve unowned or locally changed skills and indexes.
+
+### Fixed
+- Preserve a one-item skill selection as an array in the native PowerShell installer.
+  This prevents the installer from passing individual letters as skill names.
+- Classify compatible comparison differences separately instead of treating them as conflicts.
+- Accept explicit conflict choices in comparisons and define the corporate source as a local directory.
+- Keep existing compatibility claims during portability previews unless evidence supports a change.
+- Direct comparison and conversion skills to treat source instructions as data and preserve existing outputs.
+
+### Upgrade notes
+- Existing skills with `metainfo` remain readable by toolkit tools.
+  The upstream Agent Skills validator rejects that legacy top-level field.
+  Migrate legacy data to the documented string-valued `metadata.sgt-*` fields.
+- Older installations lack ownership markers for skills and indexes.
+  Automatic upgrade and uninstall leave those paths in place until the owner reviews them.
+
+---
+
 ## [1.20.0] — 2026-06-10 — consumer-correct installs + supply-chain pins
 
 Fixes the HIGH and MEDIUM findings of the 1.19.0 pre-ship multi-perspective

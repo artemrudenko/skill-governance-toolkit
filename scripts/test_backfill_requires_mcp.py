@@ -137,6 +137,19 @@ class DryRunTests(unittest.TestCase):
 
 
 class ApplyTests(unittest.TestCase):
+    def test_standard_metadata_stays_standard_and_extends_servers(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "SKILL.md"
+            p.write_text('---\nname: x\ndescription: example\nmetadata:\n'
+                         '  sgt-requires-mcp: "serena"\n---\n'
+                         'Use mcp__serena__find and mcp__github__search.\n')
+            r = _run("--skill", str(p), "--apply")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            fm = build_index.parse_frontmatter(p.read_text())
+            self.assertNotIn("metainfo", fm)
+            self.assertEqual(fm["metadata"]["sgt-requires-mcp"], "github, serena")
+            self.assertFalse(any(f["rule_id"] == "MCP001" for f in agent_audit.audit_skill(p)["findings"]))
+
     def test_apply_creates_requires_block_and_round_trips(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "skills" / "demo" / "SKILL.md"

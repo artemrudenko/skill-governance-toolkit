@@ -20,7 +20,12 @@ Read both skills fully. For each logical section found in either skill, classify
 - **SHARED** — same intent in both skills (wording may differ, semantics match).
 - **CORPORATE_ONLY** — present in corporate, absent in local.
 - **LOCAL_ONLY** — present in local, absent in corporate.
-- **CONFLICT** — both have the section but with contradictory instructions.
+- **CONFLICT** — instructions cannot both be satisfied in the same situation.
+
+Do not classify different instructions as a conflict merely because they appear
+in the same section or numbered step. If both can be followed, classify each
+as LOCAL_ONLY or CORPORATE_ONLY. For example, "report missing information"
+and "add source links" are compatible additions, not a conflict.
 
 ## How to detect intent equivalence
 
@@ -40,7 +45,7 @@ Two instructions are CONFLICT (not SHARED) when:
 | Section          | Status           | Detail                                  |
 |---|---|---|
 | Purpose          | SHARED           | Same intent; local is more concise      |
-| Required Inputs  | CONFLICT         | Corporate requires FORMAT field; local does not |
+| Required Inputs  | CORPORATE_ONLY   | Corporate requires FORMAT field; local is silent |
 | Phase 1          | SHARED           | Identical logic                         |
 | Phase 2 Step 4   | CORPORATE_ONLY   | Corporate checks for duplicates         |
 | Phase 3          | LOCAL_ONLY       | Local adds PR-coverage analysis         |

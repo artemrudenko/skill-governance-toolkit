@@ -236,9 +236,10 @@ installs add unnecessary token cost on activation. Use these flags to scope the 
 ./scripts/install.sh --claude --project --interactive
 ```
 
-Each install dir gets a **filtered `INDEX.jsonl`** listing exactly the installed
-subset, so `skill-find` in the target environment never reports skills that aren't
-actually there.
+Managed indexes list the installed toolkit subset. A shared library can also
+contain other skills, so `skill-find` checks files missing from its index.
+The Copilot skill directory has no installer-created index; the installer preserves
+any existing index and `skill-find` scans the directory when needed.
 
 **Closed-vocab `--category` values:** `code-review` · `docs` · `testing` ·
 `governance` · `discovery` · `research` · `delivery`. Adding a new category requires

@@ -17,6 +17,14 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.21.2] — 2026-10-27 — include unindexed skills in discovery
+
+### Fixed
+- Include unindexed skills in local discovery, even when a managed index exists.
+  Avoid suggesting an unsafe index overwrite in shared libraries.
+
+---
+
 ## [1.21.1] — 2026-10-27 — repair GitHub consumer workflow
 
 ### Fixed

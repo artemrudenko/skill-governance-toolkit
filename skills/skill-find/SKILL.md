@@ -209,5 +209,3 @@ Three worked examples (strong match, partial → skill-compare, no-match → sug
 - ✅ Idempotent.
 - ✅ Fast path: prefer `INDEX.jsonl` over directory scanning.
 - ✅ **Clarification policy:** permitted ONLY in Phase 0 to elicit the `NEED` input when not provided. No other phase may prompt the user.
-
-Synthetic test character: a‮b

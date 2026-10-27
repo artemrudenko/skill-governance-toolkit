@@ -66,7 +66,7 @@ env:
   # Toolkit source. Pin SGT_REF to an IMMUTABLE 40-char commit SHA (not a tag) so
   # a re-tagged release cannot silently change gate behaviour. Replace both.
   SGT_REPO: "https://github.com/artemrudenko/skill-governance-toolkit.git"
-  SGT_REF: "59c07d2187bafb739f00e08b43732ad30ea42679"
+  SGT_REF: "0000000000000000000000000000000000000000"
 
 jobs:
   skill-gate:

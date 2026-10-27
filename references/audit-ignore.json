@@ -1,1 +1,11 @@
-{ "version": "1.0", "ignores": [] }
+{
+  "version": "1.0",
+  "ignores": [
+    {
+      "rule_id": "SEC003",
+      "path": "skills/example/SKILL.md",
+      "reason": "Synthetic pull request test",
+      "expires": "2026-11-10"
+    }
+  ]
+}

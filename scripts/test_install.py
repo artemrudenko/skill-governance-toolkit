@@ -51,11 +51,14 @@ class InstallBehaviorTests(unittest.TestCase):
             self.skipTest("pwsh not installed")
         with tempfile.TemporaryDirectory() as tmp:
             env = {**os.environ, "SGT_TEST_TARGET": tmp, "SGT_TEST_INSTALLER": str(ROOT / "install.ps1")}
+            env.update({"PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0", "LC_ALL": "C"})
+            env.pop("PYTHONIOENCODING", None)
             prefix = "" if os.name == "nt" else "Set-Variable IsWindows -Value $true -Force; "
             command = prefix + "& $env:SGT_TEST_INSTALLER -YesDefault -TargetProject $env:SGT_TEST_TARGET -Skill skill-find"
             result = subprocess.run(["pwsh", "-NoProfile", "-Command", command], cwd=ROOT,
                                     env=env, text=True, capture_output=True, check=False)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertNotIn("consumer AGENTS.md generation failed", result.stdout + result.stderr)
             target = Path(tmp)
             self.assertTrue((target / "skills" / "skill-find" / "SKILL.md").is_file())
             self.assertTrue((target / ".claude" / "skills" / "skill-find" / "SKILL.md").is_file())

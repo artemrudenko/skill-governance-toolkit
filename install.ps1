@@ -195,7 +195,7 @@ if ($Interactive) {
         throw "-Interactive requires an interactive PowerShell session."
     }
     Write-Host "── Interactive: pick categories ──"
-    $catLines = & $pythonCmd (Join-Path $RepoRoot 'scripts\filter_skills.py') --index $indexPath --list-categories
+    $catLines = & $pythonCmd -X utf8 (Join-Path $RepoRoot 'scripts\filter_skills.py') --index $indexPath --list-categories
     $categories = @()
     $i = 1
     foreach ($line in $catLines) {
@@ -234,7 +234,7 @@ $filterArgs = @('--index', $indexPath, '--tier', $tierFilter)
 if (-not [string]::IsNullOrWhiteSpace($Category)) { $filterArgs += @('--category', $Category) }
 if (-not [string]::IsNullOrWhiteSpace($Skill))    { $filterArgs += @('--skill',    $Skill) }
 
-$selectedSkills = @((& $pythonCmd (Join-Path $RepoRoot 'scripts\filter_skills.py') @filterArgs) `
+$selectedSkills = @((& $pythonCmd -X utf8 (Join-Path $RepoRoot 'scripts\filter_skills.py') @filterArgs) `
     | Where-Object { $_ -and $_.Trim() })
 if (-not $selectedSkills -or $selectedSkills.Count -eq 0) {
     throw "No skills match the filter (Category=$Category Tier=$tierFilter Skill=$Skill). Inspect: $pythonCmd scripts/filter_skills.py --index skills/INDEX.jsonl --list-categories"
@@ -291,7 +291,7 @@ function Upsert-MarkerBlock {
         Copy-Item $Src $Dest -Force
         return
     }
-    & $pythonCmd $markerScript upsert --file $Dest --src $Src
+    & $pythonCmd -X utf8 $markerScript upsert --file $Dest --src $Src
 }
 
 # Consumer AGENTS.md: installs must NOT carry the toolkit-repo prose (the
@@ -308,7 +308,7 @@ function Resolve-AgentsSource {
     }
     $tmpFile = [System.IO.Path]::GetTempFileName()
     $skillCsv = ($SelectedSkills -join ',')
-    $output = & $pythonCmd $genScript (Join-Path $RepoRoot 'AGENTS.md') $skillCsv
+    $output = & $pythonCmd -X utf8 $genScript (Join-Path $RepoRoot 'AGENTS.md') $skillCsv
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "consumer AGENTS.md generation failed — using canonical AGENTS.md"
         return (Join-Path $RepoRoot 'AGENTS.md')
@@ -368,7 +368,7 @@ function Copy-FilteredSkills {
     param([string]$Dest, [string]$Mode)
 
     # Preserve unowned or locally edited skills and indexes on every upgrade.
-    & $pythonCmd (Join-Path $RepoRoot 'scripts/managed_skills.py') install $Dest --index @selectedSkills
+    & $pythonCmd -X utf8 (Join-Path $RepoRoot 'scripts/managed_skills.py') install $Dest --index @selectedSkills
     if ($LASTEXITCODE -ne 0) { throw "Managed skill installation failed" }
 }
 
@@ -515,7 +515,7 @@ function Install-Host {
             $skillDest = Join-Path $dest 'skills'
             if ($ScopePrefix -eq $HOME) { $skillDest = Join-Path $ScopePrefix '.copilot/skills' }
             if ($selectedSkills.Count -gt 0) {
-                & $pythonCmd (Join-Path $RepoRoot 'scripts/managed_skills.py') install $skillDest @selectedSkills
+                & $pythonCmd -X utf8 (Join-Path $RepoRoot 'scripts/managed_skills.py') install $skillDest @selectedSkills
                 if ($LASTEXITCODE -ne 0) { throw "Copilot skill installation failed" }
             }
         }

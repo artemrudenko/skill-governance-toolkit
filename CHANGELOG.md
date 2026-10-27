@@ -38,6 +38,7 @@ start blocking on the next `SGT_REF` bump (see
 ### Fixed
 - Preserve a one-item skill selection as an array in the native PowerShell installer.
   This prevents the installer from passing individual letters as skill names.
+- Run Python installer helpers in UTF-8 mode on Windows, including non-UTF-8 system locales.
 - Classify compatible comparison differences separately instead of treating them as conflicts.
 - Accept explicit conflict choices in comparisons and define the corporate source as a local directory.
 - Keep existing compatibility claims during portability previews unless evidence supports a change.

@@ -15,6 +15,11 @@ start blocking on the next `SGT_REF` bump (see
 
 ## [Unreleased]
 
+### Fixed
+- Initialize the GitHub consumer template's toolkit directory on the runner.
+  The previous workflow-level runner context prevented GitHub from starting the workflow.
+- Skip advisory scans and artifacts when the pinned toolkit or PR base could not be verified.
+
 ### Changed
 - Update GitHub Actions to Node.js 24-based versions.
   Self-hosted GitHub Actions runners require version 2.327.1 or newer.

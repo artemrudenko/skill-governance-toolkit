@@ -329,6 +329,18 @@ class CiInitTests(unittest.TestCase):
             body = wf.read_text(encoding="utf-8")
             self.assertIn(sha, body)
             self.assertNotIn("REPLACE-WITH-40-CHAR-COMMIT-SHA", body)
+            workflow_env = body.split("\njobs:", 1)[0]
+            self.assertNotIn("${{ runner.", workflow_env,
+                             "runner context is unavailable in workflow-level env")
+            self.assertIn('SGT_DIR=$RUNNER_TEMP/sgt" >> "$GITHUB_ENV"', body)
+            self.assertLess(body.index('SGT_DIR=$RUNNER_TEMP/sgt'),
+                            body.index('git clone "$SGT_REPO" "$SGT_DIR"'))
+            for section in ("Annotate every finding on the PR diff (advisory)",
+                            "Upload findings artifact"):
+                step = body.split(f"- name: {section}", 1)[1].split("\n      - name:", 1)[0]
+                self.assertIn("steps.toolkit.outcome == 'success'", step)
+                self.assertIn("steps.base.outcome == 'success'", step)
+            self.assertIn("steps.report.outputs.written == 'true'", body)
             # Setup guidance must mention the token/branch-protection steps.
             self.assertRegex(result.stdout, r"(?i)branch protection|CODEOWNERS|secret")
 

@@ -15,6 +15,10 @@ start blocking on the next `SGT_REF` bump (see
 
 ## [Unreleased]
 
+---
+
+## [1.21.1] — 2026-10-27 — repair GitHub consumer workflow
+
 ### Fixed
 - Initialize the GitHub consumer template's toolkit directory on the runner.
   The previous workflow-level runner context prevented GitHub from starting the workflow.

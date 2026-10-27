@@ -56,8 +56,8 @@ python3 ~/tools/sgt/scripts/sgt.py init        # guided install + verify; undo w
 Pin a release for reproducibility:
 ```bash
 /plugin marketplace add {your-org}/skill-governance-toolkit   # Claude — once per machine
-/plugin install skill-governance-toolkit@1.21.0               # Claude
-gemini extensions install ...@1.21.0                           # Gemini
+/plugin install skill-governance-toolkit@1.21.1               # Claude
+gemini extensions install ...@1.21.1                           # Gemini
 ```
 
 A project install adds top-level `skills/`, `agents/`, `references/`, `scripts/`,

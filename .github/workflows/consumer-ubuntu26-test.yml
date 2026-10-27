@@ -1,0 +1,207 @@
+# Skill governance gate for a GitHub-hosted AI Tools Marketplace repository.
+#
+# Copy this file into the CONSUMING repo as `.github/workflows/skill-gate.yml`.
+#
+# NOTE: this is the *consumer* template — it audits ONLY the skills/agents a pull
+# request changes (`--changed-only`), so pre-existing legacy assets never block an
+# unrelated PR. (The toolkit's OWN `.github/workflows/ci.yml` deliberately audits
+# the whole tree — that is self-CI for the toolkit, not a consumer gate.)
+#
+# It mirrors the GitLab template (`references/ci/gitlab-ci.yml`): same engine,
+# same three-dot diff, same immutable-SHA pin. Results surface inline on the PR
+# diff as GitHub annotations, and the full JSON is uploaded as an artifact.
+#
+# The block step uses `--fail-on-new high`: it blocks only on high-severity
+# findings the PR INTRODUCES versus its base, never on pre-existing legacy debt
+# in a file the PR happens to touch — so adoption is not blocked by old findings.
+#
+# Kill-switch: set the org/repo Actions variable SGT_FAIL_MODE=advisory to
+# downgrade the gate to non-blocking fleet-wide WITHOUT editing this pinned
+# template. It is passed into the block step's env below; the engine honors it
+# automatically (exit 0 even on a blocking finding).
+#
+# Action pinning: the `actions/*` steps use floating major tags (@v7), not
+# 40-char SHAs. The immutable-SHA rule this template enforces targets SGT_REF
+# (the toolkit gate-logic source). These first-party GitHub-owned helper actions
+# are an accepted residual risk; pin them to SHAs too if your org requires it.
+
+name: skill-governance-gate
+
+on:
+  pull_request:
+    # Keep in sync with the engine's governed asset types (agent_audit.py
+    # asset_type). A path the engine governs but CI ignores is a silent gap.
+    paths:
+      - "skills/**"
+      - ".github/skills/**"
+      - ".agents/skills/**"
+      - "agents/**"
+      - "commands/**"
+      - "prompts/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "GEMINI.md"
+      - ".github/copilot-instructions.md"
+      - "gemini-extension.json"
+      - "**/plugin.json"
+      - "**/.mcp.json"
+      - "**/mcp.json"
+      - ".claude/settings.json"
+      - ".claude/settings.local.json"
+      - "hooks/**"
+      - "references/agent-audit-rules.json"
+      # Suppression control-plane: a suppression-only PR must still get a gate
+      # verdict (otherwise it silently weakens the gate ungated).
+      - "references/audit-ignore.json"
+      # Config overlays live in the PINNED TOOLKIT MIRROR, not the audited repo —
+      # a consumer-side audit-config.*.json is IGNORED by the engine. Triggered
+      # here only so the "config overlay is ignored" warning step can fire and
+      # tell the author to move it into the mirror.
+      - "references/audit-config.*.json"
+
+permissions:
+  contents: read
+
+env:
+  # Toolkit source. Pin SGT_REF to an IMMUTABLE 40-char commit SHA (not a tag) so
+  # a re-tagged release cannot silently change gate behaviour. Replace both.
+  SGT_REPO: "https://github.com/artemrudenko/skill-governance-toolkit.git"
+  SGT_REF: "59c07d2187bafb739f00e08b43732ad30ea42679"
+
+jobs:
+  skill-gate:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Set toolkit directory
+        run: echo "SGT_DIR=$RUNNER_TEMP/sgt" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7
+        with:
+          # Full history so the merge-base of the PR base is reachable for the
+          # three-dot diff. A shallow clone breaks --changed-only.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Fetch the pinned toolkit
+        id: toolkit
+        run: |
+          set -euo pipefail
+          git clone "$SGT_REPO" "$SGT_DIR"
+          git -C "$SGT_DIR" checkout -q "$SGT_REF"
+          test "$(git -C "$SGT_DIR" rev-parse HEAD)" = "$SGT_REF" \
+            || { echo "Toolkit SHA mismatch — expected $SGT_REF"; exit 1; }
+
+      - name: Ensure the PR base ref is present
+        id: base
+        # `origin/<base>` must resolve for the three-dot diff. checkout fetches
+        # the PR ref; fetch the base branch explicitly into a tracking ref.
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+
+      - name: Did this PR change the suppression file?
+        id: supp
+        # The expiring-soon early-warning below blocks ONLY suppression PRs, so the
+        # fleet is never gated on a third party's soon-to-expire entry. Compare the
+        # PR's three-dot diff against its base.
+        run: |
+          set -euo pipefail
+          if git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" \
+               | grep -qx "references/audit-ignore.json"; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Suppression hygiene — block on EXPIRED suppressions (every PR)
+        # An already-expired suppression means the floor finding it silenced has
+        # silently resurfaced and the gate is OFF for that rule/path right now; any
+        # merge inherits that hole, so every PR is blocked until it is renewed or
+        # removed. No --expiring-within here, so a merely soon-to-expire entry never
+        # blocks an unrelated PR. `.` is the audited consumer root, where
+        # audit-ignore.json lives (loaded via _load_ignore_doc, not $SGT_DIR — the
+        # pinned toolkit mirror holds only the catalog + overlays).
+        run: |
+          python3 "$SGT_DIR/scripts/agent_audit.py" list-suppressions --root .
+
+      - name: Suppression hygiene — block on EXPIRING-SOON (suppression PRs only)
+        # Early-warning (expires within 30 days). Blocks ONLY when this PR edits the
+        # suppression file: the author touching suppressions is the right owner to
+        # renew or remove them. Unrelated PRs are never blocked on someone else's
+        # soon-to-expire entry. For a proactive fleet-wide expiry sweep, run this
+        # same command on a `schedule:` trigger in a separate workflow.
+        if: steps.supp.outputs.changed == 'true'
+        run: |
+          python3 "$SGT_DIR/scripts/agent_audit.py" list-suppressions \
+            --root . --expiring-within 30
+
+      - name: Warn if the PR edits a consumer-side config overlay (no-op file)
+        # The engine loads audit-config overlays from the PINNED TOOLKIT MIRROR
+        # ($SGT_DIR), never from the audited repo. A `references/audit-config.*.json`
+        # committed here is silently ignored — the author may believe they tightened
+        # or loosened the gate when they changed nothing. Surface it loudly (PR
+        # annotation + step summary) but do NOT block: the file is inert, and the
+        # real gate verdict is the audit step below.
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" \
+                      | grep -E '^references/audit-config\..*\.json$' || true)
+          if [ -n "$changed" ]; then
+            for f in $changed; do
+              echo "::warning file=$f::This consumer-side audit-config overlay is IGNORED by the engine. Config overlays must live in the pinned toolkit mirror (SGT_REF), not in the audited repo. This file changes nothing about the gate."
+            done
+            {
+              echo "### ⚠️ Consumer audit-config overlay ignored"
+              echo "The engine reads config overlays only from the pinned toolkit mirror (\`SGT_REF\`), not from this repo. These files are inert here:"
+              for f in $changed; do echo "- \`$f\`"; done
+              echo ""
+              echo "Move the overlay into the toolkit mirror to change gate behaviour."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Block on newly introduced high-severity findings (changed assets only)
+        # SGT_FAIL_MODE=advisory (set as an org/repo Actions variable) downgrades
+        # this gate to non-blocking fleet-wide without editing the pinned template.
+        env:
+          SGT_FAIL_MODE: ${{ vars.SGT_FAIL_MODE }}
+        run: |
+          python3 "$SGT_DIR/scripts/agent_audit.py" audit-project . \
+            --changed-only --base "origin/${GITHUB_BASE_REF}" \
+            --profile release-ready --fail-on-new high --format text
+
+      - name: Annotate every finding on the PR diff (advisory)
+        id: report
+        if: always() && steps.toolkit.outcome == 'success' && steps.base.outcome == 'success'
+        run: |
+          set -euo pipefail
+          # The engine has a native `--format github` that emits GitHub workflow
+          # commands directly (with rule title= for richer inline annotations) —
+          # use it instead of re-deriving annotations from JSON, so the two output
+          # paths can never drift. `--fail-on none` keeps this advisory; the JSON
+          # artifact is emitted separately below for download.
+          # An empty/unreachable base makes the engine exit non-zero (fail-closed,
+          # per the --changed-only contract); `|| true` keeps the annotate step
+          # green while the block step above carries the real verdict.
+          python3 "$SGT_DIR/scripts/agent_audit.py" audit-project . \
+            --changed-only --base "origin/${GITHUB_BASE_REF}" \
+            --profile release-ready --fail-on none --format github || true
+          if python3 "$SGT_DIR/scripts/agent_audit.py" audit-project . \
+            --changed-only --base "origin/${GITHUB_BASE_REF}" \
+            --profile release-ready --fail-on none --format json > skill-audit.json.tmp; then
+            mv skill-audit.json.tmp skill-audit.json
+            echo "written=true" >> "$GITHUB_OUTPUT"
+          else
+            rm -f skill-audit.json.tmp
+          fi
+
+      - name: Upload findings artifact
+        if: always() && steps.toolkit.outcome == 'success' && steps.base.outcome == 'success' && steps.report.outputs.written == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: skill-audit
+          path: skill-audit.json
+          if-no-files-found: ignore

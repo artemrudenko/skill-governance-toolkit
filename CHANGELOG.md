@@ -15,6 +15,10 @@ start blocking on the next `SGT_REF` bump (see
 
 ## [Unreleased]
 
+### Changed
+- Update GitHub Actions to Node.js 24-based versions.
+  Self-hosted GitHub Actions runners require version 2.327.1 or newer.
+
 ---
 
 ## [1.21.0] — 2026-10-27 — portable skills and safer installs

@@ -4,6 +4,11 @@ Enable the skill-governance pull-request gate on GitHub Actions — the GitHub c
 
 > Audience: platform-devops · Type: how-to · Prerequisite: a toolkit mirror your workflows can clone
 
+The template uses Node.js 24-based GitHub actions. Self-hosted runners need
+Actions Runner 2.327.1 or newer. `actions/upload-artifact@v7` does not support
+GitHub Enterprise Server; GHES users must adapt the artifact step to a supported
+version and check their server and runner compatibility.
+
 ## What this gate does
 
 Every pull request that touches a governed asset (skill, agent, `AGENTS.md`,

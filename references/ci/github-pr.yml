@@ -20,7 +20,7 @@
 # template. It is passed into the block step's env below; the engine honors it
 # automatically (exit 0 even on a blocking finding).
 #
-# Action pinning: the `actions/*` steps use floating major tags (@v4/@v5), not
+# Action pinning: the `actions/*` steps use floating major tags (@v7), not
 # 40-char SHAs. The immutable-SHA rule this template enforces targets SGT_REF
 # (the toolkit gate-logic source). These first-party GitHub-owned helper actions
 # are an accepted residual risk; pin them to SHAs too if your org requires it.
@@ -73,13 +73,13 @@ jobs:
   skill-gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so the merge-base of the PR base is reachable for the
           # three-dot diff. A shallow clone breaks --changed-only.
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -190,7 +190,7 @@ jobs:
 
       - name: Upload findings artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: skill-audit
           path: skill-audit.json

@@ -4,7 +4,7 @@
 #   GitHub: references/ci/github-pr.yml   GitLab: references/ci/gitlab-ci.yml
 #
 # Action pinning: the third-party `actions/*` below use floating major tags
-# (@v4/@v5), NOT 40-char SHAs — a deliberate, accepted residual risk. The
+# (@v7), NOT 40-char SHAs — a deliberate, accepted residual risk. The
 # immutable-SHA rule the toolkit enforces targets SGT_REF (the gate-logic source
 # an attacker could re-tag to change verdicts); these are first-party
 # GitHub-owned helper actions whose compromise implies GitHub itself is breached.
@@ -24,10 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -47,10 +47,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -64,8 +64,8 @@ jobs:
     name: PowerShell install on Windows
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Check native installer for one skill and all hosts
@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build Docker image
         run: docker build -t agent-governance-mcp:ci .

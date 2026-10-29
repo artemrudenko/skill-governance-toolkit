@@ -447,38 +447,13 @@ function Copy-OwnedTree {
     ($nowOwned | Sort-Object) -join "`n" | Set-Content -Path $ownedFile -Encoding UTF8
 }
 
-# Mirror of ensure_docs_copied() in scripts/install.sh — copy the toolkit's
-# top-level docs/*.md to the project root with conflict-renaming, tracking what
-# WE placed in docs/.sgt-owned so uninstall removes exactly ours and never the
-# user's own docs. Top-level .md only (matches bash; never recurses into
-# docs/ subdirectories).
+# Use the same hash-verified documentation installer as the shell path.
 function Ensure-DocsCopied {
     param([string]$Dest)
-
     $srcDocs = Join-Path $RepoRoot 'docs'
     if (-not (Test-Path $srcDocs)) { return }
-    New-Item -ItemType Directory -Force -Path $Dest | Out-Null
-    $owned = New-Object System.Collections.Generic.List[string]
-
-    Get-ChildItem -Path $srcDocs -Filter '*.md' -File | ForEach-Object {
-        $base = $_.Name
-        $destFile = Join-Path $Dest $base
-        if (-not (Test-Path $destFile)) {
-            Copy-Item -Force $_.FullName $destFile
-            $owned.Add($base)
-        } elseif ((Get-FileHash $_.FullName).Hash -eq (Get-FileHash $destFile).Hash) {
-            $owned.Add($base)                       # content-identical — we own it
-        } else {
-            # Conflict — rename OURS, never touch the user's differing doc.
-            $renamed = "$([System.IO.Path]::GetFileNameWithoutExtension($base)).skill-governance-toolkit.md"
-            Copy-Item -Force $_.FullName (Join-Path $Dest $renamed)
-            $owned.Add($renamed)
-            Write-Warning "conflict: user has docs/$base — saved ours as docs/$renamed"
-        }
-    }
-    if ($owned.Count -gt 0) {
-        ($owned | Sort-Object) -join "`n" | Set-Content -Path (Join-Path $Dest '.sgt-owned') -Encoding UTF8
-    }
+    & $pythonCmd -X utf8 (Join-Path $RepoRoot 'scripts/managed_docs.py') $srcDocs $Dest
+    if ($LASTEXITCODE -ne 0) { throw 'Managed documentation installation failed' }
 }
 
 function Install-Host {

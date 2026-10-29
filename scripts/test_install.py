@@ -45,6 +45,41 @@ def _load_manifest() -> list[str]:
 
 
 class InstallBehaviorTests(unittest.TestCase):
+    def test_powershell_native_document_upgrade(self) -> None:
+        if not shutil.which("pwsh"):
+            self.skipTest("pwsh not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, target = root / "source", root / "target"
+            shutil.copytree(ROOT, source, ignore=shutil.ignore_patterns(".git", "assets", "__pycache__", "*.zip"))
+            target.mkdir()
+            guide = source / "docs" / "github-onboarding.md"
+            guide.write_text("release one", encoding="utf-8")
+            env = {**os.environ, "SGT_TEST_TARGET": str(target), "SGT_TEST_INSTALLER": str(source / "install.ps1")}
+            prefix = "" if os.name == "nt" else "Set-Variable IsWindows -Value $true -Force; "
+            command = prefix + "& $env:SGT_TEST_INSTALLER -YesDefault -TargetProject $env:SGT_TEST_TARGET -Skill skill-find"
+
+            def run() -> None:
+                result = subprocess.run(["pwsh", "-NoProfile", "-Command", command], cwd=source,
+                                        env=env, text=True, capture_output=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            run()
+            guide.write_text("release two", encoding="utf-8")
+            run()
+            installed = target / "docs" / "github-onboarding.md"
+            self.assertEqual(installed.read_text(encoding="utf-8"), "release two")
+            installed.write_text("my local edit", encoding="utf-8")
+            guide.write_text("release three", encoding="utf-8")
+            run()
+            incoming = target / "docs" / "github-onboarding.skill-governance-toolkit.md"
+            self.assertEqual(installed.read_text(encoding="utf-8"), "my local edit")
+            incoming.write_text("my alternate edit", encoding="utf-8")
+            guide.write_text("release four", encoding="utf-8")
+            run()
+            self.assertEqual(incoming.read_text(encoding="utf-8"), "my alternate edit")
+            self.assertEqual((target / "docs" / "github-onboarding.skill-governance-toolkit.1.md").read_text(encoding="utf-8"), "release four")
+
     def test_powershell_native_branch_single_skill(self) -> None:
         """Exercise the native PowerShell branch on Windows and Unix pwsh."""
         if not shutil.which("pwsh"):

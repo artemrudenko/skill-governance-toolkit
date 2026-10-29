@@ -268,6 +268,14 @@ Older installations have no marker, so the installer preserves their skill direc
 Review and back up each legacy path before moving it aside and reinstalling.
 The installer reports preserved paths and does not automatically claim ownership.
 
+Project documentation has a separate `docs/.sgt-docs-hashes.json` record.
+The installer updates a document only when its current hash matches that record.
+It preserves modified documents and writes incoming copies beside them.
+If an incoming copy was changed locally, the installer preserves it and uses another name.
+Older installs have no document hashes: their existing documents remain unverified and are preserved.
+An identical pre-existing document is not claimed merely because its content matches.
+Uninstall removes recorded documents only when their hashes still match.
+
 | Runtime | Project rules read from | Skills loaded from | Sub-agents loaded from |
 |---|---|---|---|
 | Claude Code | `CLAUDE.md` (which `@AGENTS.md`) | `~/.claude/skills/` or `./.claude/skills/` | `~/.claude/agents/` or `./.claude/agents/` |

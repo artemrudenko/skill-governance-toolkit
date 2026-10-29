@@ -73,6 +73,7 @@ jobs:
           python scripts/test_install.py
           InstallBehaviorTests.test_powershell_native_branch_single_skill
           InstallBehaviorTests.test_powershell_native_branch_all_hosts_single_skill
+          InstallBehaviorTests.test_powershell_native_document_upgrade
 
   docker:
     name: Docker MCP smoke test

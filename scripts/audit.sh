@@ -379,6 +379,11 @@ if python3 "$ROOT/scripts/test_install.py" >/dev/null 2>&1; then
 else
   fail "installer behavior tests failed — run: python3 scripts/test_install.py"
 fi
+if python3 "$ROOT/scripts/test_managed_docs.py" >/dev/null 2>&1; then
+  pass "managed documentation behavior tests pass"
+else
+  fail "managed documentation tests failed — run: python3 scripts/test_managed_docs.py"
+fi
 
 # ── P14: sgt command facade behavior ─────────────────────────────────────────
 

@@ -506,11 +506,7 @@ ensure_project_root_user_files() {
   return 0
 }
 
-# ── Ensure docs/ copied with conflict-renaming (NEVER deletes user docs/) ────
-# Per the user contract: we COPY our docs/ files into the target's docs/.
-# If a file with the same name already exists with DIFFERENT content, we
-# rename OUR file (suffix `.skill-governance-toolkit.md`) — never the user's.
-# We NEVER delete the target's docs/ directory or any file in it.
+# ── Copy docs with hash-verified ownership; preserve unverified files ────────
 
 ensure_docs_copied() {
   if [[ "$SCOPE" != "project" ]]; then return 0; fi
@@ -520,33 +516,7 @@ ensure_docs_copied() {
   fi
   echo "── Copying docs/ with conflict-rename (preserves user docs) ──"
   mkdir -p "$TARGET_PROJECT/docs"
-  # Track which doc files WE own (placed or content-identical, plus conflict
-  # copies) in a .sgt-owned sidecar, so `sgt uninstall` removes exactly these and
-  # never the user's own docs. Rebuilt each run — mirrors _copy_owned_tree.
-  local owned=()
-  local our_file dest_file base
-  for our_file in "$SOURCE"/docs/*.md; do
-    [[ -f "$our_file" ]] || continue
-    base="$(basename "$our_file")"
-    dest_file="$TARGET_PROJECT/docs/$base"
-    if [[ ! -f "$dest_file" ]]; then
-      cp "$our_file" "$dest_file"
-      owned+=("$base")
-      echo "  · placed docs/$base"
-    elif cmp -s "$our_file" "$dest_file"; then
-      owned+=("$base")
-      echo "  · docs/$base unchanged (content matches)"
-    else
-      # Conflict — rename OUR file, never touch user's; we own the renamed copy.
-      local renamed="${base%.md}.skill-governance-toolkit.md"
-      cp "$our_file" "$TARGET_PROJECT/docs/$renamed"
-      owned+=("$renamed")
-      echo "  ⚠ conflict: user has differing docs/$base — saved ours as docs/$renamed"
-    fi
-  done
-  if [[ ${#owned[@]} -gt 0 ]]; then
-    printf '%s\n' "${owned[@]}" > "$TARGET_PROJECT/docs/.sgt-owned"
-  fi
+  python3 "$SOURCE/scripts/managed_docs.py" "$SOURCE/docs" "$TARGET_PROJECT/docs"
 }
 
 # ── Ensure .gitignore entries (only for --project scope) ─────────────────────

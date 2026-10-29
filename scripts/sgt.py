@@ -28,6 +28,7 @@ from quickstart import print_text as print_quickstart_text
 from quickstart import build_quickstart
 from marker_block import remove as remove_marker_block
 from managed_skills import INDEX_MARKER, owned_and_unchanged, owned_index_unchanged
+from managed_docs import MARKER as DOCS_MARKER, load_hashes, managed_unchanged
 
 # Install root (where the toolkit's own scripts/references/templates live). Distinct
 # from `--root`, which is the user's project being operated on.
@@ -673,12 +674,15 @@ def _plan_install_dir(base: Path, skill_names: set[str], script_names: list[str]
     # never the user's — honoring "removes ONLY toolkit-owned files".
     for sub in ("agents", "references", "commands", "docs"):
         owned = _owned_entries(base / sub)
+        doc_hashes = load_hashes(base / sub) if sub == "docs" else {}
         for rel in owned:
             p = base / sub / rel
-            if p.exists():
+            if p.exists() and (sub != "docs" or managed_unchanged(base / sub, rel, doc_hashes)):
                 files.append(p)
         if owned:
             sidecars.append(base / sub / ".sgt-owned")
+        if sub == "docs" and (base / sub / DOCS_MARKER).exists():
+            sidecars.append(base / sub / DOCS_MARKER)
 
     for name in script_names:
         p = base / "scripts" / name

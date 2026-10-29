@@ -17,6 +17,16 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.21.3] — 2026-10-29 — preserve documentation changes on upgrade
+
+### Fixed
+- Track project documentation hashes so unchanged managed documents update normally.
+  Preserve modified and unverified documents, including locally edited incoming copies.
+  Uninstall preserves documentation whose content no longer matches its recorded hash.
+  Older installs without document hashes are preserved conservatively.
+
+---
+
 ## [1.21.2] — 2026-10-27 — include unindexed skills in discovery
 
 ### Fixed

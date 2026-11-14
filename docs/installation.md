@@ -494,6 +494,17 @@ per-version upgrade notes.
 
 ### State preserved across upgrades
 
+Runtime scripts use `scripts/.sgt-runtime-hashes.json` to track installed content.
+The installer updates a script only when its recorded hash still matches.
+It preserves edited, linked, or untracked scripts and places new versions beside them.
+Those alternate files are not active; review and merge them yourself.
+Older installs have no runtime hash record, so the installer treats their scripts as untracked.
+Uninstall removes only recorded, unchanged runtime scripts.
+Use the updated checkout's `scripts/sgt.py` for uninstalling older installations.
+An older installed command may not understand the ownership record.
+A linked runtime directory or ownership record stops installation without following the link.
+The explicit `--force` option still removes managed directories before installation.
+
 These directories are NEVER touched by upgrades and remain yours:
 
 - `.skill-state/` — resumable-run checkpoints ([`references/checkpointing.md`](../references/checkpointing.md)).

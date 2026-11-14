@@ -381,23 +381,7 @@ _copy_filtered_skills() {
 # is NEVER shipped. Installer-internal helpers still run from $SOURCE/scripts/.
 _copy_runtime_scripts() {
   local dest="$1"
-  local manifest="$SOURCE/scripts/runtime-manifest.txt"
-  if [[ ! -f "$manifest" ]]; then
-    echo "✗ scripts/runtime-manifest.txt not found — cannot resolve runtime script set." >&2
-    exit 1
-  fi
-  mkdir -p "$dest"
-  local raw name
-  while IFS= read -r raw; do
-    name="${raw%%#*}"                 # strip trailing comment
-    name="$(echo "$name" | tr -d '[:space:]')"
-    [[ -z "$name" ]] && continue
-    if [[ -f "$SOURCE/scripts/$name" ]]; then
-      cp "$SOURCE/scripts/$name" "$dest/$name"
-    else
-      echo "  ! manifest lists $name but scripts/$name missing — skipped" >&2
-    fi
-  done < "$manifest"
+  python3 "$SOURCE/scripts/managed_runtime.py" "$SOURCE/scripts" "$dest"
 }
 
 # _copy_owned_tree SRC DEST — copy a toolkit-owned dir tree into DEST WITHOUT

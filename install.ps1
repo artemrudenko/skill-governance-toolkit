@@ -378,27 +378,12 @@ function Copy-FilteredSkills {
 function Copy-RuntimeScripts {
     param([string]$Dest, [string]$Mode)
 
-    $manifest = Join-Path $RepoRoot 'scripts\runtime-manifest.txt'
-    if (-not (Test-Path $manifest)) {
-        throw "scripts/runtime-manifest.txt not found — cannot resolve runtime script set."
-    }
-    # Wipe only on explicit force. In global scope $Dest is ~/.<host>/scripts,
-    # which may hold the user's own scripts; the auto-detected `upgrade` mode
-    # must overwrite whitelisted files in place, not nuke the whole dir (H3).
+    # Wipe only on explicit force.
     if ($Mode -eq 'force' -and (Test-Path $Dest)) {
         Remove-Item -Recurse -Force $Dest
     }
-    New-Item -ItemType Directory -Force -Path $Dest | Out-Null
-    foreach ($raw in Get-Content $manifest) {
-        $name = ($raw -replace '#.*$', '').Trim()
-        if ([string]::IsNullOrWhiteSpace($name)) { continue }
-        $srcScript = Join-Path $RepoRoot ('scripts\' + $name)
-        if (Test-Path $srcScript) {
-            Copy-Item -Force -Path $srcScript -Destination (Join-Path $Dest $name)
-        } else {
-            Write-Warning "manifest lists $name but scripts\$name missing — skipped"
-        }
-    }
+    & $pythonCmd -X utf8 (Join-Path $RepoRoot 'scripts/managed_runtime.py') (Join-Path $RepoRoot 'scripts') $Dest
+    if ($LASTEXITCODE -ne 0) { throw 'Managed runtime installation failed' }
 }
 
 # Mirror of _copy_owned_tree() in scripts/install.sh — copy a toolkit-owned tree

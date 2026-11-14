@@ -31,7 +31,7 @@ def hashes(folder: Path) -> dict[str, str]:
 def owned_and_unchanged(folder: Path) -> bool:
     try:
         marker = folder / MARKER
-        return (folder.is_dir() and not folder.is_symlink() and marker.is_file()
+        return (folder.is_dir() and not folder.is_symlink() and not marker.is_symlink() and marker.is_file()
                 and json.loads(marker.read_text(encoding="utf-8")) == hashes(folder))
     except (OSError, ValueError, TypeError):
         return False
@@ -41,13 +41,16 @@ def owned_index_unchanged(folder: Path) -> bool:
     try:
         index = folder / "INDEX.jsonl"
         marker = folder / INDEX_MARKER
-        return (index.is_file() and not index.is_symlink() and marker.is_file()
+        return (not folder.is_symlink() and index.is_file() and not index.is_symlink()
+                and not marker.is_symlink() and marker.is_file()
                 and marker.read_text(encoding="utf-8").strip() == hashlib.sha256(index.read_bytes()).hexdigest())
     except OSError:
         return False
 
 
 def install(dest: Path, names: list[str], write_index: bool = False) -> None:
+    if dest.is_symlink():
+        raise ValueError(f"symlinked skill directory: {dest}")
     dest.mkdir(parents=True, exist_ok=True)
     for name in names:
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
@@ -81,6 +84,9 @@ def install(dest: Path, names: list[str], write_index: bool = False) -> None:
     if write_index:
         index = dest / "INDEX.jsonl"
         marker = dest / INDEX_MARKER
+        if marker.is_symlink():
+            print(f"  ! preserved symlinked index marker: {marker}", file=sys.stderr)
+            return
         if (index.exists() or index.is_symlink()) and not owned_index_unchanged(dest):
             print(f"  ! preserved existing or modified index: {index}", file=sys.stderr)
             return

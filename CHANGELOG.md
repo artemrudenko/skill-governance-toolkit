@@ -17,6 +17,20 @@ start blocking on the next `SGT_REF` bump (see
 
 ---
 
+## [1.21.4] — 2026-11-14 — preserve runtime changes on upgrade
+
+### Fixed
+- Preserve locally edited runtime scripts and symbolic links during installation and removal.
+  The installer updates verified, unchanged scripts and saves conflicting updates alongside local files.
+  It treats scripts from older installations without ownership records as untracked.
+- Preserve linked ownership markers and linked user instructions during installation and removal.
+- Avoid an encoding error after uninstall on Windows consoles using code page 1252.
+
+### Changed
+- Run runtime update and removal checks in the Windows installer CI job.
+
+---
+
 ## [1.21.3] — 2026-10-29 — preserve documentation changes on upgrade
 
 ### Fixed

@@ -384,6 +384,11 @@ if python3 "$ROOT/scripts/test_managed_docs.py" >/dev/null 2>&1; then
 else
   fail "managed documentation tests failed — run: python3 scripts/test_managed_docs.py"
 fi
+if python3 "$ROOT/scripts/test_managed_runtime.py" >/dev/null 2>&1; then
+  pass "managed runtime behavior tests pass"
+else
+  fail "managed runtime tests failed — run: python3 scripts/test_managed_runtime.py"
+fi
 
 # ── P14: sgt command facade behavior ─────────────────────────────────────────
 

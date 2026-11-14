@@ -45,6 +45,70 @@ def _load_manifest() -> list[str]:
 
 
 class InstallBehaviorTests(unittest.TestCase):
+    def test_powershell_native_runtime_upgrade_and_uninstall(self) -> None:
+        if not shutil.which('pwsh'):
+            self.skipTest('pwsh not installed')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, target = root / 'source', root / 'target'
+            shutil.copytree(ROOT, source, ignore=shutil.ignore_patterns('.git', 'assets', '__pycache__', '*.zip'))
+            target.mkdir()
+            env = {**os.environ, 'SGT_TEST_TARGET': str(target), 'SGT_TEST_INSTALLER': str(source / 'install.ps1')}
+            prefix = '' if os.name == 'nt' else 'Set-Variable IsWindows -Value $true -Force; '
+            command = prefix + '& $env:SGT_TEST_INSTALLER -YesDefault -TargetProject $env:SGT_TEST_TARGET -Skill skill-find'
+
+            def install() -> None:
+                result = subprocess.run(['pwsh', '-NoProfile', '-Command', command], cwd=source,
+                                        env=env, text=True, capture_output=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            install()
+            scripts = target / 'scripts'
+            edited = scripts / 'post_mr_comment.py'
+            edited.write_text('local edits\n', encoding='utf-8')
+            changed = source / 'scripts/checkpoint.py'
+            changed.write_text(changed.read_text(encoding='utf-8') + '\n# updated\n', encoding='utf-8')
+            install()
+            self.assertEqual(edited.read_text(encoding='utf-8'), 'local edits\n')
+            self.assertEqual((scripts / 'checkpoint.py').read_text(encoding='utf-8'), changed.read_text(encoding='utf-8'))
+            self.assertTrue((scripts / 'post_mr_comment.skill-governance-toolkit.py').is_file())
+            result = subprocess.run([sys.executable, str(scripts / 'sgt.py'), 'uninstall', '--scope', 'project',
+                                     '--target-project', str(target), '--yes'], cwd=target, env=env,
+                                    text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(edited.read_text(encoding='utf-8'), 'local edits\n')
+            self.assertFalse((scripts / 'checkpoint.py').exists())
+
+    def test_powershell_native_runtime_symlink_preserved(self) -> None:
+        if not shutil.which('pwsh'):
+            self.skipTest('pwsh not installed')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / 'target'
+            scripts = target / 'scripts'
+            scripts.mkdir(parents=True)
+            outside = root / 'outside.py'
+            outside.write_text('private data\n', encoding='utf-8')
+            link = scripts / 'checkpoint.py'
+            try:
+                link.symlink_to(outside)
+            except OSError as exc:
+                self.skipTest(f'symlink creation unavailable: {exc}')
+            env = {**os.environ, 'SGT_TEST_TARGET': str(target), 'SGT_TEST_INSTALLER': str(ROOT / 'install.ps1')}
+            prefix = '' if os.name == 'nt' else 'Set-Variable IsWindows -Value $true -Force; '
+            command = prefix + '& $env:SGT_TEST_INSTALLER -YesDefault -TargetProject $env:SGT_TEST_TARGET -Skill skill-find'
+            result = subprocess.run(['pwsh', '-NoProfile', '-Command', command], cwd=ROOT,
+                                    env=env, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(outside.read_text(encoding='utf-8'), 'private data\n')
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/sgt.py'), 'uninstall', '--scope', 'project',
+                                     '--target-project', str(target), '--yes'], cwd=ROOT, env=env,
+                                    text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(outside.read_text(encoding='utf-8'), 'private data\n')
+
     def test_powershell_native_document_upgrade(self) -> None:
         if not shutil.which("pwsh"):
             self.skipTest("pwsh not installed")

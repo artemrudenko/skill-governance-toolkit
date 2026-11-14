@@ -24,6 +24,7 @@ filter_skills.py
 sgt.py
 managed_skills.py
 managed_docs.py
+managed_runtime.py
 doctor.py
 quickstart.py
 

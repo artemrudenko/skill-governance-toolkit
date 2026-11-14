@@ -17,6 +17,8 @@ def digest(path: Path) -> str:
 
 def load_hashes(dest: Path) -> dict[str, str]:
     try:
+        if dest.is_symlink() or (dest / MARKER).is_symlink():
+            return {}
         data = json.loads((dest / MARKER).read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             return {}
@@ -28,11 +30,15 @@ def load_hashes(dest: Path) -> dict[str, str]:
 
 def managed_unchanged(dest: Path, name: str, hashes: dict[str, str]) -> bool:
     path = dest / name
-    return (name in hashes and not path.is_symlink() and path.is_file()
+    return (not dest.is_symlink() and Path(name).name == name
+            and name not in (".", "..") and name in hashes and not path.is_symlink() and path.is_file()
             and digest(path) == hashes[name])
 
 
 def install_docs(source: Path, dest: Path) -> None:
+    if dest.is_symlink() or any((dest / name).is_symlink() for name in (MARKER, ".sgt-owned")):
+        print(f"  ! preserved docs with symlinked ownership path: {dest}", file=sys.stderr)
+        return
     dest.mkdir(parents=True, exist_ok=True)
     previous = load_hashes(dest)
     owned = {name: value for name, value in previous.items()

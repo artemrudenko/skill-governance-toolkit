@@ -74,6 +74,8 @@ jobs:
           InstallBehaviorTests.test_powershell_native_branch_single_skill
           InstallBehaviorTests.test_powershell_native_branch_all_hosts_single_skill
           InstallBehaviorTests.test_powershell_native_document_upgrade
+          InstallBehaviorTests.test_powershell_native_runtime_upgrade_and_uninstall
+          InstallBehaviorTests.test_powershell_native_runtime_symlink_preserved
 
   docker:
     name: Docker MCP smoke test

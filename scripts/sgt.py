@@ -29,6 +29,7 @@ from quickstart import build_quickstart
 from marker_block import remove as remove_marker_block
 from managed_skills import INDEX_MARKER, owned_and_unchanged, owned_index_unchanged
 from managed_docs import MARKER as DOCS_MARKER, load_hashes, managed_unchanged
+from managed_runtime import MARKER as RUNTIME_MARKER, load_hashes as load_runtime_hashes, unchanged as runtime_unchanged
 
 # Install root (where the toolkit's own scripts/references/templates live). Distinct
 # from `--root`, which is the user's project being operated on.
@@ -636,8 +637,11 @@ def _runtime_script_names() -> list[str]:
 
 def _owned_entries(d: Path) -> list[str]:
     sidecar = d / ".sgt-owned"
-    if sidecar.exists():
-        return [ln for ln in sidecar.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    if not d.is_symlink() and not sidecar.is_symlink() and sidecar.is_file():
+        return [ln for ln in sidecar.read_text(encoding="utf-8").splitlines()
+                if ln.strip() and not Path(ln).is_absolute()
+                and ".." not in Path(ln).parts and Path(ln).parts
+                and not any((d / parent).is_symlink() for parent in Path(ln).parents)]
     return []
 
 
@@ -647,6 +651,11 @@ def _content_matches_source(dest: Path, src_rel: str) -> bool:
         return src.exists() and dest.read_bytes() == src.read_bytes()
     except OSError:
         return False
+
+
+def _linked_path(base: Path, relative: str) -> bool:
+    path = Path(relative)
+    return any((base / part).is_symlink() for part in (path, *path.parents) if str(part) != ".")
 
 
 def _plan_install_dir(base: Path, skill_names: set[str], script_names: list[str],
@@ -660,9 +669,12 @@ def _plan_install_dir(base: Path, skill_names: set[str], script_names: list[str]
     files: list[Path] = []
     sidecars: list[Path] = []
 
+    if base.is_symlink():
+        return dirs, files, sidecars
+
     for name in skill_names:
         d = base / "skills" / name
-        if owned_and_unchanged(d):
+        if not (base / "skills").is_symlink() and owned_and_unchanged(d):
             dirs.append(d)
     idx = base / "skills" / "INDEX.jsonl"
     if owned_index_unchanged(base / "skills"):
@@ -673,26 +685,39 @@ def _plan_install_dir(base: Path, skill_names: set[str], script_names: list[str]
     # records them in docs/.sgt-owned, so uninstall removes exactly our docs and
     # never the user's — honoring "removes ONLY toolkit-owned files".
     for sub in ("agents", "references", "commands", "docs"):
+        if (base / sub).is_symlink():
+            continue
         owned = _owned_entries(base / sub)
         doc_hashes = load_hashes(base / sub) if sub == "docs" else {}
         for rel in owned:
             p = base / sub / rel
-            if p.exists() and (sub != "docs" or managed_unchanged(base / sub, rel, doc_hashes)):
+            if not p.is_symlink() and p.exists() and (sub != "docs" or managed_unchanged(base / sub, rel, doc_hashes)):
                 files.append(p)
         if owned:
             sidecars.append(base / sub / ".sgt-owned")
-        if sub == "docs" and (base / sub / DOCS_MARKER).exists():
+        if (sub == "docs" and not (base / sub / DOCS_MARKER).is_symlink()
+                and (base / sub / DOCS_MARKER).is_file()):
             sidecars.append(base / sub / DOCS_MARKER)
 
-    for name in script_names:
-        p = base / "scripts" / name
-        if p.exists():
-            files.append(p)
+    runtime = base / "scripts"
+    runtime_hashes = load_runtime_hashes(runtime)
+    permitted = {name for name in runtime_hashes if any(
+        name == source or re.fullmatch(re.escape(Path(source).stem) +
+            r"\.skill-governance-toolkit(?:\.\d+)?" + re.escape(Path(source).suffix), name)
+        for source in [*script_names, "runtime-manifest.txt"])}
+    for name in permitted:
+        if runtime_unchanged(runtime, name, runtime_hashes):
+            files.append(runtime / name)
+    marker = runtime / RUNTIME_MARKER
+    if permitted == runtime_hashes.keys() and permitted and all(
+            not (runtime / name).exists() and not (runtime / name).is_symlink()
+            or runtime_unchanged(runtime, name, runtime_hashes) for name in permitted):
+        sidecars.append(marker)
 
     if host is not None:
         for dest_rel, src_rel in HOST_OWNED_FILES.get(host, {}).items():
             p = base / dest_rel
-            if p.exists() and _content_matches_source(p, src_rel):
+            if not _linked_path(base, dest_rel) and p.exists() and _content_matches_source(p, src_rel):
                 files.append(p)
 
     return dirs, files, sidecars
@@ -837,11 +862,11 @@ def command_uninstall(args: argparse.Namespace) -> int:
         all_dirs += d; all_files += f; all_sidecars += s
         for mf in MARKER_FILES:
             p = base / mf
-            if p.exists() and "skill-governance-toolkit: BEGIN" in _safe_read(p):
+            if not _linked_path(base, mf) and p.exists() and "skill-governance-toolkit: BEGIN" in _safe_read(p):
                 marker_targets.append(p)
         for dest_rel, src_rel in ROOT_OWNED_FILES.items():
             p = base / dest_rel
-            if p.exists() and _content_matches_source(p, src_rel):
+            if not _linked_path(base, dest_rel) and p.exists() and _content_matches_source(p, src_rel):
                 all_files.append(p)
         for host in hosts:
             hb = base / HOST_DIRS[host]
@@ -888,7 +913,7 @@ def command_uninstall(args: argparse.Namespace) -> int:
     candidate_parents = {f.parent for f in all_files} | {d.parent for d in all_dirs}
     _prune_empty_dirs(sorted(candidate_parents, key=lambda p: len(p.parts), reverse=True))
 
-    print(f"✓ uninstalled {total} toolkit-owned item(s). Your own files were preserved.")
+    print(f"Uninstalled {total} toolkit-owned item(s). Your own files were preserved.")
     print("  (toolkit-owned docs/ tracked in docs/.sgt-owned were removed; user docs left in place.)")
     return 0
 
